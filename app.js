@@ -497,7 +497,7 @@ function renderTaxonomy(){
 
 /* --- TMDB import --- */
 const TMDB_IMG = 'https://image.tmdb.org/t/p/';
-function tmdbKey(){ try { return localStorage.getItem('rv-tmdb-key') || ''; } catch { return ''; } }
+function tmdbKey(){ let k = ''; try { k = localStorage.getItem('rv-tmdb-key') || ''; } catch {} return k || (window.RV_CONFIG && window.RV_CONFIG.tmdbKey) || ''; }
 function setTmdbKey(k){ try { k ? localStorage.setItem('rv-tmdb-key', k) : localStorage.removeItem('rv-tmdb-key'); } catch {} }
 async function tmdb(path, params = {}){
   const key = tmdbKey(); if (!key) throw new Error('Falta la clave de TMDB.');
