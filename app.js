@@ -200,7 +200,7 @@ function renderHome(){
   const genreRows = Object.entries(genres).sort((a,b)=>b[1].length-a[1].length).slice(0,8);
   return renderHero() + `<main>
     ${continueRow()}
-    ${S.session ? row('Mi lista', [...S.myList].map(byId).filter(t => t && t.status !== 'borrador')) : ''}
+    ${listRow()}
     ${row('Destacados', feat)}
     ${row('Novedades', newest)}
     ${row('Series', series, '/series')}
@@ -379,6 +379,7 @@ function renderEditor(){
         <div class="field"><span>Póster</span>${slot('poster','poster',E.poster,'r23','Subir póster')}<span class="hint"><b>1000 × 1500 px</b> (vertical 2:3)</span></div>
         <div class="field"><span>Fondo de la ficha</span>${slot('backdrop','backdrop',E.backdrop,'r169','Subir fondo de la ficha')}<span class="hint"><b>1920 × 1080 px</b> (16:9). Se ve detrás del logo al abrir el título. Dejá libre el lado izquierdo, ahí va el texto.</span></div>
         <div class="field"><span>Logo del título</span>${slot('logo','logo',E.logo,'r31 contain','Subir logo')}<span class="hint"><b>1000 × 400 px</b> aprox., PNG con fondo transparente y recortado al borde. Reemplaza al título escrito.</span></div>
+        <div class="field"><span>Miniatura horizontal</span>${slot('thumb','thumbWide',E.thumbWide,'r169','Subir miniatura')}<span class="hint"><b>1280 × 720 px</b> (16:9) con el logo incluido. Se usa en Mi lista y Seguir viendo. Si no la cargás, se arma sola con el fondo y el logo.</span></div>
         <div class="field span3"><span>Imagen del banner principal</span>${slot('banner','bannerImage',E.bannerImage,'r31','Subir imagen para el banner')}<span class="hint"><b>2400 × 800 px</b> (3:1). Dejá lo importante en el centro y la derecha: a la izquierda va el logo y el texto, y en pantallas angostas se recortan un poco los costados. La que se ve en la portada cuando este título está en el banner. Distinta del fondo de la ficha.</span></div>
       </div>
       <h3 style="margin-top:8px">Versión celular <small>opcional · si no las cargás, se usan las de arriba</small></h3>
@@ -590,6 +591,8 @@ async function tmdbImport(id){
     }
     // images
     const bestPoster = (imgs.posters||[]).find(x=>x.iso_639_1==='es')?.file_path || det.poster_path;
+    const titled = (imgs.backdrops||[]).filter(x => x.iso_639_1 === 'es' || x.iso_639_1 === 'en').sort((a,b) => (a.iso_639_1==='es'?-1:0) - (b.iso_639_1==='es'?-1:0) || (b.vote_average||0) - (a.vote_average||0))[0];
+    if (titled) E.thumbWide = tmdbImg(titled.file_path, 'w1280');
     E.poster = tmdbImg(bestPoster, 'w780');
     const bd = det.backdrop_path || (imgs.backdrops||[])[0]?.file_path;
     E.backdrop = tmdbImg(bd, 'original');
@@ -687,7 +690,7 @@ function inlineConfirm(holder, label, onYes){
   holder.querySelector('[data-no]').onclick = e => { e.stopPropagation(); holder.innerHTML = prev; };
 }
 function collectRefs(t){
-  const r = [t.poster,t.backdrop,t.logo,t.bannerImage,t.bannerImageMobile,t.backdropMobile,...(t.cast||[]).map(c=>c.photo)];
+  const r = [t.poster,t.backdrop,t.logo,t.thumbWide,t.bannerImage,t.bannerImageMobile,t.backdropMobile,...(t.cast||[]).map(c=>c.photo)];
   (t.seasons||[]).forEach(s=>(s.episodes||[]).forEach(e=>r.push(e.thumb)));
   return r.filter(Boolean);
 }
@@ -968,6 +971,7 @@ app.addEventListener('submit', async e => {
 /* ---------- router ---------- */
 /* ---------- viewer accounts & Mi lista ---------- */
 S.myList = new Set();
+const ICON_HEART_FILL = '<svg class="ic-heart" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.7 3.9 4.5 7.3 4.5c2 0 3.6 1.1 4.7 2.7 1.1-1.6 2.7-2.7 4.7-2.7 3.4 0 5.7 3.2 4.5 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>';
 const ICON_HEART = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.7 3.9 4.5 7.3 4.5c2 0 3.6 1.1 4.7 2.7 1.1-1.6 2.7-2.7 4.7-2.7 3.4 0 5.7 3.2 4.5 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>';
 const ICON_PLUS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
 const ICON_CHECK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -1024,6 +1028,25 @@ async function removeProgress(tid){
   await S.sb.from('watch_progress').delete().eq('user_id', S.session.user.id).eq('title_id', tid);
   toast('Quitado de Seguir viendo');
 }
+// Horizontal artwork for Mi lista / Seguir viendo: the "Miniatura horizontal" or the backdrop with the logo on top.
+function wideArt(t, extra){
+  const img = t.thumbWide || t.backdrop || t.bannerImage || t.poster;
+  const logo = !t.thumbWide && t.logo ? `<img class="wa-logo" alt="" data-img="${esc(t.logo)}" hidden><span class="logo-fallback" hidden></span>` : '';
+  return `<div class="wide-art" ${img ? `data-src="${esc(img)}"` : ''}>${genBlock(t)}${logo}${extra||''}</div>`;
+}
+function listRow(){
+  if (!S.session) return '';
+  const list = [...S.myList].map(byId).filter(t => t && t.status !== 'borrador');
+  if (!list.length) return '';
+  return `<section class="row"><div class="row-head"><h2 class="h-heart">${ICON_HEART_FILL} Mi lista</h2><span class="count">${list.length}</span><a class="see-all" href="/mi-lista">Ver todo ›</a></div>
+    <div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button>
+    <div class="rail rail-wide">${list.map(wideCard).join('')}</div>
+    <button class="rail-btn r" data-scroll="1" aria-label="Siguiente">›</button></div></section>`;
+}
+function wideCard(t){
+  return `<div class="wide-card"><button class="wide-main" data-open="${esc(t.id)}" aria-label="${esc(t.title)}">${wideArt(t)}</button>
+    <button class="wa-heart" data-mylist="${esc(t.id)}" data-heart="1" aria-label="Quitar de Mi lista" title="Quitar de Mi lista">${ICON_HEART_FILL}</button></div>`;
+}
 function continueRow(){
   if (!S.session) return '';
   const items = [...S.progress.values()].map(p => ({ p, t: byId(p.title_id) })).filter(x => x.t && x.t.status !== 'borrador').slice(0, 20);
@@ -1035,9 +1058,9 @@ function continueRow(){
       const total = t.type === 'serie' ? flatEpisodes(t).length : 1;
       const seen = t.type === 'serie' ? Math.min((p.watched||[]).length, total) : 1;
       const pct = total ? Math.max(6, Math.round(seen / total * 100)) : 0;
-      const img = target?.ep?.thumb || t.backdrop || t.bannerImage || t.poster;
+
       const sub = t.type === 'serie' ? (target ? (target.cont ? 'Sigue ' : '') + `T${target.season}:E${target.episode}${target.ep?.title ? ' · ' + target.ep.title : ''}` : `${seen} de ${total} episodios`) : 'Película';
-      const inner = `<div class="cw-thumb" ${img ? `data-src="${esc(img)}"` : ''}>${genBlock(t)}<span class="cw-play">${ICONS.play}</span><span class="cw-bar"><i style="width:${pct}%"></i></span></div>`;
+      const inner = wideArt(t, `<span class="cw-play">${ICONS.play}</span><span class="cw-bar"><i style="width:${pct}%"></i></span>`);
       return `<div class="cw-card">
         ${target ? `<a class="cw-main" ${watchAttrs(t, target.season, target.episode)} href="${esc(target.url)}" target="_blank" rel="noopener" aria-label="${esc(target.label + ' · ' + t.title)}">${inner}</a>` : `<button class="cw-main" data-open="${esc(t.id)}">${inner}</button>`}
         <div class="cw-info"><button class="cw-title" data-open="${esc(t.id)}">${esc(t.title)}</button><span class="cw-sub">${esc(sub)}</span></div>
@@ -1065,13 +1088,14 @@ async function toggleList(id){
   if (S.route === 'mi-lista') render();
 }
 function refreshListButtons(){
+  if (document.querySelector('[data-heart]')){ const y = window.scrollY; render(); window.scrollTo(0, y); return; }
   document.querySelectorAll('[data-mylist]').forEach(b => { const tmp = document.createElement('div'); tmp.innerHTML = b.dataset.wide ? listWide(b.dataset.mylist) : listBtn(b.dataset.mylist, 'round'); b.replaceWith(tmp.firstElementChild); });
 }
 function renderMyList(){
   if (!S.session) return `<div class="lock"><h1>Mi lista</h1><p>Creá una cuenta gratis para guardar tus series y películas.</p><button class="btn btn-primary" data-auth="signup">Crear cuenta</button><button class="btn btn-line" data-auth="login">Ya tengo cuenta</button></div>`;
   const list = [...S.myList].map(byId).filter(t => t && t.status !== 'borrador');
-  return `<main><div class="page-head"><h1>Mi lista</h1><p>${list.length} título${list.length===1?'':'s'}</p></div>
-    ${list.length ? `<div class="grid">${list.map(card).join('')}</div>` : '<p class="empty-note">Todavía no agregaste nada. Tocá el botón + en cualquier serie o película para guardarla acá.</p>'}</main>`;
+  return `<main><div class="page-head"><h1 class="h-heart">${ICON_HEART_FILL} Mi lista</h1><p>${list.length} título${list.length===1?'':'s'}</p></div>
+    ${list.length ? `<div class="grid grid-wide">${list.map(wideCard).join('')}</div>` : '<p class="empty-note">Todavía no agregaste nada. Tocá el botón + en cualquier serie o película para guardarla acá.</p>'}</main>`;
 }
 function userHue(){
   const id = S.session?.user?.id || S.session?.user?.email || 'x';
@@ -1285,6 +1309,22 @@ syncTop();
 document.getElementById('searchToggle')?.addEventListener('click', () => {
   const top = document.querySelector('.top'); const on = !top.classList.contains('searching');
   top.classList.toggle('searching', on); if (on) document.getElementById('q').focus(); else { const q = document.getElementById('q'); if (q.value){ q.value=''; S.q=''; render(); } }
+});
+
+/* ---------- light / dark ---------- */
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  const b = document.getElementById('themeToggle');
+  if (b){ b.innerHTML = t === 'light' ? ICON_MOON : ICON_SUN; b.setAttribute('aria-label', t === 'light' ? 'Activar modo oscuro' : 'Activar modo claro'); b.title = t === 'light' ? 'Modo oscuro' : 'Modo claro'; }
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'light' ? '#ffffff' : '#000000');
+}
+const ICON_SUN = '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>';
+const ICON_MOON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>';
+let themePref = 'dark'; try { themePref = localStorage.getItem('rv-theme2') || 'dark'; } catch {}
+applyTheme(themePref);
+document.getElementById('themeToggle')?.addEventListener('click', () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  applyTheme(next); try { localStorage.setItem('rv-theme2', next); } catch {}
 });
 
 /* ---------- instant start: last catalog saved in this browser ---------- */
