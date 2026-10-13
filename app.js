@@ -887,13 +887,14 @@ function renderTitlePage(id){
 function renderEpisodesTab(t, seasons){
   const s = seasons[S.tpSeason] || seasons[0]; if (!s) return '';
   return `${seasons.length>1 ? `<select class="pill-select" id="tpSeason" aria-label="Temporada">${seasons.map((x,i)=>`<option value="${i}" ${i===S.tpSeason?'selected':''}>Temporada ${esc(x.number)}${x.title?' · '+esc(x.title):''}</option>`).join('')}</select>` : `<span class="pill-select" style="background-image:none;padding-right:16px">Temporada ${esc(s.number)}</span>`}
-    ${s.episodes.length ? `<div class="ep-grid">${s.episodes.map(e => {
+    ${s.episodes.length ? `<div class="row-wrap ep-row"><button class="rail-btn l" data-scroll="-1" aria-label="Anteriores">‹</button><div class="rail rail-eps">${s.episodes.map(e => {
       const u = isSoon(t) ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
       const seen = (S.progress.get(t.id)?.watched || []).includes(epKey(s.number, e.number));
       return `<${tag} class="ep-card ${seen?'seen':''}" ${u?`${watchAttrs(t, s.number, e.number)} href="${esc(u)}" target="_blank" rel="noopener"`:''}>
         <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number)}${seen?'<span class="seen-tag">✓ Visto</span>':''}</div>
-        <div><strong>${esc(e.number)}. ${esc(e.title || 'Episodio '+e.number)}</strong>${e.duration?`<div class="ep-d">${esc(e.duration)}</div>`:''}</div>
-        ${e.description?`<p>${esc(e.description)}</p>`:''}</${tag}>`; }).join('')}</div>` : '<p class="empty-note" style="padding:0">Esta temporada todavía no tiene episodios.</p>'}`;
+        <div class="ep-meta"><span class="ep-label">Episodio ${esc(e.number)}</span><strong>${esc(e.title || 'Episodio '+e.number)}</strong></div>
+        ${e.description?`<p>${esc(e.description)}</p>`:''}
+        ${e.duration?`<div class="ep-d">${esc(e.duration)}</div>`:''}</${tag}>`; }).join('')}</div><button class="rail-btn r" data-scroll="1" aria-label="Siguientes">›</button></div>` : '<p class="empty-note" style="padding:0">Esta temporada todavía no tiene episodios.</p>'}`;
 }
 function renderSuggTab(t){
   const pub = published().filter(x=>x.id!==t.id);
@@ -909,10 +910,18 @@ function renderDetailsTab(t, seasons){
     ['Género', (t.genres||[]).join(', ')],
     ['Clasificación', t.rating],
     [isSerie ? 'Creación' : 'Dirección', t.director],
-    ['Elenco', (t.cast||[]).map(c => c.name + (c.role ? ` (${c.role})` : '')).join(', ')],
     ['Etiquetas', (t.tags||[]).join(', ')]
   ].filter(r => r[1]);
-  return `<div class="det"><div><h2>${esc(t.title)}</h2>${t.tagline?`<p style="font-weight:700;margin-bottom:10px">${esc(t.tagline)}</p>`:''}${t.description?`<p>${esc(t.description)}</p>`:''}</div>
+  const crew = String(t.director||'').split(',').map(x=>x.trim()).filter(Boolean).map(name => ({ name, role: isSerie ? 'Creación' : 'Dirección', photo:'' }));
+  const people = [...(t.cast||[]).filter(c => c.name), ...crew];
+  const initials = n => String(n||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+  const castRail = people.length ? `<section class="cast-sec"><h2 class="section-h">Reparto y equipo</h2>
+    <div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anteriores">‹</button>
+    <div class="rail rail-cast">${people.map(c => `<div class="cast-card">
+      <div class="cast-photo" ${c.photo?`data-src="${esc(c.photo)}"`:''}><span>${esc(initials(c.name))}</span></div>
+      <strong>${esc(c.name)}</strong>${c.role?`<small>${esc(c.role)}</small>`:''}</div>`).join('')}</div>
+    <button class="rail-btn r" data-scroll="1" aria-label="Siguientes">›</button></div></section>` : '';
+  return castRail + `<div class="det"><div><h2>${esc(t.title)}</h2>${t.tagline?`<p style="font-weight:700;margin-bottom:10px">${esc(t.tagline)}</p>`:''}${t.description?`<p>${esc(t.description)}</p>`:''}</div>
     <dl>${rows.map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></div>`;
 }
 function renderFooter(){
