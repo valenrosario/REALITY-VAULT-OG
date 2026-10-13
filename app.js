@@ -54,7 +54,7 @@ async function processImage(file, maxW, maxH, alpha){
   x.drawImage(src,0,0,c.width,c.height);
   return await new Promise((res, rej) => c.toBlob(bl => bl ? res(bl) : rej(new Error('No se pudo procesar la imagen')), type, .88));
 }
-const IMG_SPECS = { sitelogo:[1400,460,true], poster:[1200,1800,false], backdrop:[2560,1440,false], logo:[1400,560,true], thumb:[1280,720,false], face:[400,400,false], banner:[2800,1200,false] };
+const IMG_SPECS = { sitelogo:[1400,460,true], poster:[1200,1800,false], backdrop:[2560,1440,false], logo:[1400,560,true], thumb:[1280,720,false], face:[400,400,false], banner:[3000,1000,false] };
 const BUCKET = 'media';
 async function uploadImage(file, kind){
   const [w,h,alpha] = IMG_SPECS[kind] || IMG_SPECS.backdrop;
@@ -368,10 +368,10 @@ function renderEditor(){
     </div>
     <div class="fs"><h3>Imágenes <small>se comprimen automáticamente</small></h3>
       <div class="imgs">
-        <div class="field"><span>Póster (vertical 2:3)</span>${slot('poster','poster',E.poster,'r23','Subir póster')}</div>
-        <div class="field"><span>Fondo de la ficha (16:9)</span>${slot('backdrop','backdrop',E.backdrop,'r169','Subir fondo de la ficha')}<span class="hint">Se ve detrás del logo al abrir el título.</span></div>
-        <div class="field"><span>Logo (PNG transparente)</span>${slot('logo','logo',E.logo,'r31 contain','Subir logo')}<span class="hint">Se muestra en lugar del título escrito, en la ficha y en el banner.</span></div>
-        <div class="field span3"><span>Imagen del banner principal (panorámica 21:9)</span>${slot('banner','bannerImage',E.bannerImage,'r219','Subir imagen para el banner')}<span class="hint">La que se ve en la portada cuando este título está en el banner. Distinta del fondo de la ficha.</span></div>
+        <div class="field"><span>Póster</span>${slot('poster','poster',E.poster,'r23','Subir póster')}<span class="hint"><b>1000 × 1500 px</b> (vertical 2:3)</span></div>
+        <div class="field"><span>Fondo de la ficha</span>${slot('backdrop','backdrop',E.backdrop,'r169','Subir fondo de la ficha')}<span class="hint"><b>1920 × 1080 px</b> (16:9). Se ve detrás del logo al abrir el título. Dejá libre el lado izquierdo, ahí va el texto.</span></div>
+        <div class="field"><span>Logo del título</span>${slot('logo','logo',E.logo,'r31 contain','Subir logo')}<span class="hint"><b>1000 × 400 px</b> aprox., PNG con fondo transparente y recortado al borde. Reemplaza al título escrito.</span></div>
+        <div class="field span3"><span>Imagen del banner principal</span>${slot('banner','bannerImage',E.bannerImage,'r31','Subir imagen para el banner')}<span class="hint"><b>2400 × 800 px</b> (3:1). Dejá lo importante en el centro y la derecha: a la izquierda va el logo y el texto, y en pantallas angostas se recortan un poco los costados. La que se ve en la portada cuando este título está en el banner. Distinta del fondo de la ficha.</span></div>
       </div>
     </div>
     <div class="fs"><h3>Géneros y etiquetas</h3><div class="fgrid">
@@ -413,7 +413,7 @@ function renderSeasonsEd(E){
         <span data-row="s${si}"><button class="btn btn-danger btn-sm" data-season-x="${si}">Quitar temporada</button></span></div>
       <div class="season-b">
         ${(s.episodes||[]).map((e,ei)=>`<div class="ep-ed">
-          ${slot('thumb',`seasons.${si}.episodes.${ei}.thumb`,e.thumb,'r169','Miniatura')}
+          <div class="field">${slot('thumb',`seasons.${si}.episodes.${ei}.thumb`,e.thumb,'r169','Miniatura')}<span class="hint">1280 × 720 px</span></div>
           <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
             <div class="fgrid">
               <label class="field"><span>Nº</span><input class="input" id="e-n-${si}-${ei}" data-ep="${si}.${ei}" data-f="number" value="${esc(e.number)}" inputmode="numeric"></label>
@@ -435,7 +435,8 @@ function renderBanners(){
     <p style="margin:0;color:var(--muted);max-width:65ch">Los banners activos rotan en la portada en este orden. Si un campo queda vacío se usa la información del título vinculado. Sin banners activos, la portada muestra los títulos destacados.</p>
     <div class="banner-list">${bs.map((b,i)=>{ const t = byId(b.titleId); const img = b.image || t?.bannerImage || t?.backdrop;
       return `<div class="bcard" data-banner="${esc(b.id)}">
-        <div class="field">${slot('banner','banner:'+b.id, img, 'r219', 'Subir imagen del banner (21:9)')}
+        <div class="field">${slot('banner','banner:'+b.id, img, 'r31', 'Subir imagen del banner')}
+          <span class="hint"><b>2400 × 800 px</b> (3:1). Lo importante en el centro y la derecha.</span>
           <span class="hint">${b.image ? 'Imagen propia de este banner.' : t?.bannerImage ? 'Usando la imagen de banner del título. Tocá para cambiarla.' : t?.backdrop ? 'Usando el fondo de la ficha. Cargá una imagen de banner en el título o tocá acá.' : 'Sin imagen todavía.'}</span>
           <div class="order"><span class="code">#${i+1}</span>
             <button class="iconbtn" data-bmove="${esc(b.id)}" data-d="-1" aria-label="Subir" ${i===0?'disabled':''}>↑</button>
@@ -453,12 +454,12 @@ function renderBanners(){
 }
 function renderSite(){
   return `<div class="panel-head"><h1>Sitio</h1></div>
-    <div class="fs"><h3>Logo del sitio <small>aparece arriba a la izquierda en todas las páginas</small></h3>
+    <div class="fs"><h3>Logo del sitio <small>aparece arriba a la izquierda · PNG transparente de 600 × 160 px aprox.</small></h3>
       <div style="max-width:420px" class="field">${slot('sitelogo','site:logo',S.site.logo,'r31 contain','Subir logo (PNG transparente)')}
       <span class="hint">${S.site.logo ? 'Tocá la imagen para reemplazarla.' : 'Mientras no haya logo se muestra el nombre escrito.'}</span></div>
     </div>
     <div class="fs"><h3>Pie de página <small>se guarda al salir de cada campo</small></h3><div class="fgrid">
-      <div class="field span2" style="max-width:300px"><span>Logo del pie (opcional, pequeño)</span>${slot('sitelogo','site:footerLogo',S.site.footerLogo,'r31 contain','Subir logo (PNG transparente)')}<span class="hint">Se muestra chico junto al texto principal.</span></div>
+      <div class="field span2" style="max-width:300px"><span>Logo del pie (opcional · PNG transparente, 300 × 100 px aprox.)</span>${slot('sitelogo','site:footerLogo',S.site.footerLogo,'r31 contain','Subir logo (PNG transparente)')}<span class="hint">Se muestra chico junto al texto principal.</span></div>
       <label class="field span2"><span>Texto principal</span><input class="input" id="s-foot" data-site="footerText" value="${esc(S.site.footerText ?? 'REALITY VAULT')}"></label>
       <label class="field span2"><span>Texto secundario</span><input class="input" id="s-foot2" data-site="footerSub" value="${esc(S.site.footerSub ?? '')}" placeholder="© 2026 · Todos los derechos reservados"></label>
       <label class="field"><span>Instagram</span><input class="input" id="s-ig" data-site="instagram" value="${esc(S.site.instagram ?? '')}" placeholder="https://instagram.com/tuusuario"></label>
