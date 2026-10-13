@@ -616,27 +616,32 @@ a.cast-card:hover strong{color:var(--accent-2)}
 .tp-frame{aspect-ratio:16/9;max-height:78vh;background:#000}
 .tp-frame iframe,.tp-frame video{width:100%;height:100%;border:0;display:block}
 
-/* ---------- buttons: white pill + liquid glass (opción 1) ---------- */
+/* ---------- buttons: opción 1 (píldora blanca + círculos transparentes con borde fino) ---------- */
 .btn-play,.hero-play{background:#fff!important;color:#000!important;border-radius:99px!important;text-transform:uppercase;letter-spacing:.05em;padding:14px 28px}
 .btn-play:hover,.hero-play:hover{background:#f1eef0!important}
-.round,.hero-more,.list-wide,.hero-actions .round{
-  position:relative;isolation:isolate;overflow:hidden;color:#fff;
-  background:linear-gradient(145deg,rgba(255,255,255,.26) 0%,rgba(255,255,255,.08) 45%,rgba(255,255,255,.14) 100%);
-  border:1px solid rgba(255,255,255,.42);
-  -webkit-backdrop-filter:blur(18px) saturate(180%) brightness(1.08);backdrop-filter:blur(18px) saturate(180%) brightness(1.08);
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.55),inset 0 -1px 1px rgba(255,255,255,.12),inset 0 0 12px rgba(255,255,255,.06);
-  transition:background .2s,border-color .2s,transform .15s}
-.round::before,.hero-more::before,.list-wide::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
-  background:radial-gradient(120% 70% at 28% 0%,rgba(255,255,255,.38),rgba(255,255,255,0) 55%),radial-gradient(90% 60% at 80% 110%,rgba(255,255,255,.14),rgba(255,255,255,0) 60%)}
-.round:hover,.hero-more:hover,.list-wide:hover{background:linear-gradient(145deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.12) 45%,rgba(255,255,255,.2) 100%);border-color:rgba(255,255,255,.6)}
-.round:active,.hero-more:active,.list-wide:active{transform:scale(.95)}
+.round,.hero-more,.list-wide,.hero-actions .round{color:#fff;background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.45);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:background .2s,border-color .2s}
+.round:hover,.hero-more:hover,.list-wide:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255,.7)}
 .round{width:50px;height:50px}
 .hero-more{border-radius:99px;padding:13px 24px}
 .list-btn.on,.list-wide.on{color:var(--accent-2);border-color:rgba(245,163,196,.7)}
+/* ---------- phones only: Tubi-style home banner ---------- */
+.m-chips,.hero-m-info{display:none}
 @media (max-width:640px){
-  .hero-actions .btn{border-radius:99px}
-  .hero-actions .list-wide{width:54px;height:54px;border-radius:50%;padding:0!important;flex:0 0 54px}
-  .hero-actions .hero-play{padding:15px 12px}
+  .m-chips{display:flex;gap:10px;padding:6px 16px 16px;overflow-x:auto;scrollbar-width:none}
+  .m-chips::-webkit-scrollbar{display:none}
+  .m-chip{flex:0 0 auto;padding:10px 20px;border-radius:99px;font-family:var(--display);font-weight:700;font-size:15px;color:#fff;text-decoration:none;background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.3)}
+  .m-chip.on{background:#fff;color:#000;border-color:#fff}
+  .hero{border-radius:28px 28px 0 0}
+  .hero-slide{aspect-ratio:4/5;max-height:none;min-height:0}
+  .hero-slide::after{background:linear-gradient(0deg,#000 0%,rgba(0,0,0,.6) 20%,rgba(0,0,0,0) 48%)!important}
+  .hero-copy{align-items:stretch;text-align:left;padding:0 20px 20px;gap:6px}
+  .hero .hero-logo{object-position:left bottom;margin:0;max-width:68%;max-height:84px}
+  .hero h1{text-align:left;font-size:32px}
+  .hero-actions,.meta-m,.hero-dots{display:none!important}
+  .hero-m-info{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+  .hero-m-info .g{font-family:var(--display);font-weight:700;font-size:15px;color:#d9c6cf}
+  .hero-m-info .cnt{font-family:var(--display);font-weight:700;font-size:17px;color:var(--accent);white-space:nowrap}
+  .hero-m-info .cnt i{font-style:normal;color:var(--faint)}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>

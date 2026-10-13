@@ -220,6 +220,7 @@ function renderHero(){
           ${b.eyebrow ? `<span class="eyebrow">${esc(b.eyebrow)}</span>` : ''}
           ${t?.logo && !b.headline ? `<img class="hero-logo" alt="${esc(t.title)}" data-img="${esc(t.logo)}" hidden><h1 class="logo-fallback" hidden>${esc(headline)}</h1>` : `<h1>${esc(headline)}</h1>`}
           ${tag ? `<div class="hero-tag">${esc(tag)}</div>` : ''}
+          ${t ? `<div class="hero-m-info"><span class="g">${esc((t.genres||[]).slice(0,2).join(', '))}</span><span class="cnt">${i+1} <i>·</i> ${slides.length}</span></div>` : ''}
           ${t ? `<div class="meta">${metaLine(t)}</div><div class="meta-m">${t.rating ? `<span class="rating">${esc(t.rating)}</span>` : ''}${esc([t.year, (t.genres||[])[0]].filter(Boolean).join(' • '))}</div>` : ''}
           ${text ? `<p>${esc(text.length>220 ? text.slice(0,217)+'…' : text)}</p>` : ''}
           <div class="hero-actions">
@@ -289,6 +290,10 @@ function logoFallbacks(root){
   });
 }
 
+function mobileChips(active){
+  const items = [['home','/','Todo'],['series','/series','Series'],['peliculas','/peliculas','Películas'],['mi-lista','/mi-lista','Mi lista']];
+  return `<nav class="m-chips" aria-label="Secciones">${items.map(([k,h,l]) => `<a href="${h}" class="m-chip ${k===active?'on':''}" ${k===active?'aria-current="page"':''}>${l}</a>`).join('')}</nav>`;
+}
 function renderHome(){
   const pub = published();
   const newest = [...pub].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,20);
@@ -298,7 +303,7 @@ function renderHome(){
   const genres = {};
   pub.forEach(t => (t.genres||[]).forEach(g => (genres[g] ||= []).push(t)));
   const genreRows = Object.entries(genres).sort((a,b)=>b[1].length-a[1].length).slice(0,8);
-  return renderHero() + `<main>
+  return mobileChips('home') + renderHero() + `<main>
     ${continueRow()}
     ${listRow()}
     ${row('Destacados', feat)}
@@ -312,7 +317,7 @@ function renderBrowse(kind){
   const base = published().filter(t => kind==='series' ? t.type==='serie' : t.type!=='serie');
   const genres = [...new Set(base.flatMap(t=>t.genres||[]))].sort();
   const list = S.genre ? base.filter(t => (t.genres||[]).includes(S.genre)) : base;
-  return `<main><div class="page-head"><h1>${kind==='series'?'Series':'Películas'}</h1><p>${list.length} título${list.length===1?'':'s'} en la bóveda</p></div>
+  return mobileChips(kind) + `<main><div class="page-head"><h1>${kind==='series'?'Series':'Películas'}</h1><p>${list.length} título${list.length===1?'':'s'} en la bóveda</p></div>
     ${genres.length ? `<div class="chips"><button class="chip" data-genre="" aria-pressed="${!S.genre}">Todo</button>${genres.map(g=>`<button class="chip" data-genre="${esc(g)}" aria-pressed="${S.genre===g}">${esc(g)}</button>`).join('')}</div>` : ''}
     ${list.length ? `<div class="grid">${list.map(card).join('')}</div>` : `<p class="empty-note">Todavía no hay ${kind==='series'?'series':'películas'} publicadas.</p>`}
   </main>`;
@@ -1197,7 +1202,7 @@ function refreshListButtons(){
 function renderMyList(){
   if (!S.session) return `<div class="lock"><h1>Mi lista</h1><p>Creá una cuenta gratis para guardar tus series y películas.</p><button class="btn btn-primary" data-auth="signup">Crear cuenta</button><button class="btn btn-line" data-auth="login">Ya tengo cuenta</button></div>`;
   const list = [...S.myList].map(byId).filter(t => t && t.status !== 'borrador');
-  return `<main><div class="page-head"><h1 class="h-heart">${ICON_HEART_FILL} Mi lista</h1><p>${list.length} título${list.length===1?'':'s'}</p></div>
+  return mobileChips('mi-lista') + `<main><div class="page-head"><h1 class="h-heart">${ICON_HEART_FILL} Mi lista</h1><p>${list.length} título${list.length===1?'':'s'}</p></div>
     ${list.length ? `<div class="grid grid-wide">${list.map(wideCard).join('')}</div>` : '<p class="empty-note">Todavía no agregaste nada. Tocá el botón + en cualquier serie o película para guardarla acá.</p>'}</main>`;
 }
 function userHue(){
