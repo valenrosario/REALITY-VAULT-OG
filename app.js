@@ -25,9 +25,11 @@ function mediaUrl(ref){
   if (/^(https?:|data:|blob:)/i.test(ref)) return Promise.resolve(ref);
   return Promise.resolve(null);
 }
+const mqMobile = window.matchMedia('(max-width:640px)');
+const isMobile = () => mqMobile.matches;
 function hydrate(root){
   root.querySelectorAll('[data-src]').forEach(el => {
-    const ref = el.getAttribute('data-src'); el.removeAttribute('data-src');
+    const ref = (isMobile() && el.getAttribute('data-src-m')) || el.getAttribute('data-src'); el.removeAttribute('data-src'); el.removeAttribute('data-src-m');
     mediaUrl(ref).then(u => { if (u){ el.style.backgroundImage = `url("${u}")`; el.classList.add('has-img','filled'); } });
   });
   root.querySelectorAll('img[data-img]').forEach(el => {
@@ -54,7 +56,7 @@ async function processImage(file, maxW, maxH, alpha){
   x.drawImage(src,0,0,c.width,c.height);
   return await new Promise((res, rej) => c.toBlob(bl => bl ? res(bl) : rej(new Error('No se pudo procesar la imagen')), type, .88));
 }
-const IMG_SPECS = { sitelogo:[1400,460,true], poster:[1200,1800,false], backdrop:[2560,1440,false], logo:[1400,560,true], thumb:[1280,720,false], face:[400,400,false], banner:[3000,1000,false] };
+const IMG_SPECS = { mobile:[1600,1000,false], sitelogo:[1400,460,true], poster:[1200,1800,false], backdrop:[2560,1440,false], logo:[1400,560,true], thumb:[1280,720,false], face:[400,400,false], banner:[3000,1000,false] };
 const BUCKET = 'media';
 async function uploadImage(file, kind){
   const [w,h,alpha] = IMG_SPECS[kind] || IMG_SPECS.backdrop;
@@ -144,12 +146,13 @@ function renderHero(){
   return `<section class="hero" aria-roledescription="carrusel">
     ${slides.map(({b,t},i) => {
       const img = b.image || t?.bannerImage || t?.backdrop || t?.poster;
+      const imgM = b.imageMobile || t?.bannerImageMobile || t?.backdropMobile || '';
       const headline = b.headline || t?.title || '';
       const text = b.text || t?.description || '';
       const tag = t?.tagline || '';
       const link = t ? watchLink(t) : safeUrl(b.link);
       return `<div class="hero-slide ${i===S.heroIdx?'on':''}" data-slide="${i}" ${i===S.heroIdx?'':'aria-hidden="true"'}>
-        <div class="hero-bg ${t?'':'wide'}" ${img?`data-src="${esc(img)}"`:''}>${t?genBlock(t):''}</div>
+        <div class="hero-bg ${t?'':'wide'}" ${img||imgM?`data-src="${esc(img||imgM)}"`:''} ${imgM?`data-src-m="${esc(imgM)}"`:''}>${t?genBlock(t):''}</div>
         <div class="hero-copy">
           ${b.eyebrow ? `<span class="eyebrow">${esc(b.eyebrow)}</span>` : ''}
           ${t?.logo && !b.headline ? `<img class="hero-logo" alt="${esc(t.title)}" data-img="${esc(t.logo)}" hidden><h1 class="logo-fallback" hidden>${esc(headline)}</h1>` : `<h1>${esc(headline)}</h1>`}
@@ -351,7 +354,8 @@ function renderEditor(){
   const E = S.editing; const isSerie = E.type==='serie';
   const allTags = [...new Set(S.titles.flatMap(t=>t.tags||[]))];
   const allGenres = [...new Set([...S.titles.flatMap(t=>t.genres||[]), ...GENRE_SUGGEST])];
-  return `<div class="panel-head"><button class="btn btn-line btn-sm" data-back>← Catálogo</button><h1>${E._new?'Nuevo título':esc(E.title||'Editar')}</h1></div>
+  return `<div class="panel-head"><button class="btn btn-line btn-sm" data-back>← Catálogo</button><h1>${E._new?'Nuevo título':esc(E.title||'Editar')}</h1><button class="btn btn-primary" data-tmdb-open>Importar de TMDB</button></div>
+  ${S.tmdb?.open ? renderTmdbBox() : ''}
   <div class="editor">
     <div class="fs"><h3>Información</h3>
       <div class="seg" role="group" aria-label="Tipo"><button data-type="serie" aria-pressed="${isSerie}">Serie</button><button data-type="pelicula" aria-pressed="${!isSerie}">Película</button></div>
@@ -366,12 +370,17 @@ function renderEditor(){
         <label class="field"><span>${isSerie?'Creación':'Dirección'}</span><input class="input" id="f-dir" data-k="director" value="${esc(E.director)}"></label>
       </div>
     </div>
-    <div class="fs"><h3>Imágenes <small>se comprimen automáticamente</small></h3>
+    <div class="fs"><h3>Imágenes <small>tocá para subir un archivo o usá 🔗 para pegar un enlace</small></h3>
       <div class="imgs">
         <div class="field"><span>Póster</span>${slot('poster','poster',E.poster,'r23','Subir póster')}<span class="hint"><b>1000 × 1500 px</b> (vertical 2:3)</span></div>
         <div class="field"><span>Fondo de la ficha</span>${slot('backdrop','backdrop',E.backdrop,'r169','Subir fondo de la ficha')}<span class="hint"><b>1920 × 1080 px</b> (16:9). Se ve detrás del logo al abrir el título. Dejá libre el lado izquierdo, ahí va el texto.</span></div>
         <div class="field"><span>Logo del título</span>${slot('logo','logo',E.logo,'r31 contain','Subir logo')}<span class="hint"><b>1000 × 400 px</b> aprox., PNG con fondo transparente y recortado al borde. Reemplaza al título escrito.</span></div>
         <div class="field span3"><span>Imagen del banner principal</span>${slot('banner','bannerImage',E.bannerImage,'r31','Subir imagen para el banner')}<span class="hint"><b>2400 × 800 px</b> (3:1). Dejá lo importante en el centro y la derecha: a la izquierda va el logo y el texto, y en pantallas angostas se recortan un poco los costados. La que se ve en la portada cuando este título está en el banner. Distinta del fondo de la ficha.</span></div>
+      </div>
+      <h3 style="margin-top:8px">Versión celular <small>opcional · si no las cargás, se usan las de arriba</small></h3>
+      <div class="imgs imgs-m">
+        <div class="field"><span>Banner principal · celular</span>${slot('mobile','bannerImageMobile',E.bannerImageMobile,'r1610','Subir banner para celular')}<span class="hint"><b>1280 × 800 px</b> (16:10). Se muestra arriba de todo en la portada del celular.</span></div>
+        <div class="field"><span>Fondo de la ficha · celular</span>${slot('mobile','backdropMobile',E.backdropMobile,'r1610','Subir fondo para celular')}<span class="hint"><b>1280 × 800 px</b> (16:10). Se muestra arriba al abrir el título en el celular.</span></div>
       </div>
     </div>
     <div class="fs"><h3>Géneros y etiquetas</h3><div class="fgrid">
@@ -437,6 +446,9 @@ function renderBanners(){
       return `<div class="bcard" data-banner="${esc(b.id)}">
         <div class="field">${slot('banner','banner:'+b.id, img, 'r31', 'Subir imagen del banner')}
           <span class="hint"><b>2400 × 800 px</b> (3:1). Lo importante en el centro y la derecha.</span>
+          <span style="font-size:12.5px;font-weight:700;color:var(--muted);margin-top:6px">Versión celular (opcional)</span>
+          ${slot('mobile','bannerm:'+b.id, b.imageMobile || t?.bannerImageMobile || t?.backdropMobile, 'r1610', 'Subir imagen para celular')}
+          <span class="hint"><b>1280 × 800 px</b> (16:10). Si no la cargás, se usa la del título o un recorte de la de escritorio.</span>
           <span class="hint">${b.image ? 'Imagen propia de este banner.' : t?.bannerImage ? 'Usando la imagen de banner del título. Tocá para cambiarla.' : t?.backdrop ? 'Usando el fondo de la ficha. Cargá una imagen de banner en el título o tocá acá.' : 'Sin imagen todavía.'}</span>
           <div class="order"><span class="code">#${i+1}</span>
             <button class="iconbtn" data-bmove="${esc(b.id)}" data-d="-1" aria-label="Subir" ${i===0?'disabled':''}>↑</button>
@@ -481,6 +493,128 @@ function renderTaxonomy(){
   return `<div class="panel-head"><h1>Géneros y etiquetas</h1></div>
     <p style="margin:0;color:var(--muted)">Cada género con al menos un título publicado se convierte en una fila de la portada.</p>
     ${block('Géneros', g, 'genres')}${block('Etiquetas', tg, 'tags')}`;
+}
+
+/* --- TMDB import --- */
+const TMDB_IMG = 'https://image.tmdb.org/t/p/';
+function tmdbKey(){ try { return localStorage.getItem('rv-tmdb-key') || ''; } catch { return ''; } }
+function setTmdbKey(k){ try { k ? localStorage.setItem('rv-tmdb-key', k) : localStorage.removeItem('rv-tmdb-key'); } catch {} }
+async function tmdb(path, params = {}){
+  const key = tmdbKey(); if (!key) throw new Error('Falta la clave de TMDB.');
+  const url = new URL('https://api.themoviedb.org/3' + path);
+  url.searchParams.set('language', 'es-MX');
+  for (const [k,v] of Object.entries(params)) url.searchParams.set(k, v);
+  const headers = { accept:'application/json' };
+  if (key.startsWith('eyJ')) headers.Authorization = 'Bearer ' + key; else url.searchParams.set('api_key', key);
+  const r = await fetch(url, { headers });
+  if (r.status === 401) throw new Error('La clave de TMDB no es válida.');
+  if (!r.ok) throw new Error('TMDB respondió con un error (' + r.status + ').');
+  return r.json();
+}
+const tmdbImg = (path, size) => path ? TMDB_IMG + size + path : '';
+const TMDB_GENRE_FIX = { 'Reality':'Reality', 'Sci-Fi & Fantasy':'Ciencia ficción', 'Action & Adventure':'Acción y aventura', 'War & Politics':'Bélica', 'Kids':'Infantil' };
+function mapRating(cert){
+  if (!cert) return '';
+  const c = String(cert).toUpperCase().replace(/\s/g,'');
+  if (/^(ATP|G|TV-G|TV-Y|TV-Y7|0|U|AA|A|TP|L)$/.test(c)) return /Y7/.test(c) ? '+7' : 'ATP';
+  if (/^(\+?7|TV-Y7|PG|TV-PG|B)$/.test(c)) return '+7';
+  if (/^(\+?13|\+?12|PG-13|TV-14|B-15|12|13|14)$/.test(c)) return '+13';
+  if (/^(\+?16|R|15|16|C)$/.test(c)) return '+16';
+  if (/^(\+?18|NC-17|TV-MA|18|D)$/.test(c)) return '+18';
+  return '';
+}
+const fmtRuntime = m => !m ? '' : m >= 60 ? `${Math.floor(m/60)} h${m%60 ? ' ' + (m%60) + ' min' : ''}` : `${m} min`;
+function pickLogo(logos){
+  const order = ['es','en',null,undefined];
+  for (const lang of order){ const l = (logos||[]).filter(x => x.iso_639_1 === lang).sort((a,b)=>(b.vote_average||0)-(a.vote_average||0))[0]; if (l) return l.file_path; }
+  return (logos||[])[0]?.file_path || '';
+}
+function renderTmdbBox(){
+  const T = S.tmdb || {};
+  const key = tmdbKey();
+  if (!key || T.editKey) return `<div class="fs tmdb"><h3>Importar de TMDB <small>completa todo el formulario a partir de The Movie Database</small></h3>
+    <p class="hint" style="margin:0">Necesitás una clave gratuita de TMDB. Creá una cuenta en themoviedb.org, entrá a Configuración → API, pedí una clave para uso personal y copiá la <b>Clave de la API</b> o el <b>Token de acceso de lectura</b>. Se guarda solo en este navegador.</p>
+    <div class="toolbar"><input class="input" id="tmdb-key" style="max-width:460px" placeholder="Pegá tu clave de TMDB" value="${esc(key)}"><button class="btn btn-primary" data-tmdb-savekey>Guardar clave</button><button class="btn btn-line" data-tmdb-close>Cerrar</button></div></div>`;
+  return `<div class="fs tmdb"><h3>Importar de TMDB <small>${S.editing.type==='serie'?'buscando series':'buscando películas'}</small></h3>
+    <form class="toolbar" id="tmdbForm"><input class="input" id="tmdb-q" style="max-width:420px" placeholder="Nombre de la ${S.editing.type==='serie'?'serie':'película'}" value="${esc(T.q||'')}"><button class="btn btn-primary" type="submit">Buscar</button><button class="btn btn-line" type="button" data-tmdb-close>Cerrar</button><button class="btn btn-line btn-sm" type="button" data-tmdb-editkey>Cambiar clave</button></form>
+    ${T.status ? `<p class="hint" style="margin:0">${esc(T.status)}</p>` : ''}
+    ${(T.results||[]).length ? `<div class="tmdb-res">${T.results.map(r => `<button class="tmdb-item" data-tmdb-pick="${r.id}">
+        <span class="mini" ${r.poster_path?`style="background-image:url('${tmdbImg(r.poster_path,'w185')}')"`:''}></span>
+        <span><strong>${esc(r.name || r.title)}</strong><small>${esc(((r.first_air_date||r.release_date||'').slice(0,4)) || 's/f')}${r.original_name && r.original_name!==r.name ? ' · ' + esc(r.original_name) : ''}${r.original_title && r.original_title!==r.title ? ' · ' + esc(r.original_title) : ''}</small></span></button>`).join('')}</div>` : ''}
+    <label class="check"><input type="checkbox" id="tmdb-specials" ${T.specials?'checked':''}> Incluir “Especiales” (temporada 0)</label>
+    <span class="hint">Al elegir un resultado se reemplazan los datos del formulario: textos, géneros, reparto, imágenes y ${S.editing.type==='serie'?'todas las temporadas con sus capítulos':'duración'}. Los enlaces para ver no se tocan. Revisá todo y tocá Guardar.</span></div>`;
+}
+async function tmdbSearch(q){
+  const E = S.editing; S.tmdb = { ...(S.tmdb||{}), q, results:[], status:'Buscando…' }; rerenderPanel();
+  try {
+    const r = await tmdb(E.type==='serie' ? '/search/tv' : '/search/movie', { query:q, include_adult:'false' });
+    S.tmdb.results = (r.results||[]).slice(0,12);
+    S.tmdb.status = S.tmdb.results.length ? 'Elegí el resultado correcto:' : 'No se encontraron resultados.';
+  } catch(err){ S.tmdb.status = err.message; }
+  rerenderPanel();
+}
+async function tmdbImport(id){
+  const E = S.editing; const isSerie = E.type==='serie';
+  S.tmdb.status = 'Importando datos…'; S.tmdb.results = []; rerenderPanel();
+  try {
+    const base = isSerie ? `/tv/${id}` : `/movie/${id}`;
+    const det = await tmdb(base, { append_to_response: isSerie ? 'aggregate_credits,content_ratings' : 'credits,release_dates' });
+    const imgs = await tmdb(base + '/images', { language:'', include_image_language:'es,en,null' }).catch(()=>({}));
+    let det2 = det;
+    if (!det.overview || !det.tagline){ det2 = await tmdb(base, { language:'es-ES' }).catch(()=>det); }
+    E.tmdbId = id;
+    E.title = det.name || det.title || E.title;
+    E.tagline = det.tagline || det2.tagline || '';
+    E.description = det.overview || det2.overview || '';
+    const first = det.first_air_date || det.release_date || '';
+    E.year = first.slice(0,4) || E.year;
+    if (isSerie) E.yearEnd = (det.status === 'Ended' || det.status === 'Canceled') && det.last_air_date && det.last_air_date.slice(0,4) !== E.year ? det.last_air_date.slice(0,4) : '';
+    E.genres = (det.genres||[]).map(g => TMDB_GENRE_FIX[g.name] || g.name);
+    if (!isSerie) E.duration = fmtRuntime(det.runtime);
+    // rating
+    let cert = '';
+    if (isSerie){ const cr = det.content_ratings?.results || []; cert = (cr.find(x=>x.iso_3166_1==='AR') || cr.find(x=>x.iso_3166_1==='MX') || cr.find(x=>x.iso_3166_1==='US'))?.rating; }
+    else { const rd = det.release_dates?.results || []; const pick = rd.find(x=>x.iso_3166_1==='AR') || rd.find(x=>x.iso_3166_1==='MX') || rd.find(x=>x.iso_3166_1==='US'); cert = pick?.release_dates?.find(x=>x.certification)?.certification; }
+    const rt = mapRating(cert); if (rt) E.rating = rt;
+    // people
+    if (isSerie){
+      E.director = (det.created_by||[]).map(p=>p.name).join(', ');
+      E.cast = (det.aggregate_credits?.cast||[]).slice(0,16).map(c => ({ name:c.name, role:(c.roles||[])[0]?.character || '', photo: tmdbImg(c.profile_path,'w185') }));
+    } else {
+      E.director = (det.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', ');
+      E.cast = (det.credits?.cast||[]).slice(0,16).map(c => ({ name:c.name, role:c.character || '', photo: tmdbImg(c.profile_path,'w185') }));
+    }
+    // images
+    const bestPoster = (imgs.posters||[]).find(x=>x.iso_639_1==='es')?.file_path || det.poster_path;
+    E.poster = tmdbImg(bestPoster, 'w780');
+    const bd = det.backdrop_path || (imgs.backdrops||[])[0]?.file_path;
+    E.backdrop = tmdbImg(bd, 'original');
+    const logo = pickLogo(imgs.logos); if (logo) E.logo = tmdbImg(logo, 'w500');
+    // seasons
+    if (isSerie){
+      const wanted = (det.seasons||[]).filter(x => S.tmdb.specials || x.season_number > 0);
+      const old = E.seasons || [];
+      const seasons = [];
+      for (let i=0;i<wanted.length;i++){
+        S.tmdb.status = `Importando temporada ${wanted[i].season_number} (${i+1} de ${wanted.length})…`; rerenderPanel();
+        const sd = await tmdb(`/tv/${id}/season/${wanted[i].season_number}`);
+        const prev = old.find(x => +x.number === sd.season_number);
+        seasons.push({
+          id: prev?.id || uid('s'), number: sd.season_number,
+          title: sd.name && !/^(Temporada|Season)\s*\d+$/i.test(sd.name) ? sd.name : '',
+          episodes: (sd.episodes||[]).map(ep => {
+            const pe = prev?.episodes?.find(x => +x.number === ep.episode_number);
+            return { id: pe?.id || uid('e'), number: ep.episode_number, title: ep.name || '', description: ep.overview || '', duration: ep.runtime ? `${ep.runtime} min` : '', thumb: tmdbImg(ep.still_path,'w780'), url: pe?.url || '' };
+          })
+        });
+      }
+      E.seasons = seasons;
+    }
+    markDirty();
+    S.tmdb = { open:false };
+    toast('Datos importados de TMDB. Revisá y tocá Guardar.');
+    rerenderPanel(); window.scrollTo(0,0);
+  } catch(err){ S.tmdb.status = err.message || 'No se pudo importar.'; rerenderPanel(); }
 }
 
 /* --- backup --- */
@@ -529,6 +663,7 @@ async function importBackup(){
 /* --- admin interactions --- */
 async function applyImage(path, ref){
   if (path.startsWith('site:')){ await S.db.doc('site/config').set({ ...S.site, [path.slice(5)]:ref, updatedAt:Date.now() }); toast('Imagen actualizada'); }
+  else if (path.startsWith('bannerm:')){ await S.db.doc('banners/'+path.slice(8)).update({imageMobile:ref}); toast('Imagen para celular actualizada'); }
   else if (path.startsWith('banner:')){ await S.db.doc('banners/'+path.slice(7)).update({image:ref}); toast('Imagen del banner actualizada'); }
   else { setPath(S.editing, path, ref); markDirty(); rerenderPanel(); }
 }
@@ -548,7 +683,7 @@ function inlineConfirm(holder, label, onYes){
   holder.querySelector('[data-no]').onclick = e => { e.stopPropagation(); holder.innerHTML = prev; };
 }
 function collectRefs(t){
-  const r = [t.poster,t.backdrop,t.logo,t.bannerImage,...(t.cast||[]).map(c=>c.photo)];
+  const r = [t.poster,t.backdrop,t.logo,t.bannerImage,t.bannerImageMobile,t.backdropMobile,...(t.cast||[]).map(c=>c.photo)];
   (t.seasons||[]).forEach(s=>(s.episodes||[]).forEach(e=>r.push(e.thumb)));
   return r.filter(Boolean);
 }
@@ -634,12 +769,17 @@ app.addEventListener('click', async e => {
   if (d.backupDl !== undefined){ downloadBackup(); return; }
   if (d.backupUp !== undefined){ importBackup(); return; }
   if (d.tab){ if (S.dirty && S.editing){ toast('Guardá o cancelá los cambios primero', true); return; } S.adminTab = d.tab; S.editing=null; render(); return; }
-  if (d.new){ S.editing = blankTitle(d.new); S.dirty=false; rerenderPanel(); window.scrollTo(0,0); return; }
-  if (d.edit){ S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.dirty=false; rerenderPanel(); window.scrollTo(0,0); return; }
+  if (d.new){ S.tmdb = { open:true }; S.editing = blankTitle(d.new); S.dirty=false; rerenderPanel(); window.scrollTo(0,0); return; }
+  if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.dirty=false; rerenderPanel(); window.scrollTo(0,0); return; }
   if (d.del !== undefined && d.del){ inlineConfirm(t.closest('[data-row]'), '¿Eliminar?', () => deleteTitle(d.del)); return; }
   if (d.back !== undefined){ S.editing=null; S.dirty=false; rerenderPanel(); return; }
   if (d.save !== undefined){ saveTitle(); return; }
   const E = S.editing;
+  if (d.tmdbOpen !== undefined){ S.tmdb = { ...(S.tmdb||{}), open:true, editKey:false }; rerenderPanel(); document.getElementById(tmdbKey()?'tmdb-q':'tmdb-key')?.focus(); return; }
+  if (d.tmdbClose !== undefined){ S.tmdb = { open:false }; rerenderPanel(); return; }
+  if (d.tmdbEditkey !== undefined){ S.tmdb.editKey = true; rerenderPanel(); return; }
+  if (d.tmdbSavekey !== undefined){ const k = document.getElementById('tmdb-key').value.trim(); setTmdbKey(k); S.tmdb.editKey = false; toast(k ? 'Clave guardada en este navegador' : 'Clave borrada'); rerenderPanel(); document.getElementById('tmdb-q')?.focus(); return; }
+  if (d.tmdbPick){ S.tmdb.specials = !!document.getElementById('tmdb-specials')?.checked; tmdbImport(d.tmdbPick); return; }
   if (d.avail && E){ E.availability = d.avail; markDirty(); rerenderPanel(); return; }
   if (d.type && E){ E.type = d.type; if (E.type==='serie' && !E.seasons.length) E.seasons.push({id:uid('s'),number:1,title:'',episodes:[]}); markDirty(); rerenderPanel(); return; }
   if (d.chipX){ E[d.chipX].splice(+d.i,1); markDirty(); rerenderPanel(); return; }
@@ -652,6 +792,7 @@ app.addEventListener('click', async e => {
   if (d.epX){ const [si,ei]=d.epX.split('.').map(Number); E.seasons[si].episodes.splice(ei,1); markDirty(); rerenderPanel(); return; }
   if (d.clear){ e.stopPropagation();
     if (d.clear.startsWith('site:')){ await S.db.doc('site/config').set({ ...S.site, [d.clear.slice(5)]:'' }).catch(()=>toast('No se pudo quitar',true)); return; }
+    if (d.clear.startsWith('bannerm:')){ await S.db.doc('banners/'+d.clear.slice(8)).update({imageMobile:''}).catch(()=>toast('No se pudo quitar',true)); return; }
     if (d.clear.startsWith('banner:')){ const id=d.clear.slice(7); await S.db.doc('banners/'+id).update({image:''}).catch(()=>toast('No se pudo quitar',true)); return; }
     setPath(E, d.clear, ''); markDirty(); rerenderPanel(); return; }
   if (d.slotUrl){ e.stopPropagation();
@@ -721,7 +862,7 @@ function renderTitlePage(id){
   const meta = [years, isSerie && seasons.length ? `${seasons.length} temporada${seasons.length>1?'s':''}` : t.duration, (t.genres||[]).join(', ')].filter(Boolean).join(' • ');
   const playLabel = isSerie ? (firstSeason ? `Ver T${firstSeason.number}:E${firstEp.number}` : 'Ver') : 'Ver';
   return `<section class="tp-hero">
-    <div class="tp-bg wide" ${t.backdrop||t.bannerImage||t.poster?`data-src="${esc(t.backdrop||t.bannerImage||t.poster)}"`:''}>${genBlock(t)}</div>
+    <div class="tp-bg wide" ${t.backdrop||t.bannerImage||t.poster||t.backdropMobile?`data-src="${esc(t.backdrop||t.bannerImage||t.poster||t.backdropMobile)}"`:''} ${t.backdropMobile?`data-src-m="${esc(t.backdropMobile)}"`:''}>${genBlock(t)}</div>
     <div class="tp-copy">
       ${t.logo ? `<img class="tp-logo hero-logo" alt="${esc(t.title)}" data-img="${esc(t.logo)}" hidden><h1 class="logo-fallback" hidden>${esc(t.title)}</h1>` : `<h1>${esc(t.title)}</h1>`}
       <div class="chips-sm">${t.rating?`<span>${esc(t.rating)}</span>`:''}${isSoon(t)?'<span>Próximamente</span>':''}${(t.tags||[]).filter(x=>x.length<=6).slice(0,3).map(x=>`<span>${esc(x)}</span>`).join('')}</div>
@@ -777,6 +918,7 @@ function renderFooter(){
 }
 
 app.addEventListener('submit', async e => {
+  if (e.target.id === 'tmdbForm'){ e.preventDefault(); S.tmdb.specials = !!document.getElementById('tmdb-specials')?.checked; const q = document.getElementById('tmdb-q').value.trim(); if (q) tmdbSearch(q); return; }
   if (e.target.id !== 'loginForm') return;
   e.preventDefault();
   const msg = document.getElementById('loginMsg'); msg.textContent = '';
@@ -833,6 +975,8 @@ syncTop();
 /* ---------- boot ---------- */
 S.route = routeFromHash();
 render();
+mqMobile.addEventListener('change', () => { if (S.route !== 'admin') render(); });
+
 /* ---------- data layer (Supabase) ---------- */
 function makeDb(sb){
   const listeners = { titles:new Set(), banners:new Set(), site:new Set() };

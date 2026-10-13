@@ -55,7 +55,21 @@ Cada vez que cambies algo en GitHub, Vercel vuelve a publicar solo.
 
 ## Cómo se usa
 
-- **Imágenes:** en cada campo de imagen podés tocar para **subir un archivo**, o el botón 🔗 para **pegar un enlace** (por ejemplo una imagen de Blogger).
+### Importar series y películas desde TMDB
+
+En el panel, al crear o editar un título, tocá **Importar de TMDB**. Completa título, descripción, años, géneros, clasificación, reparto con fotos, póster, fondo, logo y todas las temporadas con sus capítulos.
+
+La primera vez te pide una clave gratuita:
+
+1. Creá una cuenta en [themoviedb.org](https://www.themoviedb.org/signup).
+2. Entrá a **Configuración → API** ([enlace directo](https://www.themoviedb.org/settings/api)) y pedí una clave de tipo **Developer** para uso personal.
+3. Copiá la **Clave de la API** (o el **Token de acceso de lectura**) y pegala en el panel. Queda guardada solo en tu navegador.
+
+Después de importar, revisá los datos, cargá los enlaces para ver y tocá **Guardar**.
+
+### Imágenes
+
+- En cada campo de imagen podés tocar para **subir un archivo**, o el botón 🔗 para **pegar un enlace** (por ejemplo una imagen de Blogger).
 - **Respaldo:** en **Panel → Sitio → Descargar respaldo** bajás todo el catálogo en un archivo. Conviene hacerlo de vez en cuando.
 - **Cerrar sesión:** botón al final del menú del panel.
 
