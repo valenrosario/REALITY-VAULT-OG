@@ -1237,10 +1237,11 @@ window.addEventListener('popstate', onRoute);
 let brandRef = null;
 function renderBrand(){
   const ref = S.site.logo || '';
-  if (ref === brandRef) return; brandRef = ref;
+  const key = ref + '|' + (S.siteLoaded ? 1 : 0);
+  if (key === brandRef) return; brandRef = key;
   const img = document.getElementById('siteLogo'), txt = document.getElementById('brandText');
-  if (!ref){ img.hidden = true; txt.style.display = 'contents'; return; }
-  mediaUrl(ref).then(u => { if (u && brandRef === ref){ img.src = u; img.hidden = false; txt.style.display = 'none'; } });
+  if (!ref){ img.hidden = true; txt.style.display = (S.siteLoaded || S.noDb) ? 'contents' : 'none'; return; }
+  mediaUrl(ref).then(u => { if (u && brandRef === key){ img.src = u; img.hidden = false; txt.style.display = 'none'; } });
 }
 function render(){
   clearInterval(S.heroTimer); renderBrand();
@@ -1249,7 +1250,7 @@ function render(){
   document.querySelectorAll('.nav a').forEach(a => { if (a.dataset.r===S.route && !S.q) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current'); });
   let html;
   if (S.noDb) html = `<div class="lock"><div class="dial" style="width:64px;height:64px" aria-hidden="true"></div><h1>Falta conectar la base de datos</h1><p>Completá <code>config.js</code> con los datos de tu proyecto de Supabase. Los pasos están en el archivo README.</p></div>`;
-  else if (!S.loaded.t && S.route!=='admin') html = `<div class="hero-empty"><div><div class="vault" aria-hidden="true"></div><p>Abriendo la bóveda…</p></div></div>`;
+  else if (!S.loaded.t && S.route!=='admin') html = `<div class="skel" aria-hidden="true"><div class="skel-hero"></div><div class="skel-row"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>`;
   else if (S.route==='admin') html = renderAdmin();
   else if (S.q.trim()) html = renderSearch();
   else if (S.route==='title') html = renderTitlePage(currentTitleId());
@@ -1275,6 +1276,22 @@ syncTop();
 
 
 /* ---------- boot ---------- */
+/* ---------- instant start: last catalog saved in this browser ---------- */
+const CACHE_KEY = 'rv-cache-v1';
+function loadCache(){
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if (!c) return;
+    S.titles = c.titles || []; S.banners = c.banners || []; S.site = c.site || {}; S.siteLoaded = true;
+    S.loaded.t = true; S.loaded.b = true;
+  } catch {}
+}
+let cacheT;
+function saveCache(){
+  clearTimeout(cacheT);
+  cacheT = setTimeout(() => { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ titles:S.titles, banners:S.banners, site:S.site, at:Date.now() })); } catch {} }, 300);
+}
+loadCache();
 S.route = routeFromPath();
 render();
 mqMobile.addEventListener('change', () => { if (S.route !== 'admin') render(); });
@@ -1337,7 +1354,7 @@ async function checkOwner(){
   if (!window.supabase || !cfg.supabaseUrl || !cfg.supabaseAnonKey || /TU_|xxxx/i.test(cfg.supabaseUrl + cfg.supabaseAnonKey)){ S.noDb = true; render(); return; }
   S.sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
   const db = makeDb(S.sb);
-  await checkOwner(); await loadMyList(); await loadProgress();
+  const authReady = (async () => { await checkOwner(); await loadMyList(); await loadProgress(); render(); })();
   // Supabase pide no llamar a otras funciones suyas dentro de este aviso: se difiere con setTimeout.
   S.sb.auth.onAuthStateChange((evt) => {
     if (evt === 'TOKEN_REFRESHED' || evt === 'INITIAL_SESSION') return;
@@ -1350,19 +1367,19 @@ async function checkOwner(){
   S.db = db;
   db.collection('titles').onSnapshot(snap => {
     S.titles = snap.docs.map(d => ({ ...d.data(), id:d.id }));
-    S.loaded.t = true;
+    S.loaded.t = true; saveCache();
     if (S.route==='admin' && S.owner){ if (!S.editing) rerenderPanel(); else { const side = document.querySelector('.side'); if (side) side.querySelector('[data-tab="catalogo"] span').textContent = S.titles.length; } }
     else { const y = window.scrollY; render(); if (S.route==='title') window.scrollTo(0,y); }
   }, err => { console.error(err); S.loaded.t = true; render(); });
   db.doc('site/config').onSnapshot(snap => {
-    S.site = snap.exists ? { ...snap.data() } : {};
-    renderBrand();
+    S.site = snap.exists ? { ...snap.data() } : {}; S.siteLoaded = true;
+    saveCache(); renderBrand();
     const f = app.querySelector('footer'); if (f){ f.outerHTML = renderFooter(); const nf = app.querySelector('footer'); if (nf) hydrate(nf); }
     if (S.route==='admin' && S.owner && S.adminTab==='sitio') rerenderPanel();
   }, () => {});
   db.collection('banners').onSnapshot(snap => {
     S.banners = snap.docs.map(d => ({ ...d.data(), id:d.id }));
-    S.loaded.b = true;
+    S.loaded.b = true; saveCache();
     if (S.route==='admin' && S.owner){ if (S.adminTab==='banners') rerenderPanel(); }
     else if (S.loaded.t) render();
   }, () => {});
