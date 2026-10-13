@@ -401,7 +401,7 @@ function renderEditor(){
       </div><div><button class="btn btn-line btn-sm" data-cast-add>+ Agregar persona</button></div>
     </div>
     ${isSerie ? renderSeasonsEd(E) : `<div class="fs"><h3>Reproducción</h3><div class="fgrid">
-      <label class="field span2"><span>Enlace para ver la película</span><input class="input" id="f-url" data-k="url" value="${esc(E.url)}" placeholder="https://…"><span class="hint">El botón “Ver ahora” abre este enlace.</span></label>
+      <label class="field span2"><span>Enlace para ver la película</span><input class="input" id="f-url" data-k="url" value="${esc(E.url)}" placeholder="https://…"><span class="hint">Se reproduce dentro del sitio. Funciona con YouTube, Vimeo, Google Drive, Dailymotion, OK.ru, Internet Archive y archivos .mp4 o .m3u8. Otros enlaces se intentan mostrar igual.</span></label>
     </div></div>`}
     <div class="fs"><h3>Disponibilidad</h3>
       <div class="seg" role="group" aria-label="Disponibilidad"><button data-avail="disponible" aria-pressed="${!isSoon(E)}">Disponible para ver</button><button data-avail="proximamente" aria-pressed="${isSoon(E)}">Próximamente</button></div>
@@ -435,7 +435,7 @@ function renderSeasonsEd(E){
               <label class="field"><span>Duración</span><input class="input" id="e-d-${si}-${ei}" data-ep="${si}.${ei}" data-f="duration" value="${esc(e.duration)}" placeholder="45 min"></label>
             </div>
             <label class="field"><span>Sinopsis</span><textarea class="textarea" style="min-height:64px" id="e-s-${si}-${ei}" data-ep="${si}.${ei}" data-f="description">${esc(e.description)}</textarea></label>
-            <div class="ep-ed-foot"><input class="input" id="e-u-${si}-${ei}" data-ep="${si}.${ei}" data-f="url" value="${esc(e.url)}" placeholder="Enlace para ver este capítulo (https://…)" aria-label="Enlace del capítulo">
+            <div class="ep-ed-foot"><input class="input" id="e-u-${si}-${ei}" data-ep="${si}.${ei}" data-f="url" value="${esc(e.url)}" placeholder="Enlace del video: YouTube, Vimeo, Google Drive, .mp4… (https://…)" aria-label="Enlace del capítulo">
               <button class="iconbtn" data-ep-x="${si}.${ei}" aria-label="Quitar capítulo">✕</button></div>
           </div></div>`).join('')}
         <div><button class="btn btn-line btn-sm" data-ep-add="${si}">+ Capítulo</button></div>
@@ -1183,6 +1183,113 @@ document.addEventListener('click', e => {
   if (!a || !S.session) return;
   recordWatch(a.dataset.tid, a.dataset.s ?? null, a.dataset.e ?? null);
 });
+/* ---------- built-in player ---------- */
+function embedFor(url){
+  let u; try { u = new URL(url); } catch { return null; }
+  const h = u.hostname.replace(/^(www|m)\./,'');
+  let id = null;
+  if (h === 'youtu.be') id = u.pathname.slice(1).split('/')[0];
+  else if (h.endsWith('youtube.com') || h === 'youtube-nocookie.com'){
+    id = u.searchParams.get('v');
+    if (!id){ const m = u.pathname.match(/\/(embed|shorts|live|v)\/([\w-]{6,})/); if (m) id = m[2]; }
+    if (!id && u.searchParams.get('list')) return { type:'iframe', provider:'YouTube', src:`https://www.youtube-nocookie.com/embed/videoseries?list=${encodeURIComponent(u.searchParams.get('list'))}&autoplay=1&rel=0` };
+  }
+  if (id){
+    const t = parseInt(u.searchParams.get('t') || u.searchParams.get('start') || '0', 10);
+    return { type:'iframe', provider:'YouTube', src:`https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0&modestbranding=1&playsinline=1${t ? '&start=' + t : ''}` };
+  }
+  if (h === 'vimeo.com' || h === 'player.vimeo.com'){
+    const m = u.pathname.match(/(\d{5,})(?:\/([0-9a-f]{6,}))?/);
+    if (m) return { type:'iframe', provider:'Vimeo', src:`https://player.vimeo.com/video/${m[1]}?autoplay=1${m[2] ? '&h=' + m[2] : (u.searchParams.get('h') ? '&h=' + u.searchParams.get('h') : '')}` };
+  }
+  if (h === 'drive.google.com'){
+    const m = u.pathname.match(/\/file\/d\/([^/]+)/); const fid = m ? m[1] : u.searchParams.get('id');
+    if (fid) return { type:'iframe', provider:'Google Drive', src:`https://drive.google.com/file/d/${encodeURIComponent(fid)}/preview` };
+  }
+  if (h === 'dailymotion.com' || h === 'dai.ly'){
+    const m = h === 'dai.ly' ? [null, u.pathname.slice(1)] : u.pathname.match(/video\/([a-z0-9]+)/i);
+    if (m && m[1]) return { type:'iframe', provider:'Dailymotion', src:`https://www.dailymotion.com/embed/video/${m[1]}?autoplay=1` };
+  }
+  if (h === 'ok.ru'){ const m = u.pathname.match(/video(?:embed)?\/(\d+)/); if (m) return { type:'iframe', provider:'OK', src:`https://ok.ru/videoembed/${m[1]}` }; }
+  if (h === 'archive.org'){ const m = u.pathname.match(/\/(?:details|embed)\/(.+)/); if (m) return { type:'iframe', provider:'Internet Archive', src:`https://archive.org/embed/${m[1]}` }; }
+  if (/\.(mp4|webm|ogv|ogg|mov|m4v)$/i.test(u.pathname)) return { type:'video', src:url };
+  if (/\.m3u8$/i.test(u.pathname)) return { type:'hls', src:url };
+  return { type:'iframe', src:url, generic:true };
+}
+let hlsLoading = null;
+function loadHls(){
+  if (window.Hls) return Promise.resolve(window.Hls);
+  return hlsLoading ||= new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js'; sc.onload = () => res(window.Hls); sc.onerror = rej; document.head.appendChild(sc); });
+}
+function nextAfter(t, season, episode){
+  if (!t || t.type !== 'serie' || season == null || season === '') return null;
+  const eps = flatEpisodes(t).filter(x => safeUrl(x.e.url));
+  const i = eps.findIndex(x => +x.s.number === +season && +x.e.number === +episode);
+  return i >= 0 && i + 1 < eps.length ? eps[i + 1] : null;
+}
+let playerRoot = null;
+function openPlayer({ url, tid, s: season, e: episode }){
+  const t = tid ? byId(tid) : null;
+  const emb = embedFor(url); if (!emb) return;
+  let sub = '';
+  if (t && t.type === 'serie' && season !== '' && season != null){
+    const ep = flatEpisodes(t).find(x => +x.s.number === +season && +x.e.number === +episode)?.e;
+    sub = `T${season}:E${episode}${ep?.title ? ' · ' + ep.title : ''}`;
+  }
+  const nx = nextAfter(t, season, episode);
+  if (!playerRoot){ playerRoot = document.createElement('div'); playerRoot.id = 'playerRoot'; document.body.appendChild(playerRoot); }
+  const media = emb.type === 'iframe'
+    ? `<iframe src="${esc(emb.src)}" title="${esc(t?.title || 'Video')}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+    : `<video id="plVideo" controls autoplay playsinline ${t?.backdrop ? `poster="${esc(t.backdrop)}"` : ''}></video>`;
+  playerRoot.innerHTML = `<div class="player" role="dialog" aria-modal="true" aria-label="Reproductor">
+    <div class="pl-top">
+      <button class="pl-btn" data-pl-close aria-label="Volver">←</button>
+      <div class="pl-title"><strong>${esc(t?.title || '')}</strong>${sub ? `<span>${esc(sub)}</span>` : ''}</div>
+      ${nx ? `<button class="pl-next" data-pl-next="${esc(t.id)}" data-s="${esc(nx.s.number)}" data-e="${esc(nx.e.number)}">Siguiente episodio ›</button>` : ''}
+      <button class="pl-btn" data-pl-full aria-label="Pantalla completa">⛶</button>
+    </div>
+    <div class="pl-stage">${media}</div>
+    ${emb.generic ? `<p class="pl-note">Si el video no carga, <a href="${esc(url)}" target="_blank" rel="noopener">abrilo en otra pestaña</a>.</p>` : ''}
+  </div>`;
+  document.body.style.overflow = 'hidden';
+  if (!S.playerOpen){ history.pushState({ player:true }, '', location.pathname); }
+  S.playerOpen = true;
+  const v = playerRoot.querySelector('#plVideo');
+  if (v){
+    if (emb.type === 'video') v.src = emb.src;
+    else if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = emb.src;
+    else loadHls().then(Hls => { const hls = new Hls(); hls.loadSource(emb.src); hls.attachMedia(v); v._hls = hls; }).catch(() => toast('No se pudo cargar el video', true));
+  }
+}
+function closePlayer(fromPop){
+  if (!S.playerOpen) return;
+  S.playerOpen = false;
+  const v = playerRoot?.querySelector('#plVideo'); if (v?._hls) v._hls.destroy();
+  if (playerRoot) playerRoot.innerHTML = '';
+  document.body.style.overflow = '';
+  if (!fromPop && history.state?.player){ S.ignorePop = true; history.back(); }
+}
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-pl-close]')){ closePlayer(); return; }
+  if (e.target.closest('[data-pl-full]')){ const st = document.querySelector('.player'); (st.requestFullscreen ? st.requestFullscreen() : Promise.reject()).catch(() => {}); return; }
+  const n = e.target.closest('[data-pl-next]');
+  if (n){
+    const t = byId(n.dataset.plNext); const ep = flatEpisodes(t).find(x => +x.s.number === +n.dataset.s && +x.e.number === +n.dataset.e);
+    if (!ep) return;
+    recordWatch(t.id, n.dataset.s, n.dataset.e);
+    S.playerOpen = true; openPlayer({ url: ep.e.url, tid: t.id, s: n.dataset.s, e: n.dataset.e });
+  }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.playerOpen && !document.fullscreenElement) closePlayer(); });
+// signed-in viewers: play inside the site instead of leaving it
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[data-watch]');
+  if (!a || !S.session) return;
+  e.preventDefault();
+  if (a.closest('.auth-card')) closeDetail();
+  openPlayer({ url: a.getAttribute('href'), tid: a.dataset.tid || '', s: a.dataset.s ?? '', e: a.dataset.e ?? '' });
+}, true);
+
 // gate every "watch" link behind an account (capture phase, before navigation)
 document.addEventListener('click', e => {
   const a = e.target.closest('a[data-watch]');
@@ -1262,7 +1369,11 @@ document.addEventListener('click', e => {
   if (!href.startsWith('/') || href.startsWith('//')) return;
   e.preventDefault(); navigate(href);
 });
-window.addEventListener('popstate', onRoute);
+window.addEventListener('popstate', () => {
+  if (S.ignorePop){ S.ignorePop = false; return; }
+  if (S.playerOpen){ closePlayer(true); return; }
+  onRoute();
+});
 let brandRef = null;
 function renderBrand(){
   const ref = S.site.logo || '';
