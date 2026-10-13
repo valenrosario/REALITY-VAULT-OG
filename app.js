@@ -140,7 +140,7 @@ function renderHero(){
     return `<section class="hero-empty"><div><div class="vault" aria-hidden="true"></div>
       <h1>La bóveda está cerrada</h1>
       <p>${S.owner ? 'Todavía no hay títulos publicados. Cargá tu primera serie o película desde el panel de control.' : 'Pronto vas a encontrar acá series y películas. Volvé en un rato.'}</p>
-      ${S.owner ? '<a class="btn btn-primary" href="#admin">Abrir el panel</a>' : ''}</div></section>`;
+      ${S.owner ? '<a class="btn btn-primary" href="/admin">Abrir el panel</a>' : ''}</div></section>`;
   }
   S.heroIdx = S.heroIdx % slides.length;
   return `<section class="hero" aria-roledescription="carrusel">
@@ -759,12 +759,12 @@ app.addEventListener('focusout', e => { const el=e.target; if (el.dataset?.chipI
 app.addEventListener('click', async e => {
   const t = e.target.closest('button, [data-slot], a, [data-open]'); if (!t) return;
   const d = t.dataset;
-  if (d.open){ S.q=''; document.getElementById('q').value=''; location.hash = 't-' + d.open; return; }
+  if (d.open){ S.q=''; document.getElementById('q').value=''; const tt = byId(d.open); if (tt) navigate(titlePath(tt)); return; }
   if (d.tptab){ S.tpTab = d.tptab; const y = window.scrollY; render(); window.scrollTo(0,y); return; }
   if (d.scroll){ const rail = t.parentElement.querySelector('.rail'); rail.scrollBy({left: +d.scroll * rail.clientWidth * .85, behavior:'smooth'}); return; }
   if (d.dot){ setHero(+d.dot); startHero(); return; }
   if (d.genre !== undefined && t.classList.contains('chip')){ S.genre = d.genre; render(); return; }
-  if (d.logout !== undefined){ await S.sb.auth.signOut(); toast('Sesión cerrada'); location.hash=''; return; }
+  if (d.logout !== undefined){ await S.sb.auth.signOut(); toast('Sesión cerrada'); navigate('/'); return; }
   if (!S.owner) return;
   if (d.backupDl !== undefined){ downloadBackup(); return; }
   if (d.backupUp !== undefined){ importBackup(); return; }
@@ -849,7 +849,7 @@ const ICONS = {
 function sortedSeasons(t){ return (t.seasons||[]).slice().sort((a,b)=>(a.number||0)-(b.number||0)).map(s=>({...s, episodes:(s.episodes||[]).slice().sort((a,b)=>(a.number||0)-(b.number||0))})); }
 function renderTitlePage(id){
   const t = byId(id);
-  if (!t || (t.status==='borrador' && !S.owner)) return `<div class="lock"><h1>No encontramos este título</h1><p>Puede que lo hayan quitado del catálogo.</p><a class="btn btn-line" href="#">Volver al inicio</a></div>`;
+  if (!t || (t.status==='borrador' && !S.owner)) return `<div class="lock"><h1>No encontramos este título</h1><p>Puede que lo hayan quitado del catálogo.</p><a class="btn btn-line" href="/">Volver al inicio</a></div>`;
   const isSerie = t.type==='serie';
   const seasons = isSerie ? sortedSeasons(t) : [];
   const tabs = [...(isSerie && seasons.length ? [['episodios','Episodios']] : []), ['sugerencias','Sugerencias'], ['detalles','Detalles']];
@@ -928,7 +928,60 @@ app.addEventListener('submit', async e => {
 });
 
 /* ---------- router ---------- */
-function routeFromHash(){ const h = location.hash.replace('#',''); if (h.startsWith('t-') && h.length>2){ S.titleId = h.slice(2); return 'title'; } return ['series','peliculas','admin'].includes(h) ? h : 'home'; }
+/* ---------- clean URLs: /serie/nombre, /pelicula/nombre, /series, /peliculas, /admin ---------- */
+function slugify(str){
+  return String(str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+    .replace(/&/g,' y ').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'titulo';
+}
+function slugOf(t){
+  const base = slugify(t.title);
+  const same = S.titles.filter(x => x.type === t.type && slugify(x.title) === base);
+  if (same.length <= 1) return base;
+  const withYear = base + (t.year ? '-' + t.year : '');
+  const sameYear = same.filter(x => (x.year||'') === (t.year||''));
+  return sameYear.length <= 1 ? withYear : withYear + '-' + String(t.id).slice(-4);
+}
+function titlePath(t){ return (t.type === 'serie' ? '/serie/' : '/pelicula/') + slugOf(t); }
+function findBySlug(kind, slug){
+  const type = kind === 'serie' ? 'serie' : 'pelicula';
+  return S.titles.find(t => (t.type === 'serie' ? 'serie' : 'pelicula') === type && slugOf(t) === slug)
+      || S.titles.find(t => slugOf(t) === slug) || byId(slug);
+}
+function routeFromPath(){
+  // old links with # (…/#t-id, …/#admin) still work
+  const h = location.hash.replace('#','');
+  if (h){
+    if (h.startsWith('t-')){ const t = byId(h.slice(2)); if (t){ history.replaceState(null,'',titlePath(t)); } else { S.pendingId = h.slice(2); } }
+    else if (['series','peliculas','admin'].includes(h)) history.replaceState(null,'','/'+h);
+  }
+  const parts = decodeURIComponent(location.pathname).replace(/\/+$/,'').split('/').filter(Boolean);
+  if (S.pendingId){ S.titleSlug = null; S.titleKind = null; return 'title'; }
+  if (parts.length === 2 && (parts[0] === 'serie' || parts[0] === 'pelicula')){ S.titleKind = parts[0]; S.titleSlug = parts[1]; return 'title'; }
+  if (parts.length === 1 && ['series','peliculas','admin'].includes(parts[0])) return parts[0];
+  return 'home';
+}
+function currentTitleId(){
+  if (S.pendingId){ const t = byId(S.pendingId); if (t){ S.pendingId = null; S.titleKind = t.type === 'serie' ? 'serie' : 'pelicula'; S.titleSlug = slugOf(t); history.replaceState(null,'',titlePath(t)); return t.id; } return S.pendingId; }
+  const t = findBySlug(S.titleKind, S.titleSlug); return t ? t.id : null;
+}
+function onRoute(){
+  const r = routeFromPath();
+  S.route = r; S.genre=''; S.tpTab=''; S.tpSeason=0;
+  if (r==='admin'){ S.q=''; document.getElementById('q').value=''; }
+  render(); window.scrollTo(0,0);
+}
+function navigate(path){
+  if (path === location.pathname && !location.hash) { window.scrollTo(0,0); return; }
+  history.pushState(null, '', path); onRoute();
+}
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[href]');
+  if (!a || a.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+  const href = a.getAttribute('href');
+  if (!href.startsWith('/') || href.startsWith('//')) return;
+  e.preventDefault(); navigate(href);
+});
+window.addEventListener('popstate', onRoute);
 let brandRef = null;
 function renderBrand(){
   const ref = S.site.logo || '';
@@ -947,19 +1000,14 @@ function render(){
   else if (!S.loaded.t && S.route!=='admin') html = `<div class="hero-empty"><div><div class="vault" aria-hidden="true"></div><p>Abriendo la bóveda…</p></div></div>`;
   else if (S.route==='admin') html = renderAdmin();
   else if (S.q.trim()) html = renderSearch();
-  else if (S.route==='title') html = renderTitlePage(S.titleId);
+  else if (S.route==='title') html = renderTitlePage(currentTitleId());
   else if (S.route==='series' || S.route==='peliculas') html = renderBrowse(S.route);
   else html = renderHome();
   app.innerHTML = html + (S.route==='admin' ? '' : renderFooter());
   hydrate(app); logoFallbacks(app); startHero();
 }
-window.addEventListener('hashchange', () => {
-  const r = routeFromHash();
-  if (S.route==='admin' && r!=='admin' && S.dirty){ /* keep edits in memory */ }
-  S.route = r; S.genre=''; S.tpTab=''; S.tpSeason=0; if (r==='admin'){ S.q=''; document.getElementById('q').value=''; }
-  render(); window.scrollTo(0,0);
-});
-document.getElementById('q').addEventListener('input', e => { S.q = e.target.value; if (S.route==='admin'){ location.hash=''; } render(); });
+
+document.getElementById('q').addEventListener('input', e => { S.q = e.target.value; if (S.route==='admin'){ history.pushState(null,'','/'); S.route='home'; } render(); });
 
 /* ---------- header over hero ---------- */
 const topEl = document.querySelector('.top');
@@ -973,7 +1021,7 @@ syncTop();
 
 
 /* ---------- boot ---------- */
-S.route = routeFromHash();
+S.route = routeFromPath();
 render();
 mqMobile.addEventListener('change', () => { if (S.route !== 'admin') render(); });
 

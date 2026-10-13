@@ -9,9 +9,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-@font-face{font-family:"Gravity Grotesk";src:url(fonts/MTVGravityGrotesk-Bold.woff) format("woff");font-weight:700;font-style:normal;font-display:swap}
-@font-face{font-family:"Gravity Grotesk";src:url(fonts/MTVGravityGrotesk-Book.woff) format("woff");font-weight:400;font-style:normal;font-display:swap}
-@font-face{font-family:"Gravity Grotesk";src:url(fonts/MTVGravityGrotesk-Light.woff) format("woff");font-weight:300;font-style:normal;font-display:swap}
+@font-face{font-family:"Gravity Grotesk";src:url(/fonts/MTVGravityGrotesk-Bold.woff) format("woff");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"Gravity Grotesk";src:url(/fonts/MTVGravityGrotesk-Book.woff) format("woff");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Gravity Grotesk";src:url(/fonts/MTVGravityGrotesk-Light.woff) format("woff");font-weight:300;font-style:normal;font-display:swap}
 /* Layout: pastel vault — full-bleed hero carousel over horizontal poster rows; owner-only control room at #admin. Light by default, dark on request. */
 :root{
   --bg:#000000; --bg-rgb:0,0,0; --surface:#0d0b0c; --surface-rgb:13,11,12; --surface-2:#1a1518; --surface-3:#272024;
@@ -394,23 +394,23 @@ a.ep-card:hover .ep-thumb{transform:scale(1.03);box-shadow:inset 0 0 0 2px var(-
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="#" aria-label="REALITY VAULT inicio"><img id="siteLogo" class="brand-logo" alt="REALITY VAULT" hidden><span id="brandText" style="display:contents"><span class="dial" aria-hidden="true"></span><b>REALITY <span>VAULT</span></b></span></a>
+  <a class="brand" href="/" aria-label="REALITY VAULT inicio"><img id="siteLogo" class="brand-logo" alt="REALITY VAULT" hidden><span id="brandText" style="display:contents"><span class="dial" aria-hidden="true"></span><b>REALITY <span>VAULT</span></b></span></a>
   <nav class="nav" aria-label="Secciones">
-    <a href="#" data-r="home">Inicio</a>
-    <a href="#series" data-r="series">Series</a>
-    <a href="#peliculas" data-r="peliculas">Películas</a>
+    <a href="/" data-r="home">Inicio</a>
+    <a href="/series" data-r="series">Series</a>
+    <a href="/peliculas" data-r="peliculas">Películas</a>
   </nav>
   <div class="top-right">
     <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q" type="search" placeholder="Buscar títulos, cast, etiquetas" aria-label="Buscar"></label>
-    <a id="adminLink" class="btn btn-line btn-sm admin-link" href="#admin" hidden>Panel</a>
+    <a id="adminLink" class="btn btn-line btn-sm admin-link" href="/admin" hidden>Panel</a>
   </div>
 </header>
 <div id="app"></div>
 <div id="overlayRoot"></div>
 <input id="filePick" type="file" accept="image/*" hidden>
-<script src="config.js"></script>
+<script src="/config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="app.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>

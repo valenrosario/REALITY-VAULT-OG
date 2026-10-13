@@ -47,7 +47,7 @@ Cada vez que cambies algo en GitHub, Vercel vuelve a publicar solo.
 
 ## Paso 5 · Entrar al panel y recuperar lo que ya tenías
 
-1. Abrí tu sitio y agregá `/#admin` al final del enlace (por ejemplo `reality-vault.vercel.app/#admin`).
+1. Abrí tu sitio y agregá `/admin` al final del enlace (por ejemplo `reality-vault.vercel.app/admin`).
 2. Entrá con el email y la contraseña del paso 2. A partir de ahí vas a ver el botón **Panel** arriba a la derecha.
 3. Andá a **Panel → Sitio → Importar respaldo** y elegí el archivo `respaldo-inicial.json` (descargalo desde GitHub). Se suben tus títulos, banners, imágenes y el logo del sitio.
 
