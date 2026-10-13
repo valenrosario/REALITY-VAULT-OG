@@ -74,9 +74,10 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .btn[disabled]{opacity:.5;cursor:default}
 .admin-link{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
 @media (max-width:760px){
-  .top{flex-wrap:wrap;gap:8px;padding-block:10px}
+  .top{flex-wrap:nowrap;gap:6px;padding-block:10px}
   .brand{order:1;margin-right:auto}
-  .brand-logo{height:28px;max-width:150px}
+  .brand{min-width:0;flex-shrink:1}
+  .brand-logo{height:26px;max-width:min(150px,38vw)}
   .nav{display:none}
   .top-right{order:2;gap:6px;flex:0 0 auto}
   .top .search{display:none}
@@ -368,7 +369,7 @@ a.ep-card:hover .ep-thumb{transform:scale(1.03);box-shadow:inset 0 0 0 2px var(-
   .hero-bg{position:relative;inset:auto;aspect-ratio:16/10;transform:none!important;flex-shrink:0}
   .hero-slide::after{inset:0 0 auto 0;aspect-ratio:16/10;background:linear-gradient(0deg,#000 0%,rgba(0,0,0,.35) 30%,rgba(0,0,0,0) 60%)}
   .hero-copy{margin-top:-48px;padding:0 var(--gutter) 40px;gap:6px}
-  .hero-logo{max-width:62vw;max-height:84px}
+  .hero .hero-logo{max-width:62vw;max-height:84px}
   .hero h1{font-size:34px}
   .hero-tag{font-size:15px}
   .hero p{font-size:14px;-webkit-line-clamp:2}
@@ -506,8 +507,8 @@ a.cast-card:hover strong{color:var(--accent-2)}
 .icon-btn{width:42px;height:42px;border-radius:50%;border:0;background:transparent;color:var(--fg);display:grid;place-items:center;cursor:pointer;text-decoration:none}
 .icon-btn:hover{background:rgba(var(--fg-rgb),.1)}
 .search-toggle,.heart-m{display:none!important}
-@media (max-width:760px){.search-toggle,.heart-m{display:grid!important}.btn-enter{background:#fff;color:#000;letter-spacing:.14em;text-transform:uppercase;padding:10px 20px;font-size:13px}}
 .btn-enter{background:var(--accent);color:var(--accent-ink)}
+@media (max-width:760px){.search-toggle,.heart-m{display:grid!important}.btn-enter{background:#fff;color:#000;letter-spacing:.14em;text-transform:uppercase;padding:10px 20px;font-size:13px}}
 .see-all{margin-left:auto;font-size:13.5px;color:var(--muted);text-decoration:none;font-family:var(--display);font-weight:700}
 .see-all:hover{color:var(--fg)}
 .list-wide,.meta-m,.lbl-m,.hero-tap{display:none}
@@ -522,7 +523,7 @@ a.cast-card:hover strong{color:var(--accent-2)}
   .hero-tap{display:block;position:absolute;inset:0;z-index:1;border:0;background:transparent;cursor:pointer}
   .hero-copy{margin-top:0;align-items:center;text-align:center;padding:0 16px 34px;max-width:none;gap:8px;z-index:2;pointer-events:none}
   .hero-copy > *{pointer-events:auto}
-  .hero-logo{object-position:center bottom;max-width:68vw;max-height:110px;margin:0 auto 4px}
+  .hero .hero-logo{object-position:center bottom;max-width:68vw;max-height:110px;margin:0 auto 4px}
   .hero h1{text-align:center}
   .hero .eyebrow,.hero-tag,.hero p,.hero .meta,.hero-more,.hero-actions .round{display:none}
   .meta-m{display:flex;align-items:center;justify-content:center;gap:10px;font-size:15px;color:var(--fg)}
