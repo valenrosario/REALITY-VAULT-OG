@@ -90,8 +90,14 @@ h1,h2,h3{text-wrap:balance;margin:0}
 
 /* ---------- hero ---------- */
 .hero{position:relative;height:clamp(380px,min(34vw,64vh),580px);overflow:hidden;isolation:isolate}
-.hero-slide{position:absolute;inset:0;opacity:0;transition:opacity .9s ease;z-index:0;display:flex;flex-direction:column;justify-content:flex-end}
-.hero-slide.on{opacity:1;z-index:1}
+.hero-track{display:flex;height:100%;transition:transform .55s cubic-bezier(.22,.7,.2,1);touch-action:pan-y;will-change:transform}
+.hero-slide{position:relative;flex:0 0 100%;min-width:0;height:100%;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;user-select:none;-webkit-user-select:none}
+.hero-slide img{-webkit-user-drag:none}
+.hero-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:4;width:44px;height:64px;border:0;border-radius:8px;background:rgba(0,0,0,.35);color:#fff;font-size:30px;cursor:pointer;opacity:0;transition:opacity .2s}
+.hero-arrow.l{left:10px}.hero-arrow.r{right:10px}
+.hero:hover .hero-arrow{opacity:1}
+@media (hover:none),(max-width:640px){.hero-arrow{display:none}}
+.hero-bg .gen .g-title,.hero-bg .gen .g-code,.tp-bg .gen .g-title,.tp-bg .gen .g-code{display:none}
 .hero-bg{position:absolute;inset:0;background-size:cover;background-position:center center;transform:scale(1.04);transition:transform 8s ease-out}
 .hero-slide.on .hero-bg{transform:scale(1)}
 .hero-slide::after{content:"";position:absolute;inset:0;background:
@@ -364,8 +370,8 @@ a.ep-card:hover .ep-thumb{transform:scale(1.03);box-shadow:inset 0 0 0 2px var(-
 /* ---------- phones: image on top, text below (HBO / Disney+ mobile) ---------- */
 @media (max-width:640px){
   .hero{height:auto}
-  .hero-slide{position:relative;inset:auto;display:none;opacity:1}
-  .hero-slide.on{display:flex}
+  .hero-track{height:auto;align-items:stretch}
+  .hero-slide{height:auto}
   .hero-bg{position:relative;inset:auto;aspect-ratio:16/10;transform:none!important;flex-shrink:0}
   .hero-slide::after{inset:0 0 auto 0;aspect-ratio:16/10;background:linear-gradient(0deg,#000 0%,rgba(0,0,0,.35) 30%,rgba(0,0,0,0) 60%)}
   .hero-copy{margin-top:-48px;padding:0 var(--gutter) 40px;gap:6px}

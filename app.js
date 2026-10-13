@@ -204,6 +204,7 @@ function renderHero(){
   }
   S.heroIdx = S.heroIdx % slides.length;
   return `<section class="hero" aria-roledescription="carrusel">
+    <div class="hero-track" style="transform:translateX(-${S.heroIdx*100}%)">
     ${slides.map(({b,t},i) => {
       const img = b.image || t?.bannerImage || t?.backdrop || t?.poster;
       const imgM = b.imageMobile || t?.bannerImageMobile || '';
@@ -227,15 +228,54 @@ function renderHero(){
           </div>
         </div></div>`;
     }).join('')}
+    </div>
+    ${slides.length>1 ? `<button class="hero-arrow l" data-hero-step="-1" aria-label="Anterior">‹</button><button class="hero-arrow r" data-hero-step="1" aria-label="Siguiente">›</button>` : ''}
     ${slides.length>1 ? `<div class="hero-dots">${slides.map((_,i)=>`<button data-dot="${i}" aria-label="Destacado ${i+1}" aria-current="${i===S.heroIdx}"></button>`).join('')}</div>` : ''}
   </section>`;
 }
 function setHero(i){
   const slides = app.querySelectorAll('.hero-slide'); if (!slides.length) return;
   S.heroIdx = (i + slides.length) % slides.length;
+  const track = app.querySelector('.hero-track');
+  if (track){ track.style.transition = ''; track.style.transform = `translateX(-${S.heroIdx*100}%)`; }
   slides.forEach((s,k)=>{ s.classList.toggle('on', k===S.heroIdx); s.toggleAttribute('aria-hidden', k!==S.heroIdx); });
   app.querySelectorAll('[data-dot]').forEach((d,k)=>d.setAttribute('aria-current', k===S.heroIdx));
 }
+// swipe with the finger (or drag with the mouse) to change banner
+(function heroSwipe(){
+  let st = null, dragged = false;
+  app.addEventListener('pointerdown', e => {
+    const track = e.target.closest('.hero-track'); if (!track || e.button > 0) return;
+    if (track.children.length < 2) return;
+    st = { x:e.clientX, y:e.clientY, w:track.getBoundingClientRect().width, track, id:e.pointerId, horiz:null };
+    dragged = false;
+  });
+  app.addEventListener('pointermove', e => {
+    if (!st || e.pointerId !== st.id) return;
+    const dx = e.clientX - st.x, dy = e.clientY - st.y;
+    if (st.horiz === null){ if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; st.horiz = Math.abs(dx) > Math.abs(dy); if (st.horiz){ clearInterval(S.heroTimer); try { st.track.setPointerCapture(e.pointerId); } catch {} } }
+    if (!st.horiz) return;
+    dragged = true;
+    const n = st.track.children.length;
+    let off = dx; if ((S.heroIdx === 0 && dx > 0) || (S.heroIdx === n-1 && dx < 0)) off = dx / 3;
+    st.track.style.transition = 'none';
+    st.track.style.transform = `translateX(calc(-${S.heroIdx*100}% + ${off}px))`;
+  });
+  const end = e => {
+    if (!st || e.pointerId !== st.id) return;
+    const dx = e.clientX - st.x, n = st.track.children.length;
+    if (st.horiz){
+      let next = S.heroIdx;
+      if (Math.abs(dx) > st.w * 0.15) next = dx < 0 ? Math.min(n-1, S.heroIdx + 1) : Math.max(0, S.heroIdx - 1);
+      setHero(next); startHero();
+    }
+    st = null;
+  };
+  app.addEventListener('pointerup', end); app.addEventListener('pointercancel', end);
+  // a drag must not count as a tap on the banner
+  app.addEventListener('click', e => { if (dragged && e.target.closest('.hero')){ e.preventDefault(); e.stopPropagation(); dragged = false; } }, true);
+  app.addEventListener('click', e => { const b = e.target.closest('[data-hero-step]'); if (b){ setHero(S.heroIdx + +b.dataset.heroStep); startHero(); } });
+})();
 function startHero(){
   clearInterval(S.heroTimer);
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
