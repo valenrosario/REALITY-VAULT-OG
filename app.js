@@ -393,15 +393,13 @@ function renderCatalog(){
       <button class="btn btn-line" data-new="pelicula">+ Película</button><button class="btn btn-primary" data-new="serie">+ Serie</button></div>
     <div class="stats"><div><b>${ser.length}</b>series</div><div><b>${mov.length}</b>películas</div><div><b>${ser.reduce((n,t)=>n+epCount(t),0)}</b>episodios</div><div><b>${S.titles.filter(t=>t.status==='borrador').length}</b>borradores</div></div>
     <div class="toolbar"><input class="input" id="adminFilter" style="max-width:320px" placeholder="Filtrar por título" value="${esc(S.adminFilter)}"></div>
-    ${list.length ? `<div class="table-wrap"><table><thead><tr><th></th><th>Título</th><th>Tipo</th><th>Contenido</th><th>Estado</th><th></th></tr></thead><tbody>
-      ${list.map(t=>`<tr>
-        <td><div class="mini" ${t.poster?`data-src="${esc(t.poster)}"`:''}>${genBlock(t)}</div></td>
-        <td><strong>${esc(t.title||'Sin título')}</strong><div class="code">${esc(t.year||'')}</div></td>
-        <td>${t.type==='serie'?'Serie':'Película'}</td>
-        <td>${t.type==='serie' ? `${(t.seasons||[]).length} temp. · ${epCount(t)} ep.` : esc(t.duration||'—')}</td>
-        <td style="white-space:nowrap">${t.status==='borrador'?'<span class="pill draft">Borrador</span>':'<span class="pill live">Publicado</span>'} ${t.featured?'<span class="pill feat">Destacado</span>':''} ${isSoon(t)?'<span class="pill draft">Próximamente</span>':''}</td>
-        <td><div class="actions" data-row="${esc(t.id)}"><button class="btn btn-line btn-sm" data-edit="${esc(t.id)}">Editar</button><button class="btn btn-danger btn-sm" data-del="${esc(t.id)}">Eliminar</button></div></td>
-      </tr>`).join('')}</tbody></table></div>` : `<p class="empty-note" style="padding:20px 0">${S.titles.length ? 'Ningún título coincide con el filtro.' : 'El catálogo está vacío. Empezá con “+ Serie” o “+ Película”.'}</p>`}`;
+    ${list.length ? `<div class="admin-grid">${list.map(t=>`<div class="admin-tile">
+        <button class="admin-poster" data-edit="${esc(t.id)}" aria-label="Editar ${esc(t.title||'Sin título')}"><div class="poster" ${t.poster?`data-src="${esc(t.poster)}"`:''}>${genBlock(t)}</div>
+          <span class="admin-badges">${t.status==='borrador'?'<span class="pill draft">Borrador</span>':''}${t.featured?'<span class="pill feat">Destacado</span>':''}${isSoon(t)?'<span class="pill draft">Próximamente</span>':''}</span></button>
+        <strong class="admin-name">${esc(t.title||'Sin título')}</strong>
+        <span class="admin-sub">${esc([t.type==='serie'?'Serie':'Película', t.year, t.type==='serie' ? `${(t.seasons||[]).length} temp. · ${epCount(t)} ep.` : t.duration].filter(Boolean).join(' · '))}</span>
+        <div class="actions admin-actions" data-row="${esc(t.id)}"><button class="btn btn-line btn-sm" data-edit="${esc(t.id)}">Editar</button><button class="btn btn-danger btn-sm" data-del="${esc(t.id)}">Eliminar</button></div>
+      </div>`).join('')}</div>` : `<p class="empty-note" style="padding:20px 0">${S.titles.length ? 'Ningún título coincide con el filtro.' : 'El catálogo está vacío. Empezá con “+ Serie” o “+ Película”.'}</p>`}`;
 }
 function slot(kind, path, value, cls, label){
   return `<div class="slot ${cls} ${value?'filled':''}" role="button" tabindex="0" data-slot="${kind}" data-path="${esc(path)}" ${value?`data-src="${esc(value)}"`:''} aria-label="${esc(label)}">

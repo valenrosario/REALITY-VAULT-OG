@@ -586,6 +586,21 @@ a.cast-card:hover strong{color:var(--accent-2)}
 .crop-zoom{flex:1;accent-color:var(--accent)}
 .crop-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 @media (max-width:520px){.crop-actions .btn{flex:1}}
+
+/* admin catalog as poster grid */
+.admin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:22px 16px}
+.admin-tile{display:flex;flex-direction:column;gap:6px;min-width:0}
+.admin-poster{position:relative;border:0;padding:0;background:none;cursor:pointer;display:block}
+.admin-poster .poster{transition:transform .2s}
+.admin-poster:hover .poster{transform:scale(1.03)}
+.admin-badges{position:absolute;left:6px;top:6px;z-index:3;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.admin-badges .pill{background:rgba(0,0,0,.78);font-size:11px;padding:3px 8px}
+.admin-name{font-family:var(--display);font-weight:700;font-size:14.5px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.admin-sub{font-size:12.5px;color:var(--muted)}
+.admin-actions{justify-content:flex-start;flex-wrap:wrap;margin-top:2px}
+.admin-actions .btn{flex:1;min-width:0;padding:6px 8px}
+.admin-actions .confirm{flex-wrap:wrap}
+@media (max-width:640px){.admin-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
 </head>
