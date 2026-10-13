@@ -73,14 +73,18 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .btn[disabled]{opacity:.5;cursor:default}
 .admin-link{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
 @media (max-width:760px){
-  .top{flex-wrap:wrap;gap:10px 12px;padding-block:10px 0}
-  .brand{order:1}
-  .brand-logo{height:26px;max-width:130px}
-  .top-right{order:2;flex:1;justify-content:flex-end}
-  .search{flex:1;max-width:240px;padding:6px 12px}
-  .search input{width:100%;font-size:14px}
-  .nav{order:3;width:calc(100% + 2 * var(--gutter));margin:0 calc(-1 * var(--gutter));padding:0 var(--gutter) 8px;overflow-x:auto;scrollbar-width:none}
-  .nav a{padding:6px 12px;font-size:13.5px}
+  .top{flex-wrap:wrap;gap:8px;padding-block:10px}
+  .brand{order:1;margin-right:auto}
+  .brand-logo{height:28px;max-width:150px}
+  .nav{display:none}
+  .top-right{order:2;gap:6px;flex:0 0 auto}
+  .top .search{display:none}
+  .top.searching .search{display:flex;position:absolute;left:12px;right:12px;top:calc(100% + 6px);max-width:none;background:var(--surface-2);box-shadow:0 10px 30px rgba(0,0,0,.6);padding:10px 14px}
+  .top.searching .search input{font-size:16px}
+  .search-toggle{display:grid!important}
+  .heart-m{display:grid!important}
+  .btn-enter{background:#fff;color:#000;letter-spacing:.14em;text-transform:uppercase;padding:9px 18px;font-size:13px}
+}
 }
 
 /* ---------- hero ---------- */
@@ -274,7 +278,7 @@ tbody tr:hover{background:rgba(var(--fg-rgb),.025)}
 .slot.filled .slot-x{display:block}
 .slot.contain{background-size:contain;background-repeat:no-repeat;background-color:var(--surface-3)}
 .slot.busy::after{content:"Procesando…";position:absolute;inset:0;display:grid;place-items:center;background:rgba(var(--bg-rgb),.85);color:var(--accent-strong)}
-.r219{aspect-ratio:21/9}.r1610{aspect-ratio:16/10}.r23{aspect-ratio:2/3}.r169{aspect-ratio:16/9}.r31{aspect-ratio:3/1}
+.r219{aspect-ratio:21/9}.r45{aspect-ratio:4/5}.r1610{aspect-ratio:16/10}.r23{aspect-ratio:2/3}.r169{aspect-ratio:16/9}.r31{aspect-ratio:3/1}
 .cast-ed{display:flex;flex-direction:column;gap:8px}
 .cast-row{display:grid;grid-template-columns:44px minmax(0,1fr) minmax(0,1fr) 36px;gap:8px;align-items:center}
 .cast-row .slot{width:44px;height:44px;border-radius:50%;padding:0;font-size:18px}
@@ -497,6 +501,43 @@ a.cast-card:hover strong{color:var(--accent-2)}
 .skel-row i{aspect-ratio:2/3;border-radius:4px;background:linear-gradient(100deg,var(--surface) 30%,var(--surface-2) 50%,var(--surface) 70%);background-size:250% 100%;animation:skel 1.4s ease-in-out infinite}
 @keyframes skel{0%{background-position:120% 0}100%{background-position:-20% 0}}
 @media (max-width:640px){.skel-hero{height:auto;aspect-ratio:16/10}.skel-row{grid-auto-columns:38vw;gap:10px}}
+
+/* simplified header bits */
+.icon-btn{width:42px;height:42px;border-radius:50%;border:0;background:transparent;color:var(--fg);display:grid;place-items:center;cursor:pointer;text-decoration:none}
+.icon-btn:hover{background:rgba(var(--fg-rgb),.1)}
+.search-toggle,.heart-m{display:none!important}
+@media (max-width:760px){.search-toggle,.heart-m{display:grid!important}.btn-enter{background:#fff;color:#000;letter-spacing:.14em;text-transform:uppercase;padding:10px 20px;font-size:13px}}
+.btn-enter{background:var(--accent);color:var(--accent-ink)}
+.see-all{margin-left:auto;font-size:13.5px;color:var(--muted);text-decoration:none;font-family:var(--display);font-weight:700}
+.see-all:hover{color:var(--fg)}
+.list-wide,.meta-m,.lbl-m,.hero-tap{display:none}
+.list-wide{background:rgba(20,16,18,.72);border:1px solid rgba(255,255,255,.22);color:#fff;gap:8px}
+.list-wide.on{border-color:var(--accent);color:var(--accent-2)}
+/* phones: tall poster-like banner, centered logo, two big buttons */
+@media (max-width:640px){
+  .hero{height:auto}
+  .hero-slide{aspect-ratio:4/5;max-height:82vh;min-height:440px;justify-content:flex-end}
+  .hero-bg{position:absolute!important;inset:0!important;aspect-ratio:auto!important}
+  .hero-slide::after{inset:0;aspect-ratio:auto;background:linear-gradient(0deg,#000 0%,rgba(0,0,0,.75) 18%,rgba(0,0,0,.15) 45%,rgba(0,0,0,0) 65%)}
+  .hero-tap{display:block;position:absolute;inset:0;z-index:1;border:0;background:transparent;cursor:pointer}
+  .hero-copy{margin-top:0;align-items:center;text-align:center;padding:0 16px 34px;max-width:none;gap:8px;z-index:2;pointer-events:none}
+  .hero-copy > *{pointer-events:auto}
+  .hero-logo{object-position:center bottom;max-width:68vw;max-height:110px;margin:0 auto 4px}
+  .hero h1{text-align:center}
+  .hero .eyebrow,.hero-tag,.hero p,.hero .meta,.hero-more,.hero-actions .round{display:none}
+  .meta-m{display:flex;align-items:center;justify-content:center;gap:10px;font-size:15px;color:var(--fg)}
+  .meta-m .rating{font-size:13px;background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.25);padding:2px 8px}
+  .hero-actions{width:100%;display:flex;gap:12px;margin-top:10px}
+  .hero-actions .hero-play,.hero-actions .btn-soon{flex:1.7}
+  .hero-actions .list-wide{flex:1}
+  .hero-actions .btn{padding:15px 12px;font-size:16px;border-radius:10px;text-transform:uppercase;letter-spacing:.02em}
+  .hero-play{background:#fff!important;color:#000!important;box-shadow:none!important}
+  .hero-play .lbl-d{display:none}.hero-play .lbl-m{display:inline-flex;align-items:center;gap:10px}
+  .hero-play svg{width:18px;height:18px}
+  .list-wide{display:inline-flex}
+  .hero-dots{bottom:10px}
+  .hero-dots button{width:6px;height:6px}
+}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -510,6 +551,7 @@ a.cast-card:hover strong{color:var(--accent-2)}
     <a href="/mi-lista" data-r="mi-lista" hidden>Mi lista</a>
   </nav>
   <div class="top-right">
+    <button id="searchToggle" class="icon-btn search-toggle" type="button" aria-label="Buscar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
     <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q" type="search" placeholder="Buscar títulos, cast, etiquetas" aria-label="Buscar"></label>
     <div id="account" class="account"></div>

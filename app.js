@@ -56,7 +56,7 @@ async function processImage(file, maxW, maxH, alpha){
   x.drawImage(src,0,0,c.width,c.height);
   return await new Promise((res, rej) => c.toBlob(bl => bl ? res(bl) : rej(new Error('No se pudo procesar la imagen')), type, .88));
 }
-const IMG_SPECS = { mobile:[1600,1000,false], sitelogo:[1400,460,true], poster:[1200,1800,false], backdrop:[2560,1440,false], logo:[1400,560,true], thumb:[1280,720,false], face:[400,400,false], banner:[3000,1000,false] };
+const IMG_SPECS = { mobilebanner:[1350,1700,false], mobile:[1600,1000,false], sitelogo:[1400,460,true], poster:[1200,1800,false], backdrop:[2560,1440,false], logo:[1400,560,true], thumb:[1280,720,false], face:[400,400,false], banner:[3000,1000,false] };
 const BUCKET = 'media';
 async function uploadImage(file, kind){
   const [w,h,alpha] = IMG_SPECS[kind] || IMG_SPECS.backdrop;
@@ -120,9 +120,9 @@ function card(t){
     <div class="poster" ${t.poster?`data-src="${esc(t.poster)}"`:''}>${isSoon(t)?'<span class="badge">Próximamente</span>':''}${genBlock(t)}</div>
   </button>`;
 }
-function row(title, list){
+function row(title, list, href){
   if (!list.length) return '';
-  return `<section class="row"><div class="row-head"><h2>${esc(title)}</h2><span class="count">${list.length}</span></div>
+  return `<section class="row"><div class="row-head"><h2>${esc(title)}</h2><span class="count">${list.length}</span>${href ? `<a class="see-all" href="${href}">Ver todo ›</a>` : ''}</div>
     <div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button>
     <div class="rail">${list.map(card).join('')}</div>
     <button class="rail-btn r" data-scroll="1" aria-label="Siguiente">›</button></div></section>`;
@@ -146,7 +146,7 @@ function renderHero(){
   return `<section class="hero" aria-roledescription="carrusel">
     ${slides.map(({b,t},i) => {
       const img = b.image || t?.bannerImage || t?.backdrop || t?.poster;
-      const imgM = b.imageMobile || t?.bannerImageMobile || t?.backdropMobile || '';
+      const imgM = b.imageMobile || t?.bannerImageMobile || '';
       const headline = b.headline || t?.title || '';
       const text = b.text || t?.description || '';
       const tag = t?.tagline || '';
@@ -154,15 +154,16 @@ function renderHero(){
       const link = t ? (target ? target.url : '') : safeUrl(b.link);
       return `<div class="hero-slide ${i===S.heroIdx?'on':''}" data-slide="${i}" ${i===S.heroIdx?'':'aria-hidden="true"'}>
         <div class="hero-bg ${t?'':'wide'}" ${img||imgM?`data-src="${esc(img||imgM)}"`:''} ${imgM?`data-src-m="${esc(imgM)}"`:''}>${t?genBlock(t):''}</div>
+        ${t ? `<button class="hero-tap" data-open="${esc(t.id)}" aria-label="Ver ${esc(t.title)}"></button>` : ''}
         <div class="hero-copy">
           ${b.eyebrow ? `<span class="eyebrow">${esc(b.eyebrow)}</span>` : ''}
           ${t?.logo && !b.headline ? `<img class="hero-logo" alt="${esc(t.title)}" data-img="${esc(t.logo)}" hidden><h1 class="logo-fallback" hidden>${esc(headline)}</h1>` : `<h1>${esc(headline)}</h1>`}
           ${tag ? `<div class="hero-tag">${esc(tag)}</div>` : ''}
-          ${t ? `<div class="meta">${metaLine(t)}</div>` : ''}
+          ${t ? `<div class="meta">${metaLine(t)}</div><div class="meta-m">${t.rating ? `<span class="rating">${esc(t.rating)}</span>` : ''}${esc([t.year, (t.genres||[])[0]].filter(Boolean).join(' • '))}</div>` : ''}
           ${text ? `<p>${esc(text.length>220 ? text.slice(0,217)+'…' : text)}</p>` : ''}
           <div class="hero-actions">
-            ${t && isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-primary" ${t ? watchAttrs(t, target?.season, target?.episode) : 'data-watch'} href="${esc(link)}" target="_blank" rel="noopener">▶ ${esc(target?.cont ? target.label : (b.cta || 'Ver ahora'))}</a>` : ''}
-            ${t ? `<button class="btn btn-ghost" data-open="${esc(t.id)}">Más información</button>${listBtn(t.id,'round')}` : ''}
+            ${t && isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-primary hero-play" ${t ? watchAttrs(t, target?.season, target?.episode) : 'data-watch'} href="${esc(link)}" target="_blank" rel="noopener"><span class="lbl-d">▶ ${esc(target?.cont ? target.label : (b.cta || 'Ver ahora'))}</span><span class="lbl-m">${ICONS.play} ${target?.cont ? 'Continuar' : 'Reproducir'}</span></a>` : ''}
+            ${t ? `<button class="btn btn-ghost hero-more" data-open="${esc(t.id)}">Más información</button>${listBtn(t.id,'round')}${listWide(t.id)}` : ''}
           </div>
         </div></div>`;
     }).join('')}
@@ -202,8 +203,8 @@ function renderHome(){
     ${S.session ? row('Mi lista', [...S.myList].map(byId).filter(t => t && t.status !== 'borrador')) : ''}
     ${row('Destacados', feat)}
     ${row('Novedades', newest)}
-    ${row('Series', series)}
-    ${row('Películas', movies)}
+    ${row('Series', series, '/series')}
+    ${row('Películas', movies, '/peliculas')}
     ${genreRows.map(([g,l]) => row(g, l)).join('')}
   </main>`;
 }
@@ -382,7 +383,7 @@ function renderEditor(){
       </div>
       <h3 style="margin-top:8px">Versión celular <small>opcional · si no las cargás, se usan las de arriba</small></h3>
       <div class="imgs imgs-m">
-        <div class="field"><span>Banner principal · celular</span>${slot('mobile','bannerImageMobile',E.bannerImageMobile,'r1610','Subir banner para celular')}<span class="hint"><b>1280 × 800 px</b> (16:10). Se muestra arriba de todo en la portada del celular.</span></div>
+        <div class="field"><span>Banner principal · celular</span>${slot('mobilebanner','bannerImageMobile',E.bannerImageMobile,'r45','Subir banner para celular')}<span class="hint"><b>1080 × 1350 px</b> (vertical 4:5). Ocupa toda la portada del celular; el logo y los botones van abajo al centro.</span></div>
         <div class="field"><span>Fondo de la ficha · celular</span>${slot('mobile','backdropMobile',E.backdropMobile,'r1610','Subir fondo para celular')}<span class="hint"><b>1280 × 800 px</b> (16:10). Se muestra arriba al abrir el título en el celular.</span></div>
       </div>
     </div>
@@ -450,8 +451,8 @@ function renderBanners(){
         <div class="field">${slot('banner','banner:'+b.id, img, 'r31', 'Subir imagen del banner')}
           <span class="hint"><b>2400 × 800 px</b> (3:1). Lo importante en el centro y la derecha.</span>
           <span style="font-size:12.5px;font-weight:700;color:var(--muted);margin-top:6px">Versión celular (opcional)</span>
-          ${slot('mobile','bannerm:'+b.id, b.imageMobile || t?.bannerImageMobile || t?.backdropMobile, 'r1610', 'Subir imagen para celular')}
-          <span class="hint"><b>1280 × 800 px</b> (16:10). Si no la cargás, se usa la del título o un recorte de la de escritorio.</span>
+          ${slot('mobilebanner','bannerm:'+b.id, b.imageMobile || t?.bannerImageMobile, 'r45', 'Subir imagen para celular')}
+          <span class="hint"><b>1080 × 1350 px</b> (vertical 4:5). El logo y los botones van abajo al centro: dejá libre la parte de abajo. Si no la cargás, se usa la del título o un recorte de la de escritorio.</span>
           <span class="hint">${b.image ? 'Imagen propia de este banner.' : t?.bannerImage ? 'Usando la imagen de banner del título. Tocá para cambiarla.' : t?.backdrop ? 'Usando el fondo de la ficha. Cargá una imagen de banner en el título o tocá acá.' : 'Sin imagen todavía.'}</span>
           <div class="order"><span class="code">#${i+1}</span>
             <button class="iconbtn" data-bmove="${esc(b.id)}" data-d="-1" aria-label="Subir" ${i===0?'disabled':''}>↑</button>
@@ -967,8 +968,13 @@ app.addEventListener('submit', async e => {
 /* ---------- router ---------- */
 /* ---------- viewer accounts & Mi lista ---------- */
 S.myList = new Set();
+const ICON_HEART = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.7 3.9 4.5 7.3 4.5c2 0 3.6 1.1 4.7 2.7 1.1-1.6 2.7-2.7 4.7-2.7 3.4 0 5.7 3.2 4.5 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>';
 const ICON_PLUS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
 const ICON_CHECK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+function listWide(id){
+  const on = S.myList.has(id);
+  return `<button class="btn list-wide ${on?'on':''}" data-mylist="${esc(id)}" data-wide="1" aria-pressed="${on}">${on?ICON_CHECK:ICON_PLUS} Mi lista</button>`;
+}
 function listBtn(id, cls){
   const on = S.myList.has(id);
   return `<button class="${cls||'round'} list-btn ${on?'on':''}" data-mylist="${esc(id)}" aria-pressed="${on}" aria-label="${on?'Quitar de Mi lista':'Agregar a Mi lista'}" title="${on?'Quitar de Mi lista':'Agregar a Mi lista'}">${on?ICON_CHECK:ICON_PLUS}</button>`;
@@ -1059,7 +1065,7 @@ async function toggleList(id){
   if (S.route === 'mi-lista') render();
 }
 function refreshListButtons(){
-  document.querySelectorAll('[data-mylist]').forEach(b => { const tmp = document.createElement('div'); tmp.innerHTML = listBtn(b.dataset.mylist, b.classList.contains('round') ? 'round' : b.className.split(' ')[0]); b.replaceWith(tmp.firstElementChild); });
+  document.querySelectorAll('[data-mylist]').forEach(b => { const tmp = document.createElement('div'); tmp.innerHTML = b.dataset.wide ? listWide(b.dataset.mylist) : listBtn(b.dataset.mylist, 'round'); b.replaceWith(tmp.firstElementChild); });
 }
 function renderMyList(){
   if (!S.session) return `<div class="lock"><h1>Mi lista</h1><p>Creá una cuenta gratis para guardar tus series y películas.</p><button class="btn btn-primary" data-auth="signup">Crear cuenta</button><button class="btn btn-line" data-auth="login">Ya tengo cuenta</button></div>`;
@@ -1077,9 +1083,9 @@ function glitterAvatar(size){ return `<span class="glitter-av ${size||''}" style
 function renderAccount(){
   const box = document.getElementById('account'); if (!box) return;
   document.querySelectorAll('[data-r="mi-lista"]').forEach(a => a.hidden = !S.session);
-  if (!S.session){ box.innerHTML = S.sb ? `<button class="btn btn-primary btn-sm" data-auth="login">Ingresar</button>` : ''; return; }
+  if (!S.session){ box.innerHTML = S.sb ? `<a class="icon-btn heart-m" href="/mi-lista" aria-label="Mi lista">${ICON_HEART}</a><button class="btn btn-sm btn-enter" data-auth="login">Entrar</button>` : ''; return; }
   const n = userName();
-  box.innerHTML = `<button class="avatar-btn" data-account-menu aria-haspopup="true" aria-expanded="false" title="${esc(n)}" aria-label="Tu cuenta">${glitterAvatar()}</button>
+  box.innerHTML = `<a class="icon-btn heart-m" href="/mi-lista" aria-label="Mi lista">${ICON_HEART}</a><button class="avatar-btn" data-account-menu aria-haspopup="true" aria-expanded="false" title="${esc(n)}" aria-label="Tu cuenta">${glitterAvatar()}</button>
     <div class="acc-menu" hidden><div class="acc-name">${glitterAvatar('lg')}<span>${esc(n)}</span></div>
       <a href="/mi-lista">Mi lista</a>${S.owner ? '<a href="/admin">Panel de control</a>' : ''}<button data-logout>Cerrar sesión</button></div>`;
 }
@@ -1276,6 +1282,11 @@ syncTop();
 
 
 /* ---------- boot ---------- */
+document.getElementById('searchToggle')?.addEventListener('click', () => {
+  const top = document.querySelector('.top'); const on = !top.classList.contains('searching');
+  top.classList.toggle('searching', on); if (on) document.getElementById('q').focus(); else { const q = document.getElementById('q'); if (q.value){ q.value=''; S.q=''; render(); } }
+});
+
 /* ---------- instant start: last catalog saved in this browser ---------- */
 const CACHE_KEY = 'rv-cache-v1';
 function loadCache(){
