@@ -765,7 +765,7 @@ app.addEventListener('click', async e => {
   if (d.scroll){ const rail = t.parentElement.querySelector('.rail'); rail.scrollBy({left: +d.scroll * rail.clientWidth * .85, behavior:'smooth'}); return; }
   if (d.dot){ setHero(+d.dot); startHero(); return; }
   if (d.genre !== undefined && t.classList.contains('chip')){ S.genre = d.genre; render(); return; }
-  if (d.logout !== undefined){ await S.sb.auth.signOut(); S.myList = new Set(); toast('Sesión cerrada'); navigate('/'); return; }
+  if (d.logout !== undefined){ await doLogout(); return; }
   if (!S.owner) return;
   if (d.backupDl !== undefined){ downloadBackup(); return; }
   if (d.backupUp !== undefined){ importBackup(); return; }
@@ -1054,8 +1054,15 @@ document.addEventListener('click', e => {
 }, true);
 document.addEventListener('click', async e => {
   if (!e.target.closest('[data-logout]') || e.target.closest('#app .side, #app .lock')) return;
-  await S.sb.auth.signOut(); S.myList = new Set(); toast('Sesión cerrada'); if (S.route === 'mi-lista' || S.route === 'admin') navigate('/'); else render();
+  await doLogout();
 });
+async function doLogout(){
+  try { await Promise.race([ S.sb.auth.signOut({ scope:'local' }), new Promise(r => setTimeout(r, 3000)) ]); } catch {}
+  try { Object.keys(localStorage).filter(k => /^sb-.*-auth-token/.test(k)).forEach(k => localStorage.removeItem(k)); } catch {}
+  S.session = null; S.owner = false; S.myList = new Set(); S.editing = null; S.dirty = false;
+  toast('Sesión cerrada');
+  if (S.route === 'mi-lista' || S.route === 'admin') navigate('/'); else render();
+}
 
 /* ---------- clean URLs: /serie/nombre, /pelicula/nombre, /series, /peliculas, /admin ---------- */
 function slugify(str){
@@ -1214,11 +1221,14 @@ async function checkOwner(){
   S.sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
   const db = makeDb(S.sb);
   await checkOwner(); await loadMyList();
-  S.sb.auth.onAuthStateChange(async (evt) => {
+  // Supabase pide no llamar a otras funciones suyas dentro de este aviso: se difiere con setTimeout.
+  S.sb.auth.onAuthStateChange((evt) => {
     if (evt === 'TOKEN_REFRESHED' || evt === 'INITIAL_SESSION') return;
-    const had = !!S.session, was = S.owner; await checkOwner();
-    if (had !== !!S.session){ await loadMyList(); render(); }
-    else if (was !== S.owner || S.route === 'admin') render();
+    setTimeout(async () => {
+      const had = !!S.session, was = S.owner; await checkOwner();
+      if (had !== !!S.session){ await loadMyList(); render(); }
+      else if (was !== S.owner || S.route === 'admin') render();
+    }, 0);
   });
   S.db = db;
   db.collection('titles').onSnapshot(snap => {
