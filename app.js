@@ -306,7 +306,7 @@ function showDetail(id, seasonIdx){
         <div class="meta">${metaLine(t)}</div>
         <div class="hero-actions">
           ${link ? `<a class="btn btn-primary" href="${esc(link)}" target="_blank" rel="noopener">▶ ${t.type==='serie'?'Ver T'+(seasons[0]?.number||1)+' E1':'Ver ahora'}</a>` : isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : ''}
-          ${safeUrl(t.trailer) ? `<a class="btn btn-ghost" href="${esc(t.trailer)}" target="_blank" rel="noopener">Tráiler</a>` : ''}
+          ${safeUrl(t.trailer) ? `<button class="btn btn-ghost" data-trailer="${esc(t.id)}">Tráiler</button>` : ''}
         </div>
       </div>
     </div>
@@ -467,7 +467,7 @@ function renderEditor(){
         : `<span class="hint">El botón “Ver ahora” abre ${E.type==='serie'?'el enlace del primer capítulo que lo tenga':'el enlace de la película'}.</span>`}
     </div>
     <div class="fs"><h3>Extras y publicación</h3><div class="fgrid">
-      <label class="field span2"><span>Enlace al tráiler</span><input class="input" id="f-trailer" data-k="trailer" value="${esc(E.trailer)}" placeholder="https://…"></label>
+      <label class="field span2"><span>Enlace al tráiler</span><input class="input" id="f-trailer" data-k="trailer" value="${esc(E.trailer)}" placeholder="https://www.youtube.com/watch?v=…"><span class="hint">Aparece el ícono de claqueta al lado de los botones y el tráiler se abre en una ventana encima de la página. Sirve YouTube, Vimeo, Google Drive o un .mp4.</span></label>
       <label class="check"><input type="checkbox" id="f-feat" data-k="featured" ${E.featured?'checked':''}> Mostrar en Destacados</label>
       <label class="check"><input type="checkbox" id="f-pub" data-k="published" ${E.status!=='borrador'?'checked':''}> Publicado (visible en el sitio)</label>
     </div></div>
@@ -915,7 +915,7 @@ const ICONS = {
   ig:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>',
   tt:'<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5c-1.42 0-2.6-1.16-2.6-2.6 0-1.72 1.66-3.01 3.37-2.48V9.66c-3.45-.46-6.47 2.22-6.47 5.64 0 3.33 2.76 5.7 5.69 5.7 3.14 0 5.69-2.55 5.69-5.7V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3s-1.88.09-3.24-1.48z"/></svg>',
   play:'<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l15 8-15 8z"/></svg>',
-  trailer:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z" fill="currentColor"/></svg>'
+  trailer:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10h17v9.5a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M3.2 9.9 2.6 7.3a1.5 1.5 0 0 1 1.1-1.8l13.6-3.2a1.5 1.5 0 0 1 1.8 1.1l.6 2.6z"/><path d="m7.6 4.9 2.6 4.1M12.6 3.7l2.6 4.1"/></svg>'
 };
 function sortedSeasons(t){ return (t.seasons||[]).slice().sort((a,b)=>(a.number||0)-(b.number||0)).map(s=>({...s, episodes:(s.episodes||[]).slice().sort((a,b)=>(a.number||0)-(b.number||0))})); }
 function renderTitlePage(id){
@@ -945,7 +945,7 @@ function renderTitlePage(id){
       <div class="tp-actions">
         ${isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-play" ${watchAttrs(t, target?.season, target?.episode)} href="${esc(link)}" target="_blank" rel="noopener">${ICONS.play} ${esc(playLabel)}</a>` : ''}
         ${listBtn(t.id,'round')}
-        ${safeUrl(t.trailer) ? `<a class="round" href="${esc(t.trailer)}" target="_blank" rel="noopener" aria-label="Ver tráiler" title="Tráiler">${ICONS.trailer}</a>` : ''}
+        ${safeUrl(t.trailer) ? `<button class="round" data-trailer="${esc(t.id)}" aria-label="Ver tráiler" title="Tráiler">${ICONS.trailer}</button>` : ''}
       </div>
     </div>
   </section>
@@ -1345,6 +1345,31 @@ document.addEventListener('click', e => {
   }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.playerOpen && !document.fullscreenElement) closePlayer(); });
+/* --- trailer pop-up (no account needed) --- */
+function openTrailer(id){
+  const t = byId(id); if (!t || !safeUrl(t.trailer)) return;
+  const emb = embedFor(t.trailer); if (!emb) return;
+  const box = document.createElement('div'); box.className = 'trailer-pop'; box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true'); box.setAttribute('aria-label','Tráiler de ' + (t.title||''));
+  const media = emb.type === 'iframe'
+    ? `<iframe src="${esc(emb.src)}" title="Tráiler" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+    : `<video controls autoplay playsinline src="${esc(emb.src)}"></video>`;
+  box.innerHTML = `<div class="tp-card"><div class="tp-head"><strong>Tráiler · ${esc(t.title||'')}</strong><button class="pl-btn" data-trailer-close aria-label="Cerrar">✕</button></div><div class="tp-frame">${media}</div></div>`;
+  document.body.appendChild(box); document.body.style.overflow = 'hidden';
+  const v = box.querySelector('video');
+  if (v && emb.type === 'hls'){ v.removeAttribute('src'); if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = emb.src; else loadHls().then(Hls => { const h = new Hls(); h.loadSource(emb.src); h.attachMedia(v); v._hls = h; }); }
+  box.querySelector('[data-trailer-close]').focus();
+}
+function closeTrailer(){
+  const b = document.querySelector('.trailer-pop'); if (!b) return;
+  const v = b.querySelector('video'); if (v?._hls) v._hls.destroy();
+  b.remove(); if (!S.playerOpen && !overlayRoot.firstChild) document.body.style.overflow = '';
+}
+document.addEventListener('click', e => {
+  const tr = e.target.closest('[data-trailer]'); if (tr){ e.preventDefault(); openTrailer(tr.dataset.trailer); return; }
+  if (e.target.closest('[data-trailer-close]') || e.target.classList?.contains('trailer-pop')) closeTrailer();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.querySelector('.trailer-pop')) closeTrailer(); });
+
 // signed-in viewers: play inside the site instead of leaving it
 document.addEventListener('click', e => {
   const a = e.target.closest('a[data-watch]');
