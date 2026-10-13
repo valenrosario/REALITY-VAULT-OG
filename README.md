@@ -59,6 +59,10 @@ Para ver un capítulo o una película, el sitio pide crear una cuenta gratis. Co
 2. En **Authentication → Sign In / Providers**, activá **Allow new users to sign up**.
 3. En la misma página, dentro de **Email**, desactivá **Confirm email** y guardá. Así la cuenta queda lista al instante: el correo gratuito de Supabase solo manda unos pocos emails por hora, y con la confirmación activada muchos usuarios no podrían terminar de registrarse.
 
+## Paso 7 · "Seguir viendo"
+
+En Supabase → **SQL Editor → New query**, pegá el contenido de `supabase/03-seguir-viendo.sql` y tocá **Run**. Desde ahí, cada usuario ve en el inicio la fila **Seguir viendo** con lo último que abrió, y el botón de cada serie pasa a decir **Continuar T1:E3**.
+
 ---
 
 ## Cómo se usa

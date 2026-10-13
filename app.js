@@ -150,7 +150,8 @@ function renderHero(){
       const headline = b.headline || t?.title || '';
       const text = b.text || t?.description || '';
       const tag = t?.tagline || '';
-      const link = t ? watchLink(t) : safeUrl(b.link);
+      const target = t ? playTarget(t) : null;
+      const link = t ? (target ? target.url : '') : safeUrl(b.link);
       return `<div class="hero-slide ${i===S.heroIdx?'on':''}" data-slide="${i}" ${i===S.heroIdx?'':'aria-hidden="true"'}>
         <div class="hero-bg ${t?'':'wide'}" ${img||imgM?`data-src="${esc(img||imgM)}"`:''} ${imgM?`data-src-m="${esc(imgM)}"`:''}>${t?genBlock(t):''}</div>
         <div class="hero-copy">
@@ -160,7 +161,7 @@ function renderHero(){
           ${t ? `<div class="meta">${metaLine(t)}</div>` : ''}
           ${text ? `<p>${esc(text.length>220 ? text.slice(0,217)+'…' : text)}</p>` : ''}
           <div class="hero-actions">
-            ${t && isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-primary" data-watch href="${esc(link)}" target="_blank" rel="noopener">▶ ${esc(b.cta || 'Ver ahora')}</a>` : ''}
+            ${t && isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-primary" ${t ? watchAttrs(t, target?.season, target?.episode) : 'data-watch'} href="${esc(link)}" target="_blank" rel="noopener">▶ ${esc(target?.cont ? target.label : (b.cta || 'Ver ahora'))}</a>` : ''}
             ${t ? `<button class="btn btn-ghost" data-open="${esc(t.id)}">Más información</button>${listBtn(t.id,'round')}` : ''}
           </div>
         </div></div>`;
@@ -197,6 +198,7 @@ function renderHome(){
   pub.forEach(t => (t.genres||[]).forEach(g => (genres[g] ||= []).push(t)));
   const genreRows = Object.entries(genres).sort((a,b)=>b[1].length-a[1].length).slice(0,8);
   return renderHero() + `<main>
+    ${continueRow()}
     ${S.session ? row('Mi lista', [...S.myList].map(byId).filter(t => t && t.status !== 'borrador')) : ''}
     ${row('Destacados', feat)}
     ${row('Novedades', newest)}
@@ -858,10 +860,12 @@ function renderTitlePage(id){
   if (S.tpSeason >= seasons.length) S.tpSeason = 0;
   let firstEp = null, firstSeason = null;
   for (const s of seasons){ const e = s.episodes[0]; if (e){ firstEp = e; firstSeason = s; break; } }
-  const link = watchLink(t);
+  const target = playTarget(t);
+  if (target && target.ep){ firstEp = target.ep; firstSeason = seasons.find(x => +x.number === +target.season) || firstSeason; }
+  const link = target ? target.url : '';
   const years = t.yearEnd ? `${t.year}-${t.yearEnd}` : t.year;
   const meta = [years, isSerie && seasons.length ? `${seasons.length} temporada${seasons.length>1?'s':''}` : t.duration, (t.genres||[]).join(', ')].filter(Boolean).join(' • ');
-  const playLabel = isSerie ? (firstSeason ? `Ver T${firstSeason.number}:E${firstEp.number}` : 'Ver') : 'Ver';
+  const playLabel = target ? target.label : 'Ver';
   return `<section class="tp-hero">
     <div class="tp-bg wide" ${t.backdrop||t.bannerImage||t.poster||t.backdropMobile?`data-src="${esc(t.backdrop||t.bannerImage||t.poster||t.backdropMobile)}"`:''} ${t.backdropMobile?`data-src-m="${esc(t.backdropMobile)}"`:''}>${genBlock(t)}</div>
     <div class="tp-copy">
@@ -871,7 +875,7 @@ function renderTitlePage(id){
       ${isSerie && firstEp ? `<div class="tp-ep"><strong>T${esc(firstSeason.number)}:E${esc(firstEp.number)} ${esc(firstEp.title||'')}</strong>${firstEp.description?`<p>${esc(firstEp.description)}</p>`:''}</div>`
         : `<div class="tp-ep">${t.tagline?`<strong>${esc(t.tagline)}</strong>`:''}${t.description?`<p>${esc(t.description.length>180?t.description.slice(0,177)+'…':t.description)}</p>`:''}</div>`}
       <div class="tp-actions">
-        ${isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-play" data-watch href="${esc(link)}" target="_blank" rel="noopener">${ICONS.play} ${esc(playLabel)}</a>` : ''}
+        ${isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-play" ${watchAttrs(t, target?.season, target?.episode)} href="${esc(link)}" target="_blank" rel="noopener">${ICONS.play} ${esc(playLabel)}</a>` : ''}
         ${listBtn(t.id,'round')}
         ${safeUrl(t.trailer) ? `<a class="round" href="${esc(t.trailer)}" target="_blank" rel="noopener" aria-label="Ver tráiler" title="Tráiler">${ICONS.trailer}</a>` : ''}
       </div>
@@ -885,8 +889,9 @@ function renderEpisodesTab(t, seasons){
   return `${seasons.length>1 ? `<select class="pill-select" id="tpSeason" aria-label="Temporada">${seasons.map((x,i)=>`<option value="${i}" ${i===S.tpSeason?'selected':''}>Temporada ${esc(x.number)}${x.title?' · '+esc(x.title):''}</option>`).join('')}</select>` : `<span class="pill-select" style="background-image:none;padding-right:16px">Temporada ${esc(s.number)}</span>`}
     ${s.episodes.length ? `<div class="ep-grid">${s.episodes.map(e => {
       const u = isSoon(t) ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
-      return `<${tag} class="ep-card" ${u?`data-watch href="${esc(u)}" target="_blank" rel="noopener"`:''}>
-        <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number)}</div>
+      const seen = (S.progress.get(t.id)?.watched || []).includes(epKey(s.number, e.number));
+      return `<${tag} class="ep-card ${seen?'seen':''}" ${u?`${watchAttrs(t, s.number, e.number)} href="${esc(u)}" target="_blank" rel="noopener"`:''}>
+        <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number)}${seen?'<span class="seen-tag">✓ Visto</span>':''}</div>
         <div><strong>${esc(e.number)}. ${esc(e.title || 'Episodio '+e.number)}</strong>${e.duration?`<div class="ep-d">${esc(e.duration)}</div>`:''}</div>
         ${e.description?`<p>${esc(e.description)}</p>`:''}</${tag}>`; }).join('')}</div>` : '<p class="empty-note" style="padding:0">Esta temporada todavía no tiene episodios.</p>'}`;
 }
@@ -939,6 +944,72 @@ function listBtn(id, cls){
   return `<button class="${cls||'round'} list-btn ${on?'on':''}" data-mylist="${esc(id)}" aria-pressed="${on}" aria-label="${on?'Quitar de Mi lista':'Agregar a Mi lista'}" title="${on?'Quitar de Mi lista':'Agregar a Mi lista'}">${on?ICON_CHECK:ICON_PLUS}</button>`;
 }
 const userName = () => (S.session?.user?.user_metadata?.name || S.session?.user?.email || '').trim();
+/* --- Seguir viendo --- */
+S.progress = new Map(); // title_id -> { last_season, last_episode, watched:[], updated_at }
+const epKey = (s, e) => `${s}-${e}`;
+async function loadProgress(){
+  S.progress = new Map();
+  if (!S.session || !S.sb) return;
+  const { data, error } = await S.sb.from('watch_progress').select('title_id,last_season,last_episode,watched,updated_at').order('updated_at', { ascending:false });
+  if (!error) (data||[]).forEach(r => S.progress.set(r.title_id, { ...r, watched: r.watched || [] }));
+}
+function flatEpisodes(t){ const out = []; sortedSeasons(t).forEach(s => s.episodes.forEach(e => out.push({ s, e }))); return out; }
+// What "Ver" should play: next episode after the last one opened, else the first one with a link.
+function playTarget(t){
+  if (isSoon(t)) return null;
+  if (t.type !== 'serie') return safeUrl(t.url) ? { url: t.url, label: S.progress.has(t.id) ? 'Volver a ver' : 'Ver', movie:true } : null;
+  const eps = flatEpisodes(t).filter(x => safeUrl(x.e.url));
+  if (!eps.length) return null;
+  const p = S.progress.get(t.id);
+  let i = 0, cont = false;
+  if (p){
+    const j = eps.findIndex(x => +x.s.number === +p.last_season && +x.e.number === +p.last_episode);
+    if (j >= 0){ i = j + 1 < eps.length ? j + 1 : j; cont = true; }
+  }
+  const { s, e } = eps[i];
+  return { url: e.url, season: s.number, episode: e.number, ep: e, label: `${cont ? 'Continuar' : 'Ver'} T${s.number}:E${e.number}`, cont };
+}
+function watchAttrs(t, season, episode){
+  return `data-watch data-tid="${esc(t.id)}" ${season != null ? `data-s="${esc(season)}" data-e="${esc(episode)}"` : ''}`;
+}
+async function recordWatch(tid, season, episode){
+  if (!S.session || !S.sb || !tid) return;
+  const prev = S.progress.get(tid);
+  const watched = new Set(prev?.watched || []);
+  if (season != null && season !== '') watched.add(epKey(season, episode));
+  const row = { user_id: S.session.user.id, title_id: tid, last_season: season === '' || season == null ? null : +season, last_episode: episode === '' || episode == null ? null : +episode, watched: [...watched], updated_at: new Date().toISOString() };
+  S.progress.delete(tid); S.progress = new Map([[tid, row], ...S.progress]);
+  const { error } = await S.sb.from('watch_progress').upsert(row);
+  if (error) console.warn('No se pudo guardar el progreso', error.message);
+  setTimeout(() => { const y = window.scrollY; render(); window.scrollTo(0, y); }, 400);
+}
+async function removeProgress(tid){
+  S.progress.delete(tid); render();
+  await S.sb.from('watch_progress').delete().eq('user_id', S.session.user.id).eq('title_id', tid);
+  toast('Quitado de Seguir viendo');
+}
+function continueRow(){
+  if (!S.session) return '';
+  const items = [...S.progress.values()].map(p => ({ p, t: byId(p.title_id) })).filter(x => x.t && x.t.status !== 'borrador').slice(0, 20);
+  if (!items.length) return '';
+  return `<section class="row"><div class="row-head"><h2>Seguir viendo</h2><span class="count">${items.length}</span></div>
+    <div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button>
+    <div class="rail rail-wide">${items.map(({ p, t }) => {
+      const target = playTarget(t);
+      const total = t.type === 'serie' ? flatEpisodes(t).length : 1;
+      const seen = t.type === 'serie' ? Math.min((p.watched||[]).length, total) : 1;
+      const pct = total ? Math.max(6, Math.round(seen / total * 100)) : 0;
+      const img = target?.ep?.thumb || t.backdrop || t.bannerImage || t.poster;
+      const sub = t.type === 'serie' ? (target ? (target.cont ? 'Sigue ' : '') + `T${target.season}:E${target.episode}${target.ep?.title ? ' · ' + target.ep.title : ''}` : `${seen} de ${total} episodios`) : 'Película';
+      const inner = `<div class="cw-thumb" ${img ? `data-src="${esc(img)}"` : ''}>${genBlock(t)}<span class="cw-play">${ICONS.play}</span><span class="cw-bar"><i style="width:${pct}%"></i></span></div>`;
+      return `<div class="cw-card">
+        ${target ? `<a class="cw-main" ${watchAttrs(t, target.season, target.episode)} href="${esc(target.url)}" target="_blank" rel="noopener" aria-label="${esc(target.label + ' · ' + t.title)}">${inner}</a>` : `<button class="cw-main" data-open="${esc(t.id)}">${inner}</button>`}
+        <div class="cw-info"><button class="cw-title" data-open="${esc(t.id)}">${esc(t.title)}</button><span class="cw-sub">${esc(sub)}</span></div>
+        <button class="cw-x" data-cw-remove="${esc(t.id)}" aria-label="Quitar de Seguir viendo" title="Quitar">✕</button>
+      </div>`; }).join('')}</div>
+    <button class="rail-btn r" data-scroll="1" aria-label="Siguiente">›</button></div></section>`;
+}
+
 async function loadMyList(){
   S.myList = new Set();
   if (!S.session || !S.sb) return;
@@ -966,13 +1037,20 @@ function renderMyList(){
   return `<main><div class="page-head"><h1>Mi lista</h1><p>${list.length} título${list.length===1?'':'s'}</p></div>
     ${list.length ? `<div class="grid">${list.map(card).join('')}</div>` : '<p class="empty-note">Todavía no agregaste nada. Tocá el botón + en cualquier serie o película para guardarla acá.</p>'}</main>`;
 }
+function userHue(){
+  const id = S.session?.user?.id || S.session?.user?.email || 'x';
+  let h = 0; for (const ch of id) h = (h * 33 + ch.charCodeAt(0)) >>> 0;
+  return h % 360;
+}
+const STAR_SVG = '<svg class="ga-star" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.75 6.05 6.6.7-4.95 4.45 1.4 6.5L12 16.95 6.2 20.3l1.4-6.5L2.65 9.35l6.6-.7z"/></svg>';
+function glitterAvatar(size){ return `<span class="glitter-av ${size||''}" style="--h:${userHue()}" aria-hidden="true"><span class="ga-sparkle"></span>${STAR_SVG}</span>`; }
 function renderAccount(){
   const box = document.getElementById('account'); if (!box) return;
   document.querySelectorAll('[data-r="mi-lista"]').forEach(a => a.hidden = !S.session);
   if (!S.session){ box.innerHTML = S.sb ? `<button class="btn btn-primary btn-sm" data-auth="login">Ingresar</button>` : ''; return; }
-  const n = userName(); const initial = (n[0] || '?').toUpperCase();
-  box.innerHTML = `<button class="avatar-btn" data-account-menu aria-haspopup="true" aria-expanded="false" title="${esc(n)}">${esc(initial)}</button>
-    <div class="acc-menu" hidden><div class="acc-name">${esc(n)}</div>
+  const n = userName();
+  box.innerHTML = `<button class="avatar-btn" data-account-menu aria-haspopup="true" aria-expanded="false" title="${esc(n)}" aria-label="Tu cuenta">${glitterAvatar()}</button>
+    <div class="acc-menu" hidden><div class="acc-name">${glitterAvatar('lg')}<span>${esc(n)}</span></div>
       <a href="/mi-lista">Mi lista</a>${S.owner ? '<a href="/admin">Panel de control</a>' : ''}<button data-logout>Cerrar sesión</button></div>`;
 }
 document.addEventListener('click', e => {
@@ -983,7 +1061,7 @@ document.addEventListener('click', e => {
   if (m && e.target.closest('.acc-menu a, .acc-menu button')) m.hidden = true;
 });
 function openAuth(opts = {}){
-  S.authCtx = { mode: opts.mode || 'signup', reason: opts.reason || '', href: opts.href || '', titleId: opts.titleId || '', msg:'' };
+  S.authCtx = { mode: opts.mode || 'signup', reason: opts.reason || '', href: opts.href || '', titleId: opts.titleId || '', tid: opts.tid || '', s: opts.s ?? '', e: opts.e ?? '', msg:'' };
   renderAuth();
 }
 function renderAuth(){
@@ -992,7 +1070,7 @@ function renderAuth(){
   overlayRoot.innerHTML = `<div class="overlay" data-close-bg><div class="auth-card" role="dialog" aria-modal="true" aria-label="${signup?'Crear cuenta':'Ingresar'}">
     <button class="sheet-close" data-close aria-label="Cerrar">✕</button>
     ${c.done ? `<h2>¡Listo${c.doneName ? ', ' + esc(c.doneName) : ''}!</h2><p>${esc(c.doneMsg)}</p>
-      ${c.href ? `<a class="btn btn-primary" data-watch href="${esc(c.href)}" target="_blank" rel="noopener">▶ Ver ahora</a>` : `<button class="btn btn-primary" data-close>Seguir</button>`}`
+      ${c.href ? `<a class="btn btn-primary" data-watch ${c.tid ? `data-tid="${esc(c.tid)}"` : ''} ${c.s !== '' ? `data-s="${esc(c.s)}" data-e="${esc(c.e)}"` : ''} href="${esc(c.href)}" target="_blank" rel="noopener">▶ Ver ahora</a>` : `<button class="btn btn-primary" data-close>Seguir</button>`}`
     : `<div class="auth-tabs"><button data-auth-mode="signup" aria-selected="${signup}">Crear cuenta</button><button data-auth-mode="login" aria-selected="${!signup}">Ingresar</button></div>
     <p class="auth-lead">${lead}</p>
     <form id="authForm" class="auth-form">
@@ -1038,17 +1116,24 @@ overlayRoot.addEventListener('submit', async e => {
   }
 });
 async function afterLogin(){
-  await checkOwner(); await loadMyList(); render();
+  await checkOwner(); await loadMyList(); await loadProgress(); render();
 }
+// remember what each user opens, for "Seguir viendo"
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[data-watch][data-tid]');
+  if (!a || !S.session) return;
+  recordWatch(a.dataset.tid, a.dataset.s ?? null, a.dataset.e ?? null);
+});
 // gate every "watch" link behind an account (capture phase, before navigation)
 document.addEventListener('click', e => {
   const a = e.target.closest('a[data-watch]');
   if (!a || S.session || !S.sb) return;
   if (a.closest('.auth-card')) return;
   e.preventDefault(); e.stopPropagation();
-  openAuth({ reason:'watch', href: a.getAttribute('href') });
+  openAuth({ reason:'watch', href: a.getAttribute('href'), tid: a.dataset.tid || '', s: a.dataset.s ?? '', e: a.dataset.e ?? '' });
 }, true);
 document.addEventListener('click', e => {
+  const cw = e.target.closest('[data-cw-remove]'); if (cw){ e.preventDefault(); e.stopPropagation(); removeProgress(cw.dataset.cwRemove); return; }
   const b = e.target.closest('[data-mylist]'); if (b){ e.preventDefault(); e.stopPropagation(); toggleList(b.dataset.mylist); return; }
   const au = e.target.closest('[data-auth]'); if (au){ e.preventDefault(); openAuth({ mode: au.dataset.auth }); }
 }, true);
@@ -1059,7 +1144,7 @@ document.addEventListener('click', async e => {
 async function doLogout(){
   try { await Promise.race([ S.sb.auth.signOut({ scope:'local' }), new Promise(r => setTimeout(r, 3000)) ]); } catch {}
   try { Object.keys(localStorage).filter(k => /^sb-.*-auth-token/.test(k)).forEach(k => localStorage.removeItem(k)); } catch {}
-  S.session = null; S.owner = false; S.myList = new Set(); S.editing = null; S.dirty = false;
+  S.session = null; S.owner = false; S.myList = new Set(); S.progress = new Map(); S.editing = null; S.dirty = false;
   toast('Sesión cerrada');
   if (S.route === 'mi-lista' || S.route === 'admin') navigate('/'); else render();
 }
@@ -1220,13 +1305,13 @@ async function checkOwner(){
   if (!window.supabase || !cfg.supabaseUrl || !cfg.supabaseAnonKey || /TU_|xxxx/i.test(cfg.supabaseUrl + cfg.supabaseAnonKey)){ S.noDb = true; render(); return; }
   S.sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
   const db = makeDb(S.sb);
-  await checkOwner(); await loadMyList();
+  await checkOwner(); await loadMyList(); await loadProgress();
   // Supabase pide no llamar a otras funciones suyas dentro de este aviso: se difiere con setTimeout.
   S.sb.auth.onAuthStateChange((evt) => {
     if (evt === 'TOKEN_REFRESHED' || evt === 'INITIAL_SESSION') return;
     setTimeout(async () => {
       const had = !!S.session, was = S.owner; await checkOwner();
-      if (had !== !!S.session){ await loadMyList(); render(); }
+      if (had !== !!S.session){ await loadMyList(); await loadProgress(); render(); }
       else if (was !== S.owner || S.route === 'admin') render();
     }, 0);
   });
