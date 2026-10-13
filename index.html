@@ -615,6 +615,29 @@ a.cast-card:hover strong{color:var(--accent-2)}
 .tp-head strong{font-family:var(--display);font-weight:700;font-size:16px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tp-frame{aspect-ratio:16/9;max-height:78vh;background:#000}
 .tp-frame iframe,.tp-frame video{width:100%;height:100%;border:0;display:block}
+
+/* ---------- buttons: white pill + liquid glass (opción 1) ---------- */
+.btn-play,.hero-play{background:#fff!important;color:#000!important;border-radius:99px!important;text-transform:uppercase;letter-spacing:.05em;padding:14px 28px}
+.btn-play:hover,.hero-play:hover{background:#f1eef0!important}
+.round,.hero-more,.list-wide,.hero-actions .round{
+  position:relative;isolation:isolate;overflow:hidden;color:#fff;
+  background:linear-gradient(145deg,rgba(255,255,255,.26) 0%,rgba(255,255,255,.08) 45%,rgba(255,255,255,.14) 100%);
+  border:1px solid rgba(255,255,255,.42);
+  -webkit-backdrop-filter:blur(18px) saturate(180%) brightness(1.08);backdrop-filter:blur(18px) saturate(180%) brightness(1.08);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.55),inset 0 -1px 1px rgba(255,255,255,.12),inset 0 0 12px rgba(255,255,255,.06);
+  transition:background .2s,border-color .2s,transform .15s}
+.round::before,.hero-more::before,.list-wide::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
+  background:radial-gradient(120% 70% at 28% 0%,rgba(255,255,255,.38),rgba(255,255,255,0) 55%),radial-gradient(90% 60% at 80% 110%,rgba(255,255,255,.14),rgba(255,255,255,0) 60%)}
+.round:hover,.hero-more:hover,.list-wide:hover{background:linear-gradient(145deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.12) 45%,rgba(255,255,255,.2) 100%);border-color:rgba(255,255,255,.6)}
+.round:active,.hero-more:active,.list-wide:active{transform:scale(.95)}
+.round{width:50px;height:50px}
+.hero-more{border-radius:99px;padding:13px 24px}
+.list-btn.on,.list-wide.on{color:var(--accent-2);border-color:rgba(245,163,196,.7)}
+@media (max-width:640px){
+  .hero-actions .btn{border-radius:99px}
+  .hero-actions .list-wide{width:54px;height:54px;border-radius:50%;padding:0!important;flex:0 0 54px}
+  .hero-actions .hero-play{padding:15px 12px}
+}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
 </head>
