@@ -379,7 +379,7 @@ function renderEditor(){
         <div class="field"><span>Póster</span>${slot('poster','poster',E.poster,'r23','Subir póster')}<span class="hint"><b>1000 × 1500 px</b> (vertical 2:3)</span></div>
         <div class="field"><span>Fondo de la ficha</span>${slot('backdrop','backdrop',E.backdrop,'r169','Subir fondo de la ficha')}<span class="hint"><b>1920 × 1080 px</b> (16:9). Se ve detrás del logo al abrir el título. Dejá libre el lado izquierdo, ahí va el texto.</span></div>
         <div class="field"><span>Logo del título</span>${slot('logo','logo',E.logo,'r31 contain','Subir logo')}<span class="hint"><b>1000 × 400 px</b> aprox., PNG con fondo transparente y recortado al borde. Reemplaza al título escrito.</span></div>
-        <div class="field"><span>Miniatura horizontal</span>${slot('thumb','thumbWide',E.thumbWide,'r169','Subir miniatura')}<span class="hint"><b>1280 × 720 px</b> (16:9) con el logo incluido. Se usa en Mi lista y Seguir viendo. Si no la cargás, se arma sola con el fondo y el logo.</span></div>
+        <div class="field"><span>Miniatura horizontal</span>${slot('thumb','thumbWide',E.thumbWide,'r169','Subir miniatura')}<span class="hint"><b>1280 × 720 px</b> (16:9). Se muestra tal cual en Mi lista y Seguir viendo. Si no la cargás, se usa el fondo del título.</span></div>
         <div class="field span3"><span>Imagen del banner principal</span>${slot('banner','bannerImage',E.bannerImage,'r31','Subir imagen para el banner')}<span class="hint"><b>2400 × 800 px</b> (3:1). Dejá lo importante en el centro y la derecha: a la izquierda va el logo y el texto, y en pantallas angostas se recortan un poco los costados. La que se ve en la portada cuando este título está en el banner. Distinta del fondo de la ficha.</span></div>
       </div>
       <h3 style="margin-top:8px">Versión celular <small>opcional · si no las cargás, se usan las de arriba</small></h3>
@@ -977,7 +977,7 @@ const ICON_PLUS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" s
 const ICON_CHECK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 function listWide(id){
   const on = S.myList.has(id);
-  return `<button class="btn list-wide ${on?'on':''}" data-mylist="${esc(id)}" data-wide="1" aria-pressed="${on}">${on?ICON_CHECK:ICON_PLUS} Mi lista</button>`;
+  return `<button class="btn list-wide ${on?'on':''}" data-mylist="${esc(id)}" data-wide="1" aria-pressed="${on}" aria-label="${on?'Quitar de Mi lista':'Agregar a Mi lista'}" title="${on?'Quitar de Mi lista':'Agregar a Mi lista'}">${on?ICON_CHECK:ICON_PLUS}</button>`;
 }
 function listBtn(id, cls){
   const on = S.myList.has(id);
@@ -1031,8 +1031,7 @@ async function removeProgress(tid){
 // Horizontal artwork for Mi lista / Seguir viendo: the "Miniatura horizontal" or the backdrop with the logo on top.
 function wideArt(t, extra){
   const img = t.thumbWide || t.backdrop || t.bannerImage || t.poster;
-  const logo = !t.thumbWide && t.logo ? `<img class="wa-logo" alt="" data-img="${esc(t.logo)}" hidden><span class="logo-fallback" hidden></span>` : '';
-  return `<div class="wide-art" ${img ? `data-src="${esc(img)}"` : ''}>${genBlock(t)}${logo}${extra||''}</div>`;
+  return `<div class="wide-art" ${img ? `data-src="${esc(img)}"` : ''}>${genBlock(t)}${extra||''}</div>`;
 }
 function listRow(){
   if (!S.session) return '';
