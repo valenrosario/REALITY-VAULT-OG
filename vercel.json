@@ -1,10 +1,29 @@
 {
   "cleanUrls": false,
   "rewrites": [
-    { "source": "/serie/:slug", "destination": "/index.html" },
-    { "source": "/pelicula/:slug", "destination": "/index.html" },
-    { "source": "/series", "destination": "/index.html" },
-    { "source": "/peliculas", "destination": "/index.html" },
-    { "source": "/admin", "destination": "/index.html" }
+    {
+      "source": "/serie/:slug",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/pelicula/:slug",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/series",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/peliculas",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/mi-lista",
+      "destination": "/index.html"
+    }
   ]
 }

@@ -160,8 +160,8 @@ function renderHero(){
           ${t ? `<div class="meta">${metaLine(t)}</div>` : ''}
           ${text ? `<p>${esc(text.length>220 ? text.slice(0,217)+'…' : text)}</p>` : ''}
           <div class="hero-actions">
-            ${t && isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-primary" href="${esc(link)}" target="_blank" rel="noopener">▶ ${esc(b.cta || 'Ver ahora')}</a>` : ''}
-            ${t ? `<button class="btn btn-ghost" data-open="${esc(t.id)}">Más información</button>` : ''}
+            ${t && isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-primary" data-watch href="${esc(link)}" target="_blank" rel="noopener">▶ ${esc(b.cta || 'Ver ahora')}</a>` : ''}
+            ${t ? `<button class="btn btn-ghost" data-open="${esc(t.id)}">Más información</button>${listBtn(t.id,'round')}` : ''}
           </div>
         </div></div>`;
     }).join('')}
@@ -197,6 +197,7 @@ function renderHome(){
   pub.forEach(t => (t.genres||[]).forEach(g => (genres[g] ||= []).push(t)));
   const genreRows = Object.entries(genres).sort((a,b)=>b[1].length-a[1].length).slice(0,8);
   return renderHero() + `<main>
+    ${S.session ? row('Mi lista', [...S.myList].map(byId).filter(t => t && t.status !== 'borrador')) : ''}
     ${row('Destacados', feat)}
     ${row('Novedades', newest)}
     ${row('Series', series)}
@@ -266,7 +267,7 @@ function showDetail(id, seasonIdx){
         </div>
         <div class="eps">${(s.episodes||[]).slice().sort((a,b)=>(a.number||0)-(b.number||0)).map(e => {
           const u = isSoon(t) ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
-          return `<${tag} class="ep" ${u?`href="${esc(u)}" target="_blank" rel="noopener"`:''}>
+          return `<${tag} class="ep" ${u?`data-watch href="${esc(u)}" target="_blank" rel="noopener"`:''}>
             <span class="ep-n">${esc(e.number)}</span>
             <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number)}</div>
             <div class="ep-info"><strong>${esc(e.title || 'Episodio '+e.number)}<span>${esc(e.duration||'')}</span></strong>${e.description?`<p>${esc(e.description)}</p>`:''}</div>
@@ -764,7 +765,7 @@ app.addEventListener('click', async e => {
   if (d.scroll){ const rail = t.parentElement.querySelector('.rail'); rail.scrollBy({left: +d.scroll * rail.clientWidth * .85, behavior:'smooth'}); return; }
   if (d.dot){ setHero(+d.dot); startHero(); return; }
   if (d.genre !== undefined && t.classList.contains('chip')){ S.genre = d.genre; render(); return; }
-  if (d.logout !== undefined){ await S.sb.auth.signOut(); toast('Sesión cerrada'); navigate('/'); return; }
+  if (d.logout !== undefined){ await S.sb.auth.signOut(); S.myList = new Set(); toast('Sesión cerrada'); navigate('/'); return; }
   if (!S.owner) return;
   if (d.backupDl !== undefined){ downloadBackup(); return; }
   if (d.backupUp !== undefined){ importBackup(); return; }
@@ -870,7 +871,8 @@ function renderTitlePage(id){
       ${isSerie && firstEp ? `<div class="tp-ep"><strong>T${esc(firstSeason.number)}:E${esc(firstEp.number)} ${esc(firstEp.title||'')}</strong>${firstEp.description?`<p>${esc(firstEp.description)}</p>`:''}</div>`
         : `<div class="tp-ep">${t.tagline?`<strong>${esc(t.tagline)}</strong>`:''}${t.description?`<p>${esc(t.description.length>180?t.description.slice(0,177)+'…':t.description)}</p>`:''}</div>`}
       <div class="tp-actions">
-        ${isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-play" href="${esc(link)}" target="_blank" rel="noopener">${ICONS.play} ${esc(playLabel)}</a>` : ''}
+        ${isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-play" data-watch href="${esc(link)}" target="_blank" rel="noopener">${ICONS.play} ${esc(playLabel)}</a>` : ''}
+        ${listBtn(t.id,'round')}
         ${safeUrl(t.trailer) ? `<a class="round" href="${esc(t.trailer)}" target="_blank" rel="noopener" aria-label="Ver tráiler" title="Tráiler">${ICONS.trailer}</a>` : ''}
       </div>
     </div>
@@ -883,7 +885,7 @@ function renderEpisodesTab(t, seasons){
   return `${seasons.length>1 ? `<select class="pill-select" id="tpSeason" aria-label="Temporada">${seasons.map((x,i)=>`<option value="${i}" ${i===S.tpSeason?'selected':''}>Temporada ${esc(x.number)}${x.title?' · '+esc(x.title):''}</option>`).join('')}</select>` : `<span class="pill-select" style="background-image:none;padding-right:16px">Temporada ${esc(s.number)}</span>`}
     ${s.episodes.length ? `<div class="ep-grid">${s.episodes.map(e => {
       const u = isSoon(t) ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
-      return `<${tag} class="ep-card" ${u?`href="${esc(u)}" target="_blank" rel="noopener"`:''}>
+      return `<${tag} class="ep-card" ${u?`data-watch href="${esc(u)}" target="_blank" rel="noopener"`:''}>
         <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number)}</div>
         <div><strong>${esc(e.number)}. ${esc(e.title || 'Episodio '+e.number)}</strong>${e.duration?`<div class="ep-d">${esc(e.duration)}</div>`:''}</div>
         ${e.description?`<p>${esc(e.description)}</p>`:''}</${tag}>`; }).join('')}</div>` : '<p class="empty-note" style="padding:0">Esta temporada todavía no tiene episodios.</p>'}`;
@@ -928,6 +930,133 @@ app.addEventListener('submit', async e => {
 });
 
 /* ---------- router ---------- */
+/* ---------- viewer accounts & Mi lista ---------- */
+S.myList = new Set();
+const ICON_PLUS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+const ICON_CHECK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+function listBtn(id, cls){
+  const on = S.myList.has(id);
+  return `<button class="${cls||'round'} list-btn ${on?'on':''}" data-mylist="${esc(id)}" aria-pressed="${on}" aria-label="${on?'Quitar de Mi lista':'Agregar a Mi lista'}" title="${on?'Quitar de Mi lista':'Agregar a Mi lista'}">${on?ICON_CHECK:ICON_PLUS}</button>`;
+}
+const userName = () => (S.session?.user?.user_metadata?.name || S.session?.user?.email || '').trim();
+async function loadMyList(){
+  S.myList = new Set();
+  if (!S.session || !S.sb) return;
+  const { data, error } = await S.sb.from('user_lists').select('title_id').order('created_at', { ascending:false });
+  if (!error) S.myList = new Set((data||[]).map(r => r.title_id));
+}
+async function toggleList(id){
+  if (!S.session){ openAuth({ reason:'list', titleId:id }); return; }
+  const on = S.myList.has(id);
+  on ? S.myList.delete(id) : (S.myList = new Set([id, ...S.myList]));
+  refreshListButtons();
+  const q = on ? S.sb.from('user_lists').delete().eq('user_id', S.session.user.id).eq('title_id', id)
+               : S.sb.from('user_lists').insert({ user_id: S.session.user.id, title_id: id });
+  const { error } = await q;
+  if (error){ on ? S.myList.add(id) : S.myList.delete(id); refreshListButtons(); toast('No se pudo actualizar tu lista', true); return; }
+  toast(on ? 'Quitado de Mi lista' : 'Agregado a Mi lista');
+  if (S.route === 'mi-lista') render();
+}
+function refreshListButtons(){
+  document.querySelectorAll('[data-mylist]').forEach(b => { const tmp = document.createElement('div'); tmp.innerHTML = listBtn(b.dataset.mylist, b.classList.contains('round') ? 'round' : b.className.split(' ')[0]); b.replaceWith(tmp.firstElementChild); });
+}
+function renderMyList(){
+  if (!S.session) return `<div class="lock"><h1>Mi lista</h1><p>Creá una cuenta gratis para guardar tus series y películas.</p><button class="btn btn-primary" data-auth="signup">Crear cuenta</button><button class="btn btn-line" data-auth="login">Ya tengo cuenta</button></div>`;
+  const list = [...S.myList].map(byId).filter(t => t && t.status !== 'borrador');
+  return `<main><div class="page-head"><h1>Mi lista</h1><p>${list.length} título${list.length===1?'':'s'}</p></div>
+    ${list.length ? `<div class="grid">${list.map(card).join('')}</div>` : '<p class="empty-note">Todavía no agregaste nada. Tocá el botón + en cualquier serie o película para guardarla acá.</p>'}</main>`;
+}
+function renderAccount(){
+  const box = document.getElementById('account'); if (!box) return;
+  document.querySelectorAll('[data-r="mi-lista"]').forEach(a => a.hidden = !S.session);
+  if (!S.session){ box.innerHTML = S.sb ? `<button class="btn btn-primary btn-sm" data-auth="login">Ingresar</button>` : ''; return; }
+  const n = userName(); const initial = (n[0] || '?').toUpperCase();
+  box.innerHTML = `<button class="avatar-btn" data-account-menu aria-haspopup="true" aria-expanded="false" title="${esc(n)}">${esc(initial)}</button>
+    <div class="acc-menu" hidden><div class="acc-name">${esc(n)}</div>
+      <a href="/mi-lista">Mi lista</a>${S.owner ? '<a href="/admin">Panel de control</a>' : ''}<button data-logout>Cerrar sesión</button></div>`;
+}
+document.addEventListener('click', e => {
+  const m = document.querySelector('.acc-menu');
+  const btn = e.target.closest('[data-account-menu]');
+  if (btn){ const open = m.hidden; m.hidden = !open; btn.setAttribute('aria-expanded', open); return; }
+  if (m && !m.hidden && !e.target.closest('.acc-menu')) m.hidden = true;
+  if (m && e.target.closest('.acc-menu a, .acc-menu button')) m.hidden = true;
+});
+function openAuth(opts = {}){
+  S.authCtx = { mode: opts.mode || 'signup', reason: opts.reason || '', href: opts.href || '', titleId: opts.titleId || '', msg:'' };
+  renderAuth();
+}
+function renderAuth(){
+  const c = S.authCtx; const signup = c.mode === 'signup';
+  const lead = c.reason === 'watch' ? 'Para ver necesitás una cuenta. Es gratis y tarda un minuto.' : c.reason === 'list' ? 'Creá una cuenta gratis para guardar tus series y películas en Mi lista.' : signup ? 'Creá tu cuenta gratis.' : 'Entrá con tu cuenta.';
+  overlayRoot.innerHTML = `<div class="overlay" data-close-bg><div class="auth-card" role="dialog" aria-modal="true" aria-label="${signup?'Crear cuenta':'Ingresar'}">
+    <button class="sheet-close" data-close aria-label="Cerrar">✕</button>
+    ${c.done ? `<h2>¡Listo${c.doneName ? ', ' + esc(c.doneName) : ''}!</h2><p>${esc(c.doneMsg)}</p>
+      ${c.href ? `<a class="btn btn-primary" data-watch href="${esc(c.href)}" target="_blank" rel="noopener">▶ Ver ahora</a>` : `<button class="btn btn-primary" data-close>Seguir</button>`}`
+    : `<div class="auth-tabs"><button data-auth-mode="signup" aria-selected="${signup}">Crear cuenta</button><button data-auth-mode="login" aria-selected="${!signup}">Ingresar</button></div>
+    <p class="auth-lead">${lead}</p>
+    <form id="authForm" class="auth-form">
+      ${signup ? `<label class="field"><span>Nombre</span><input class="input" id="au-name" autocomplete="name" required maxlength="40"></label>` : ''}
+      <label class="field"><span>Email</span><input class="input" id="au-email" type="email" autocomplete="email" required></label>
+      <label class="field"><span>Contraseña</span><input class="input" id="au-pass" type="password" autocomplete="${signup?'new-password':'current-password'}" minlength="6" required>${signup?'<span class="hint">Mínimo 6 caracteres.</span>':''}</label>
+      <button class="btn btn-primary" type="submit">${signup ? 'Crear cuenta' : 'Ingresar'}</button>
+      <p class="auth-msg" id="authMsg">${esc(c.msg||'')}</p>
+    </form>`}
+  </div></div>`;
+  document.body.style.overflow = 'hidden';
+  (overlayRoot.querySelector('#au-name') || overlayRoot.querySelector('#au-email') || overlayRoot.querySelector('.btn-primary'))?.focus();
+}
+overlayRoot.addEventListener('click', e => {
+  const m = e.target.closest('[data-auth-mode]'); if (m){ S.authCtx.mode = m.dataset.authMode; S.authCtx.msg=''; renderAuth(); }
+});
+overlayRoot.addEventListener('submit', async e => {
+  if (e.target.id !== 'authForm') return;
+  e.preventDefault();
+  const c = S.authCtx; const btn = e.target.querySelector('button[type="submit"]'); const msg = document.getElementById('authMsg');
+  const email = document.getElementById('au-email').value.trim(), password = document.getElementById('au-pass').value;
+  btn.disabled = true; msg.textContent = '';
+  try {
+    if (c.mode === 'signup'){
+      const name = document.getElementById('au-name').value.trim();
+      const { data, error } = await S.sb.auth.signUp({ email, password, options:{ data:{ name } } });
+      if (error) throw error;
+      if (!data.session){ c.done = true; c.doneName = name; c.doneMsg = 'Te mandamos un email para confirmar tu cuenta. Abrilo, tocá el enlace y después ingresá.'; c.href=''; renderAuth(); return; }
+      c.done = true; c.doneName = name; c.doneMsg = c.href ? 'Tu cuenta está creada.' : 'Tu cuenta está creada. Ya podés guardar títulos en Mi lista.';
+    } else {
+      const { error } = await S.sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      c.done = true; c.doneName = ''; c.doneMsg = c.href ? 'Ya ingresaste.' : 'Ya ingresaste.';
+    }
+    await afterLogin();
+    if (c.titleId && c.reason === 'list' && !S.myList.has(c.titleId)) await toggleList(c.titleId);
+    if (!c.href){ closeDetail(); return; }
+    renderAuth();
+  } catch(err){
+    const m = String(err.message||'');
+    msg.textContent = /Invalid login/i.test(m) ? 'Email o contraseña incorrectos.' : /already registered|already been registered/i.test(m) ? 'Ese email ya tiene una cuenta. Tocá “Ingresar”.' : /Email not confirmed/i.test(m) ? 'Tenés que confirmar tu email antes de ingresar. Revisá tu correo.' : /signups not allowed|Signups not allowed/i.test(m) ? 'El registro está desactivado por ahora.' : /rate limit/i.test(m) ? 'Demasiados intentos. Probá en unos minutos.' : (m || 'No se pudo completar.');
+    btn.disabled = false;
+  }
+});
+async function afterLogin(){
+  await checkOwner(); await loadMyList(); render();
+}
+// gate every "watch" link behind an account (capture phase, before navigation)
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[data-watch]');
+  if (!a || S.session || !S.sb) return;
+  if (a.closest('.auth-card')) return;
+  e.preventDefault(); e.stopPropagation();
+  openAuth({ reason:'watch', href: a.getAttribute('href') });
+}, true);
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-mylist]'); if (b){ e.preventDefault(); e.stopPropagation(); toggleList(b.dataset.mylist); return; }
+  const au = e.target.closest('[data-auth]'); if (au){ e.preventDefault(); openAuth({ mode: au.dataset.auth }); }
+}, true);
+document.addEventListener('click', async e => {
+  if (!e.target.closest('[data-logout]') || e.target.closest('#app .side, #app .lock')) return;
+  await S.sb.auth.signOut(); S.myList = new Set(); toast('Sesión cerrada'); if (S.route === 'mi-lista' || S.route === 'admin') navigate('/'); else render();
+});
+
 /* ---------- clean URLs: /serie/nombre, /pelicula/nombre, /series, /peliculas, /admin ---------- */
 function slugify(str){
   return String(str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
@@ -952,12 +1081,12 @@ function routeFromPath(){
   const h = location.hash.replace('#','');
   if (h){
     if (h.startsWith('t-')){ const t = byId(h.slice(2)); if (t){ history.replaceState(null,'',titlePath(t)); } else { S.pendingId = h.slice(2); } }
-    else if (['series','peliculas','admin'].includes(h)) history.replaceState(null,'','/'+h);
+    else if (['series','peliculas','admin','mi-lista'].includes(h)) history.replaceState(null,'','/'+h);
   }
   const parts = decodeURIComponent(location.pathname).replace(/\/+$/,'').split('/').filter(Boolean);
   if (S.pendingId){ S.titleSlug = null; S.titleKind = null; return 'title'; }
   if (parts.length === 2 && (parts[0] === 'serie' || parts[0] === 'pelicula')){ S.titleKind = parts[0]; S.titleSlug = parts[1]; return 'title'; }
-  if (parts.length === 1 && ['series','peliculas','admin'].includes(parts[0])) return parts[0];
+  if (parts.length === 1 && ['series','peliculas','admin','mi-lista'].includes(parts[0])) return parts[0];
   return 'home';
 }
 function currentTitleId(){
@@ -993,7 +1122,7 @@ function renderBrand(){
 function render(){
   clearInterval(S.heroTimer); renderBrand();
   document.body.classList.toggle('home', S.route==='home' && !S.q.trim() && !S.noDb);
-  document.getElementById('adminLink').hidden = !S.owner;
+  renderAccount();
   document.querySelectorAll('.nav a').forEach(a => { if (a.dataset.r===S.route && !S.q) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current'); });
   let html;
   if (S.noDb) html = `<div class="lock"><div class="dial" style="width:64px;height:64px" aria-hidden="true"></div><h1>Falta conectar la base de datos</h1><p>Completá <code>config.js</code> con los datos de tu proyecto de Supabase. Los pasos están en el archivo README.</p></div>`;
@@ -1001,6 +1130,7 @@ function render(){
   else if (S.route==='admin') html = renderAdmin();
   else if (S.q.trim()) html = renderSearch();
   else if (S.route==='title') html = renderTitlePage(currentTitleId());
+  else if (S.route==='mi-lista') html = renderMyList();
   else if (S.route==='series' || S.route==='peliculas') html = renderBrowse(S.route);
   else html = renderHome();
   app.innerHTML = html + (S.route==='admin' ? '' : renderFooter());
@@ -1083,11 +1213,12 @@ async function checkOwner(){
   if (!window.supabase || !cfg.supabaseUrl || !cfg.supabaseAnonKey || /TU_|xxxx/i.test(cfg.supabaseUrl + cfg.supabaseAnonKey)){ S.noDb = true; render(); return; }
   S.sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
   const db = makeDb(S.sb);
-  await checkOwner();
+  await checkOwner(); await loadMyList();
   S.sb.auth.onAuthStateChange(async (evt) => {
-    if (evt === 'TOKEN_REFRESHED') return;
-    const was = S.owner; await checkOwner();
-    if (was !== S.owner || S.route === 'admin') render();
+    if (evt === 'TOKEN_REFRESHED' || evt === 'INITIAL_SESSION') return;
+    const had = !!S.session, was = S.owner; await checkOwner();
+    if (had !== !!S.session){ await loadMyList(); render(); }
+    else if (was !== S.owner || S.route === 'admin') render();
   });
   S.db = db;
   db.collection('titles').onSnapshot(snap => {

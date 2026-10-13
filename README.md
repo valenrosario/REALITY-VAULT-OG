@@ -26,7 +26,7 @@ respaldo-inicial.json lo que ya tenías cargado (títulos, banners, logo)
 
 1. En Supabase andá a **Authentication → Users → Add user → Create new user**.
 2. Poné **el mismo email** que escribiste en el paso 1 y una contraseña. Marcá **Auto Confirm User**.
-3. Para que nadie más pueda crearse una cuenta: **Authentication → Sign In / Providers → Email** y desactivá **Allow new users to sign up**.
+3. Las cuentas de visitantes se activan en el paso 6. Solo tu email puede usar el panel, aunque otras personas se registren.
 
 ## Paso 3 · Conectar el sitio con Supabase
 
@@ -50,6 +50,14 @@ Cada vez que cambies algo en GitHub, Vercel vuelve a publicar solo.
 1. Abrí tu sitio y agregá `/admin` al final del enlace (por ejemplo `reality-vault.vercel.app/admin`).
 2. Entrá con el email y la contraseña del paso 2. A partir de ahí vas a ver el botón **Panel** arriba a la derecha.
 3. Andá a **Panel → Sitio → Importar respaldo** y elegí el archivo `respaldo-inicial.json` (descargalo desde GitHub). Se suben tus títulos, banners, imágenes y el logo del sitio.
+
+## Paso 6 · Cuentas de usuarios y "Mi lista"
+
+Para ver un capítulo o una película, el sitio pide crear una cuenta gratis. Con la cuenta, cada persona guarda títulos en **Mi lista**.
+
+1. En Supabase → **SQL Editor → New query**, pegá el contenido de `supabase/02-cuentas-y-mi-lista.sql` y tocá **Run**.
+2. En **Authentication → Sign In / Providers**, activá **Allow new users to sign up**.
+3. En la misma página, dentro de **Email**, desactivá **Confirm email** y guardá. Así la cuenta queda lista al instante: el correo gratuito de Supabase solo manda unos pocos emails por hora, y con la confirmación activada muchos usuarios no podrían terminar de registrarse.
 
 ---
 
