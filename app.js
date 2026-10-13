@@ -160,8 +160,9 @@ function metaLine(t){
   if ((t.genres||[]).length) bits.push(`<span>${esc(t.genres.slice(0,3).join(' · '))}</span>`);
   return bits.join('');
 }
-function genBlock(t, label){
-  return `<div class="gen" style="--h:${hue(t.title||t.id)}">${label?`<span class="g-code">${esc(label)}</span>`:'<span></span>'}<span class="g-title">${esc(t.title||'Sin título')}</span></div>`;
+function genBlock(t, label, logo){
+  const lg = logo === undefined ? t.logo : logo;
+  return `<div class="gen ${lg?'has-logo':''}" style="--h:${hue(t.title||t.id)}">${label?`<span class="g-code">${esc(label)}</span>`:'<span></span>'}<span class="g-title">${esc(t.title||'Sin título')}</span>${lg?`<img class="g-logo" alt="" data-img="${esc(lg)}" hidden>`:''}</div>`;
 }
 function isSoon(t){ return t.availability === 'proximamente'; }
 function soonLabel(t){ return 'Próximamente' + (t.releaseDate ? ' · ' + t.releaseDate : ''); }
@@ -377,7 +378,7 @@ function showDetail(id, seasonIdx){
           const u = isSoon(t) ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
           return `<${tag} class="ep" ${u?`data-watch href="${esc(u)}" target="_blank" rel="noopener"`:''}>
             <span class="ep-n">${esc(e.number)}</span>
-            <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number)}</div>
+            <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number, t.logo)}</div>
             <div class="ep-info"><strong>${esc(e.title || 'Episodio '+e.number)}<span>${esc(e.duration||'')}</span></strong>${e.description?`<p>${esc(e.description)}</p>`:''}</div>
           </${tag}>`; }).join('') || '<p class="empty-note" style="padding:12px 0">Esta temporada todavía no tiene episodios.</p>'}</div>
       </section>` : ''}
@@ -1004,7 +1005,7 @@ function renderEpisodesTab(t, seasons){
       const u = isSoon(t) ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
       const seen = (S.progress.get(t.id)?.watched || []).includes(epKey(s.number, e.number));
       return `<${tag} class="ep-card ${seen?'seen':''}" ${u?`${watchAttrs(t, s.number, e.number)} href="${esc(u)}" target="_blank" rel="noopener"`:''}>
-        <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number)}${seen?'<span class="seen-tag">✓ Visto</span>':''}</div>
+        <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number, t.logo)}${seen?'<span class="seen-tag">✓ Visto</span>':''}</div>
         <div class="ep-meta"><span class="ep-label">Episodio ${esc(e.number)}</span><strong>${esc(e.title || 'Episodio '+e.number)}</strong></div>
         ${e.description?`<p>${esc(e.description)}</p>`:''}
         ${e.duration?`<div class="ep-d">${esc(e.duration)}</div>`:''}</${tag}>`; }).join('')}</div><button class="rail-btn r" data-scroll="1" aria-label="Siguientes">›</button></div>` : '<p class="empty-note" style="padding:0">Esta temporada todavía no tiene episodios.</p>'}`;
