@@ -1310,21 +1310,8 @@ document.getElementById('searchToggle')?.addEventListener('click', () => {
   top.classList.toggle('searching', on); if (on) document.getElementById('q').focus(); else { const q = document.getElementById('q'); if (q.value){ q.value=''; S.q=''; render(); } }
 });
 
-/* ---------- light / dark ---------- */
-function applyTheme(t){
-  document.documentElement.setAttribute('data-theme', t);
-  const b = document.getElementById('themeToggle');
-  if (b){ b.innerHTML = t === 'light' ? ICON_MOON : ICON_SUN; b.setAttribute('aria-label', t === 'light' ? 'Activar modo oscuro' : 'Activar modo claro'); b.title = t === 'light' ? 'Modo oscuro' : 'Modo claro'; }
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'light' ? '#ffffff' : '#000000');
-}
-const ICON_SUN = '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>';
-const ICON_MOON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>';
-let themePref = 'dark'; try { themePref = localStorage.getItem('rv-theme2') || 'dark'; } catch {}
-applyTheme(themePref);
-document.getElementById('themeToggle')?.addEventListener('click', () => {
-  const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-  applyTheme(next); try { localStorage.setItem('rv-theme2', next); } catch {}
-});
+try { localStorage.removeItem('rv-theme2'); } catch {}
+document.documentElement.removeAttribute('data-theme');
 
 /* ---------- instant start: last catalog saved in this browser ---------- */
 const CACHE_KEY = 'rv-cache-v1';

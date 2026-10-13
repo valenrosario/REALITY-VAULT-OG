@@ -6,7 +6,7 @@
 <title>REALITY VAULT</title>
 <meta name="description" content="REALITY VAULT: series y películas de reality en un solo lugar.">
 <meta name="theme-color" content="#000000">
-<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('rv-theme2')||'dark')}catch(e){}</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
@@ -445,7 +445,7 @@ a.ep-card:hover .ep-thumb{transform:scale(1.03);box-shadow:inset 0 0 0 2px var(-
 .acc-menu .acc-name{display:flex;align-items:center;gap:10px}
 .acc-menu .acc-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* seguir viendo */
-.rail-wide{grid-auto-columns:clamp(240px,26vw,420px)}
+.rail-wide{grid-auto-columns:clamp(200px,19vw,300px)}
 .cw-card{position:relative;display:flex;flex-direction:column;gap:8px;scroll-snap-align:start;min-width:0}
 .cw-main{display:block;border:0;padding:0;background:none;cursor:pointer;text-decoration:none;color:inherit;text-align:left}
 .cw-thumb{position:relative;aspect-ratio:16/9;border-radius:6px;overflow:hidden;background:var(--surface-2);background-size:cover;background-position:center;transition:transform .2s}
@@ -462,7 +462,7 @@ a.ep-card:hover .ep-thumb{transform:scale(1.03);box-shadow:inset 0 0 0 2px var(-
 .cw-x:hover{color:var(--fg);background:var(--surface-3)}
 .ep-card.seen .ep-thumb{opacity:.75}
 .seen-tag{position:absolute;left:8px;top:8px;z-index:2;font-family:var(--display);font-weight:700;font-size:11px;padding:3px 8px;border-radius:99px;background:rgba(0,0,0,.75);color:var(--accent-2)}
-@media (max-width:640px){.rail-wide{grid-auto-columns:72vw}}
+@media (max-width:640px){.rail-wide{grid-auto-columns:58vw}}
 
 /* Apple TV style rows: episodes and cast */
 .tp-panel .row-wrap{margin:0 calc(-1 * var(--gutter))}
@@ -546,46 +546,14 @@ a.cast-card:hover strong{color:var(--accent-2)}
 .wide-card{position:relative;scroll-snap-align:start;min-width:0}
 .wide-main{display:block;width:100%;border:0;padding:0;background:none;cursor:pointer}
 .wide-main:hover .wide-art,.wide-main:focus-visible .wide-art{transform:scale(1.03)}
-.wa-heart{position:absolute;top:10px;right:10px;z-index:3;width:44px;height:44px;border-radius:50%;border:0;display:grid;place-items:center;cursor:pointer;color:#ff4fa3;background:rgba(40,30,35,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
-.wa-heart svg{width:24px;height:24px}
+.wa-heart{position:absolute;top:8px;right:8px;z-index:3;width:36px;height:36px;border-radius:50%;border:0;display:grid;place-items:center;cursor:pointer;color:#ff4fa3;background:rgba(40,30,35,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.wa-heart svg{width:19px;height:19px}
 .wa-heart:hover{transform:scale(1.08)}
 .cw-main .wide-art{border-radius:16px}
 .cw-card .cw-play,.cw-card .cw-bar{z-index:3}
-.grid-wide{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:22px 18px}
+.grid-wide{grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px 14px}
 .h-heart{display:flex;align-items:center;gap:12px}
 .h-heart .ic-heart{color:#ff4fa3;width:1em;height:1em}
-.theme-toggle{display:grid}
-/* ---------- light mode ---------- */
-:root[data-theme="light"]{
-  --bg:#ffffff; --bg-rgb:255,255,255; --surface:#f7f3f6; --surface-rgb:247,243,246; --surface-2:#f0e8ee; --surface-3:#e6dbe3;
-  --line:rgba(22,24,44,.08); --line-2:rgba(22,24,44,.16);
-  --fg:#16182c; --fg-rgb:22,24,44; --fg-2:#3b3e57; --muted:#6c6f87; --faint:#a4a6b9;
-  --accent:#ec4899; --accent-2:#f9a8d4; --accent-rgb:236,72,153; --accent-strong:#db2777; --accent-ink:#ffffff;
-  --danger:#d63a5c; --danger-ink:#ffffff; --ok:#1f9d6b;
-  --shade-rgb:22,24,44; --shadow-rgb:120,60,90;
-  color-scheme:light;
-}
-/* keep the header, banners and title-page header dark so logos and photos read well */
-:root[data-theme="light"] .top,:root[data-theme="light"] .hero,:root[data-theme="light"] .tp-hero,:root[data-theme="light"] .skel-hero{
-  --bg:#000000; --bg-rgb:0,0,0; --surface:#0d0b0c; --surface-rgb:13,11,12; --surface-2:#1a1518; --surface-3:#272024;
-  --line:rgba(255,200,225,.09); --line-2:rgba(255,200,225,.18);
-  --fg:#fdeef4; --fg-rgb:253,238,244; --fg-2:#ecd3de; --muted:#c6a3b3; --faint:#8c6b7a;
-  --accent:#f5a3c4; --accent-2:#ffc4da; --accent-rgb:245,163,196; --accent-strong:#ffb3d0; --accent-ink:#3b0e22;
-  color:var(--fg);
-}
-:root[data-theme="light"] .top{background:#0b0a0b}
-:root[data-theme="light"] .hero,:root[data-theme="light"] .tp-hero{background:#000}
-:root[data-theme="light"] .row-head h2{font-size:24px}
-:root[data-theme="light"] .h-heart{color:var(--accent-strong)}
-:root[data-theme="light"] .poster{box-shadow:none}
-:root[data-theme="light"] .card:hover .poster{box-shadow:none}
-:root[data-theme="light"] .card:hover .poster::after{box-shadow:inset 0 0 0 2px var(--accent)}
-:root[data-theme="light"] .tp-tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
-:root[data-theme="light"] .btn-play{background:#16182c;color:#fff}
-:root[data-theme="light"] .tp-hero .btn-play{background:#fff;color:#000}
-:root[data-theme="light"] .pill-select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%2316182c' stroke-width='2'/%3E%3C/svg%3E")}
-:root[data-theme="light"] .acc-menu{box-shadow:0 18px 40px rgba(0,0,0,.25)}
-:root[data-theme="light"] footer{background:var(--surface)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -599,7 +567,6 @@ a.cast-card:hover strong{color:var(--accent-2)}
     <a href="/mi-lista" data-r="mi-lista" hidden>Mi lista</a>
   </nav>
   <div class="top-right">
-    <button id="themeToggle" class="icon-btn theme-toggle" type="button" aria-label="Activar modo claro"></button>
     <button id="searchToggle" class="icon-btn search-toggle" type="button" aria-label="Buscar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
     <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q" type="search" placeholder="Buscar títulos, cast, etiquetas" aria-label="Buscar"></label>
