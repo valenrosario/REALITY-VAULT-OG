@@ -79,6 +79,66 @@ function removeMedia(urls){
   const paths = urls.map(storagePathOf).filter(Boolean);
   if (paths.length) S.sb.storage.from(BUCKET).remove(paths).catch(()=>{});
 }
+/* --- crop before upload --- */
+// [aspect ratio, output width]; logos are not cropped (they keep their transparent edges)
+const CROP_SPECS = { poster:[2/3,1200], backdrop:[16/9,2560], banner:[3,3000], mobilebanner:[4/5,1350], mobile:[16/10,1600], thumb:[16/9,1280], face:[1,400] };
+function cropImage(file, aspect, outW){
+  return new Promise(async (resolve, reject) => {
+    const src = URL.createObjectURL(file);
+    const img = new Image();
+    try { await new Promise((ok, bad) => { img.onload = ok; img.onerror = bad; img.src = src; }); } catch { URL.revokeObjectURL(src); reject(new Error('No se pudo abrir la imagen')); return; }
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const root = document.createElement('div');
+    root.className = 'crop-modal';
+    const ratioTxt = aspect >= 1 ? `${Math.round(aspect*100)/100}:1` : `1:${Math.round(100/aspect)/100}`;
+    root.innerHTML = `<div class="crop-card" role="dialog" aria-modal="true" aria-label="Recortar imagen">
+      <h3>Elegí qué parte se ve</h3>
+      <p class="crop-hint">Arrastrá la imagen para moverla y usá la barra (o la rueda del mouse) para acercar.</p>
+      <div class="crop-frame" style="aspect-ratio:${aspect};width:min(100%, calc(58vh * ${aspect}))"><img class="crop-img" alt="" draggable="false"><span class="crop-grid" aria-hidden="true"></span></div>
+      <div class="crop-zoom-row"><span>−</span><input type="range" class="crop-zoom" min="1" max="4" step="0.01" value="1" aria-label="Acercar"><span>+</span></div>
+      <div class="crop-actions"><button class="btn btn-line" data-c="cancel" type="button">Cancelar</button><button class="btn btn-line" data-c="full" type="button">Usar sin recortar</button><button class="btn btn-primary" data-c="ok" type="button">Usar recorte</button></div>
+    </div>`;
+    document.body.appendChild(root);
+    const frame = root.querySelector('.crop-frame'), el = root.querySelector('.crop-img'), zoomIn = root.querySelector('.crop-zoom');
+    el.src = src;
+    let W, H, base, z = 1, x = 0, y = 0;
+    const clamp = () => { const dw = iw*base*z, dh = ih*base*z; x = Math.min(0, Math.max(W - dw, x)); y = Math.min(0, Math.max(H - dh, y)); };
+    const paint = () => { el.style.width = (iw*base*z) + 'px'; el.style.height = (ih*base*z) + 'px'; el.style.transform = `translate(${x}px,${y}px)`; };
+    const measure = () => { const r = frame.getBoundingClientRect(); const pw = W; W = r.width; H = r.height; base = Math.max(W/iw, H/ih); if (!pw){ x = (W - iw*base)/2; y = (H - ih*base)/2; } else { x = x * W / pw; y = y * W / pw; } clamp(); paint(); };
+    requestAnimationFrame(measure);
+    const ro = new ResizeObserver(() => W && measure()); ro.observe(frame);
+    const setZoom = (nz, cx = W/2, cy = H/2) => {
+      nz = Math.min(4, Math.max(1, nz));
+      const k = nz / z; x = cx - (cx - x) * k; y = cy - (cy - y) * k; z = nz; zoomIn.value = z; clamp(); paint();
+    };
+    zoomIn.addEventListener('input', () => setZoom(+zoomIn.value));
+    frame.addEventListener('wheel', ev => { ev.preventDefault(); const r = frame.getBoundingClientRect(); setZoom(z * (ev.deltaY < 0 ? 1.08 : 1/1.08), ev.clientX - r.left, ev.clientY - r.top); }, { passive:false });
+    const pts = new Map(); let last = null, pinch = null;
+    frame.addEventListener('pointerdown', ev => { frame.setPointerCapture(ev.pointerId); pts.set(ev.pointerId, { x:ev.clientX, y:ev.clientY }); last = { x:ev.clientX, y:ev.clientY }; if (pts.size === 2){ const [a,b] = [...pts.values()]; pinch = { d: Math.hypot(a.x-b.x, a.y-b.y), z }; } });
+    frame.addEventListener('pointermove', ev => {
+      if (!pts.has(ev.pointerId)) return;
+      pts.set(ev.pointerId, { x:ev.clientX, y:ev.clientY });
+      if (pts.size === 2 && pinch){ const [a,b] = [...pts.values()]; const r = frame.getBoundingClientRect(); setZoom(pinch.z * Math.hypot(a.x-b.x, a.y-b.y) / pinch.d, (a.x+b.x)/2 - r.left, (a.y+b.y)/2 - r.top); return; }
+      x += ev.clientX - last.x; y += ev.clientY - last.y; last = { x:ev.clientX, y:ev.clientY }; clamp(); paint();
+    });
+    const up = ev => { pts.delete(ev.pointerId); pinch = null; const rest = [...pts.values()][0]; if (rest) last = { ...rest }; };
+    frame.addEventListener('pointerup', up); frame.addEventListener('pointercancel', up);
+    const finish = val => { ro.disconnect(); root.remove(); URL.revokeObjectURL(src); document.removeEventListener('keydown', onKey); resolve(val); };
+    const onKey = ev => { if (ev.key === 'Escape') finish(null); };
+    document.addEventListener('keydown', onKey);
+    root.addEventListener('click', ev => {
+      const c = ev.target.closest('[data-c]')?.dataset.c; if (!c) return;
+      if (c === 'cancel') return finish(null);
+      if (c === 'full') return finish(file);
+      const sc = base * z, sx = -x / sc, sy = -y / sc, sw = W / sc, sh = H / sc;
+      const ow = Math.round(Math.min(outW, sw)), oh = Math.round(ow / aspect);
+      const cv = document.createElement('canvas'); cv.width = ow; cv.height = oh;
+      const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(img, sx, sy, sw, sh, 0, 0, ow, oh);
+      const type = webpOK ? 'image/webp' : 'image/jpeg';
+      cv.toBlob(b => finish(b ? new File([b], 'recorte.' + (type === 'image/webp' ? 'webp' : 'jpg'), { type }) : file), type, .9);
+    });
+  });
+}
 function pickFile(){
   return new Promise(res => {
     const inp = document.getElementById('filePick'); inp.value='';
@@ -812,9 +872,15 @@ app.addEventListener('click', async e => {
   if (d.slot){
     const file = await pickFile(); if (!file) return;
     if (!file.type.startsWith('image/')){ toast('Elegí un archivo de imagen', true); return; }
+    let toUpload = file;
+    const spec = CROP_SPECS[d.slot];
+    if (spec && !/gif|svg/.test(file.type)){
+      try { toUpload = await cropImage(file, spec[0], spec[1]); } catch { toUpload = file; }
+      if (!toUpload) return;
+    }
     t.classList.add('busy');
     try {
-      const ref = await uploadImage(file, d.slot);
+      const ref = await uploadImage(toUpload, d.slot);
       await applyImage(d.path, ref);
     } catch(err){ toast(err.message || 'No se pudo subir la imagen', true); t.classList.remove('busy'); }
     return;

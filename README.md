@@ -82,6 +82,7 @@ Después de importar, revisá los datos, cargá los enlaces para ver y tocá **G
 ### Imágenes
 
 - En cada campo de imagen podés tocar para **subir un archivo**, o el botón 🔗 para **pegar un enlace** (por ejemplo una imagen de Blogger).
+- Al subir un archivo se abre el **recorte**: arrastrás la imagen y acercás para elegir qué parte se ve. Los logos se suben sin recortar.
 - **Respaldo:** en **Panel → Sitio → Descargar respaldo** bajás todo el catálogo en un archivo. Conviene hacerlo de vez en cuando.
 - **Cerrar sesión:** botón al final del menú del panel.
 
