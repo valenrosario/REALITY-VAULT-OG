@@ -24,6 +24,10 @@
     {
       "source": "/mi-lista",
       "destination": "/index.html"
+    },
+    {
+      "source": "/persona/:slug",
+      "destination": "/index.html"
     }
   ]
 }

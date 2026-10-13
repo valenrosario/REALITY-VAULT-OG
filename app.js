@@ -917,12 +917,33 @@ function renderDetailsTab(t, seasons){
   const initials = n => String(n||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
   const castRail = people.length ? `<section class="cast-sec"><h2 class="section-h">Reparto y equipo</h2>
     <div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anteriores">‹</button>
-    <div class="rail rail-cast">${people.map(c => `<div class="cast-card">
+    <div class="rail rail-cast">${people.map(c => `<a class="cast-card" href="/persona/${esc(slugify(c.name))}" aria-label="Ver títulos con ${esc(c.name)}">
       <div class="cast-photo" ${c.photo?`data-src="${esc(c.photo)}"`:''}><span>${esc(initials(c.name))}</span></div>
-      <strong>${esc(c.name)}</strong>${c.role?`<small>${esc(c.role)}</small>`:''}</div>`).join('')}</div>
+      <strong>${esc(c.name)}</strong>${c.role?`<small>${esc(c.role)}</small>`:''}</a>`).join('')}</div>
     <button class="rail-btn r" data-scroll="1" aria-label="Siguientes">›</button></div></section>` : '';
   return castRail + `<div class="det"><div><h2>${esc(t.title)}</h2>${t.tagline?`<p style="font-weight:700;margin-bottom:10px">${esc(t.tagline)}</p>`:''}${t.description?`<p>${esc(t.description)}</p>`:''}</div>
     <dl>${rows.map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></div>`;
+}
+function renderPerson(slug){
+  let name = '', photo = '';
+  const credits = [];
+  published().forEach(t => {
+    const roles = [];
+    (t.cast||[]).forEach(c => { if (c.name && slugify(c.name) === slug){ name = name || c.name; photo = photo || c.photo; if (c.role) roles.push(c.role); else roles.push('Reparto'); } });
+    String(t.director||'').split(',').map(x=>x.trim()).filter(Boolean).forEach(d => { if (slugify(d) === slug){ name = name || d; roles.push(t.type === 'serie' ? 'Creación' : 'Dirección'); } });
+    if (roles.length) credits.push({ t, roles:[...new Set(roles)] });
+  });
+  if (!credits.length) return `<div class="lock"><h1>No encontramos a esta persona</h1><p>Puede que ya no tenga títulos en el catálogo.</p><a class="btn btn-line" href="/">Volver al inicio</a></div>`;
+  credits.sort((a,b) => (+b.t.year||0) - (+a.t.year||0));
+  const initials = String(name).split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+  const series = credits.filter(c => c.t.type === 'serie').length, movies = credits.length - series;
+  const count = [series ? `${series} serie${series>1?'s':''}` : '', movies ? `${movies} película${movies>1?'s':''}` : ''].filter(Boolean).join(' · ');
+  return `<main><section class="person-head">
+      <div class="cast-photo person-photo" ${photo?`data-src="${esc(photo)}"`:''}><span>${esc(initials)}</span></div>
+      <div><span class="eyebrow">Reparto y equipo</span><h1>${esc(name)}</h1><p>${esc(count)} en REALITY VAULT</p></div>
+    </section>
+    <div class="grid person-grid">${credits.map(({ t, roles }) => `<div class="person-credit">${card(t)}<span class="credit-role">${esc(roles.join(' · '))}</span></div>`).join('')}</div>
+  </main>`;
 }
 function renderFooter(){
   const st = S.site || {};
@@ -1186,6 +1207,7 @@ function routeFromPath(){
   }
   const parts = decodeURIComponent(location.pathname).replace(/\/+$/,'').split('/').filter(Boolean);
   if (S.pendingId){ S.titleSlug = null; S.titleKind = null; return 'title'; }
+  if (parts.length === 2 && parts[0] === 'persona'){ S.personSlug = parts[1]; return 'persona'; }
   if (parts.length === 2 && (parts[0] === 'serie' || parts[0] === 'pelicula')){ S.titleKind = parts[0]; S.titleSlug = parts[1]; return 'title'; }
   if (parts.length === 1 && ['series','peliculas','admin','mi-lista'].includes(parts[0])) return parts[0];
   return 'home';
@@ -1232,6 +1254,7 @@ function render(){
   else if (S.q.trim()) html = renderSearch();
   else if (S.route==='title') html = renderTitlePage(currentTitleId());
   else if (S.route==='mi-lista') html = renderMyList();
+  else if (S.route==='persona') html = renderPerson(S.personSlug);
   else if (S.route==='series' || S.route==='peliculas') html = renderBrowse(S.route);
   else html = renderHome();
   app.innerHTML = html + (S.route==='admin' ? '' : renderFooter());
