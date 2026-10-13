@@ -86,6 +86,16 @@ Después de importar, revisá los datos, cargá los enlaces para ver y tocá **G
 - **Respaldo:** en **Panel → Sitio → Descargar respaldo** bajás todo el catálogo en un archivo. Conviene hacerlo de vez en cuando.
 - **Cerrar sesión:** botón al final del menú del panel.
 
+## App de Android (APK)
+
+En la carpeta `app-android/` está la app. Trae las pantallas del sitio **adentro del teléfono** (no abre la página web) y se conecta directo a la misma base de datos de Supabase: todo lo que cargues en el panel aparece solo en la app.
+
+Cada vez que hay un cambio en GitHub, se compila sola una APK nueva (pestaña **Actions** del repositorio, tarda unos 5 minutos). Se descarga siempre desde el mismo enlace:
+
+`https://github.com/valenrosario/REALITY-VAULT-OG/releases/download/apk/reality-vault.apk`
+
+Para instalarla en Android: abrí el enlace desde el celular, descargá el archivo y aceptá **Instalar apps de origen desconocido** cuando lo pida.
+
 ## Límites del plan gratis de Supabase
 
 - 500 MB de base de datos y 1 GB de imágenes: alcanza para cientos de títulos.

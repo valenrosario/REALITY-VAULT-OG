@@ -1,0 +1,7 @@
+{
+  "appId": "com.realityvault.app",
+  "appName": "REALITY VAULT",
+  "webDir": "www",
+  "backgroundColor": "#000000",
+  "android": { "allowMixedContent": false }
+}

@@ -1,0 +1,40 @@
+name: APK de Android
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app-android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Instalar Capacitor
+        run: npm install
+      - name: Copiar el sitio dentro de la app
+        run: npm run www
+      - name: Crear proyecto Android
+        run: npx cap add android && npx cap sync android
+      - name: Compilar APK
+        run: cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Publicar APK para descargar
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk reality-vault.apk
+          gh release delete apk --yes --cleanup-tag || true
+          gh release create apk reality-vault.apk --title "REALITY VAULT · APK" --notes "APK generada automáticamente desde el último cambio. Descargá reality-vault.apk e instalala en Android." --target "$GITHUB_SHA"
