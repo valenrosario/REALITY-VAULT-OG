@@ -136,9 +136,9 @@ main{display:flex;flex-direction:column;gap:30px;padding-bottom:72px}
 .row-head h2{font-family:var(--display);font-weight:700;font-size:18px;letter-spacing:0}
 .row-head .count{font-family:var(--mono);font-size:12px;color:var(--faint)}
 .row-wrap{position:relative}
-.rail{display:grid;grid-auto-flow:column;grid-auto-columns:clamp(160px,19.5vw,360px);gap:14px;overflow-x:auto;overflow-y:hidden;padding:16px var(--gutter) 20px;margin:-10px 0 -6px;scroll-snap-type:x mandatory;scroll-padding:0 var(--gutter);scrollbar-width:none}
+.rail{display:grid;grid-auto-flow:column;grid-auto-columns:clamp(160px,19.5vw,360px);gap:14px;overflow-x:auto;overflow-y:hidden;padding:28px var(--gutter) 32px;margin:-22px 0 -18px;scroll-snap-type:x mandatory;scroll-padding:0 var(--gutter);scrollbar-width:none}
 .rail::-webkit-scrollbar{display:none}
-.rail-btn{position:absolute;top:16px;bottom:20px;width:calc(var(--gutter) - 6px);min-width:36px;border:0;background:linear-gradient(90deg,rgba(var(--bg-rgb),.9),transparent);color:var(--fg);cursor:pointer;opacity:0;transition:opacity .2s;z-index:2;font-size:26px}
+.rail-btn{position:absolute;top:28px;bottom:32px;width:calc(var(--gutter) - 6px);min-width:36px;border:0;background:linear-gradient(90deg,rgba(var(--bg-rgb),.9),transparent);color:var(--fg);cursor:pointer;opacity:0;transition:opacity .2s;z-index:2;font-size:26px}
 .rail-btn.r{right:0;background:linear-gradient(-90deg,rgba(var(--bg-rgb),.9),transparent)}
 .rail-btn.l{left:0}
 .row-wrap:hover .rail-btn{opacity:1}
@@ -687,6 +687,18 @@ a.cast-card:hover strong{color:var(--accent-2)}
 .t10 .poster{position:relative;z-index:1;display:block;width:clamp(104px,10.5vw,170px);flex-shrink:0}
 .t10:hover .poster{transform:scale(1.03)}
 @media (max-width:640px){.t10-num{font-size:150px;-webkit-text-stroke:4px var(--accent)}.t10 .poster{width:100px}}
+
+/* ---------- Disney+ style poster hover (desktop) ---------- */
+.card .poster,.t10 .poster{border-radius:8px;transition:transform .3s cubic-bezier(.25,.46,.45,.94),box-shadow .3s cubic-bezier(.25,.46,.45,.94);will-change:transform}
+.card .poster::after,.t10 .poster::after{display:none}
+@media (hover:hover){
+  .card:hover .poster,.card:focus-visible .poster,.t10:hover .poster,.t10:focus-visible .poster{
+    transform:scale(1.06);
+    box-shadow:0 0 0 3px #000,0 0 0 6.5px rgba(249,249,249,.92),0 26px 30px -10px rgba(0,0,0,.85)}
+  .card:hover,.t10:hover{position:relative;z-index:2}
+}
+.card:focus-visible,.t10:focus-visible{outline:none}
+@media (prefers-reduced-motion:reduce){.card:hover .poster,.t10:hover .poster{transform:none}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
 </head>
