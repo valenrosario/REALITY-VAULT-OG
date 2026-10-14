@@ -608,7 +608,7 @@ function renderEditor(){
       </div><div><button class="btn btn-line btn-sm" data-cast-add>+ Agregar persona</button></div>
     </div>
     ${isSerie ? renderSeasonsEd(E) : `<div class="fs"><h3>Reproducción</h3><div class="fgrid">
-      <label class="field span2"><span>Enlace para ver la película</span><input class="input" id="f-url" data-k="url" value="${esc(E.url)}" placeholder="https://…"><span class="hint">Se reproduce dentro del sitio. Funciona con YouTube, Vimeo, Google Drive, Dailymotion, OK.ru, Internet Archive y archivos .mp4 o .m3u8. Otros enlaces se intentan mostrar igual.</span></label>
+      <label class="field span2"><span>Enlace para ver la película</span><input class="input" id="f-url" data-k="url" value="${esc(E.url)}" placeholder="https://…"><span class="hint">Se reproduce dentro del sitio. Funciona con YouTube, Vimeo, Google Drive, Dailymotion, OK.ru, Internet Archive, archivos .mp4 o .m3u8 y servicios como StreamHG: ahí copiá el <b>Embed code</b> completo y pegalo acá (el sitio se queda solo con el enlace).</span></label>
     </div></div>`}
     <div class="fs"><h3>Video del banner principal</h3>
       <p class="hint" style="margin:0 0 12px">Cuando esta serie aparece en el banner del inicio, se ve la imagen unos segundos y después arranca este video sin sonido (con un botón para activarlo). Al terminar, pasa al siguiente banner. Tiene que ser un archivo de video: los enlaces de YouTube no sirven acá.</p>
@@ -687,7 +687,7 @@ function renderSeasonsEd(E){
               <label class="field"><span>Duración</span><input class="input" id="e-d-${si}-${ei}" data-ep="${si}.${ei}" data-f="duration" value="${esc(e.duration)}" placeholder="45 min"></label>
             </div>
             <label class="field"><span>Sinopsis</span><textarea class="textarea" style="min-height:64px" id="e-s-${si}-${ei}" data-ep="${si}.${ei}" data-f="description">${esc(e.description)}</textarea></label>
-            <div class="ep-ed-foot"><input class="input" id="e-u-${si}-${ei}" data-ep="${si}.${ei}" data-f="url" value="${esc(e.url)}" placeholder="Enlace del video: YouTube, Vimeo, Google Drive, .mp4… (https://…)" aria-label="Enlace del capítulo">
+            <div class="ep-ed-foot"><input class="input" id="e-u-${si}-${ei}" data-ep="${si}.${ei}" data-f="url" value="${esc(e.url)}" placeholder="Enlace o código de inserción (embed) del video" aria-label="Enlace del capítulo">
               <button class="iconbtn" data-ep-x="${si}.${ei}" aria-label="Quitar capítulo">✕</button></div>
           </div></div>`).join('')}
         <div><button class="btn btn-line btn-sm" data-ep-add="${si}">+ Capítulo</button></div>
@@ -1089,8 +1089,17 @@ function addChip(key, v){
   markDirty(); rerenderPanel(); document.getElementById('chip-'+key)?.focus();
 }
 
+// accept a full embed code (<iframe src="…">) pasted into a video link field: keep only the link
+function cleanVideoLink(v){
+  const raw = String(v || '').trim();
+  const m = raw.match(/<iframe[^>]*\ssrc\s*=\s*["']([^"']+)["']/i);
+  let u = m ? m[1] : raw;
+  if (u.startsWith('//')) u = 'https:' + u;
+  return u.replace(/&amp;/g, '&');
+}
 app.addEventListener('input', e => {
   const el = e.target;
+  if ((el.dataset.k === 'url' || el.dataset.k === 'trailer' || el.dataset.f === 'url') && /<iframe/i.test(el.value)) el.value = cleanVideoLink(el.value);
   if (el.id==='adminFilter'){ S.adminFilter = el.value; const pos = el.selectionStart; rerenderPanel(); const n=document.getElementById('adminFilter'); n.focus(); n.setSelectionRange(pos,pos); return; }
   const E = S.editing; if (!E) return;
   if (el.dataset.k && el.type!=='checkbox'){ E[el.dataset.k] = el.value; markDirty(); }
