@@ -87,6 +87,7 @@ Después de importar, revisá los datos, cargá los enlaces para ver y tocá **G
 
 - En cada campo de imagen podés tocar para **subir un archivo**, o el botón 🔗 para **pegar un enlace** (por ejemplo una imagen de Blogger).
 - Al subir un archivo se abre el **recorte**: arrastrás la imagen y acercás para elegir qué parte se ve. Los logos se suben sin recortar.
+- **Video en el banner principal:** en cada serie o película, sección **Video del banner principal**. El banner muestra la imagen unos segundos y después arranca el video sin sonido (con botón para activarlo). Medidas: **1920 × 1080 px** para computadora y, opcional, **1080 × 1350 px** vertical para celular. MP4 (H.264) o WebM, de 15 a 40 segundos, hasta 50 MB.
 - **Respaldo:** en **Panel → Sitio → Descargar respaldo** bajás todo el catálogo en un archivo. Conviene hacerlo de vez en cuando.
 - **Cerrar sesión:** botón al final del menú del panel.
 

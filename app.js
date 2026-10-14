@@ -139,9 +139,10 @@ function cropImage(file, aspect, outW){
     });
   });
 }
-function pickFile(){
+function pickFile(accept){
   return new Promise(res => {
     const inp = document.getElementById('filePick'); inp.value='';
+    inp.accept = accept || 'image/*';
     inp.onchange = () => res(inp.files[0] || null);
     inp.click();
   });
@@ -214,9 +215,11 @@ function renderHero(){
       const tag = t?.tagline || '';
       const target = t ? playTarget(t) : null;
       const link = t ? (target ? target.url : '') : safeUrl(b.link);
-      return `<div class="hero-slide ${i===S.heroIdx?'on':''}" data-slide="${i}" ${i===S.heroIdx?'':'aria-hidden="true"'}>
+      const vid = safeUrl(b.video || t?.previewVideo || ''), vidM = safeUrl(b.videoMobile || t?.previewVideoMobile || '');
+      return `<div class="hero-slide ${i===S.heroIdx?'on':''}" data-slide="${i}" ${vid?`data-video="${esc(vid)}"`:''} ${vidM?`data-video-m="${esc(vidM)}"`:''} ${i===S.heroIdx?'':'aria-hidden="true"'}>
         <div class="hero-bg ${t?'':'wide'}" ${img||imgM?`data-src="${esc(img||imgM)}"`:''} ${imgM?`data-src-m="${esc(imgM)}"`:''}>${t?genBlock(t):''}</div>
         ${t ? `<button class="hero-tap" data-open="${esc(t.id)}" aria-label="Ver ${esc(t.title)}"></button>` : ''}
+        ${vid||vidM ? `<button class="hero-mute" data-hero-mute aria-label="Activar sonido" aria-pressed="false">${MUTE_ICON(true)}</button>` : ''}
         <div class="hero-copy">
           ${b.eyebrow ? `<span class="eyebrow">${esc(b.eyebrow)}</span>` : ''}
           ${t?.logo && !b.headline ? `<img class="hero-logo" alt="${esc(t.title)}" data-img="${esc(t.logo)}" hidden><h1 class="logo-fallback" hidden>${esc(headline)}</h1>` : `<h1>${esc(headline)}</h1>`}
@@ -278,11 +281,96 @@ function setHero(i){
   app.addEventListener('click', e => { if (dragged && e.target.closest('.hero')){ e.preventDefault(); e.stopPropagation(); dragged = false; } }, true);
   app.addEventListener('click', e => { const b = e.target.closest('[data-hero-step]'); if (b){ setHero(S.heroIdx + +b.dataset.heroStep); startHero(); } });
 })();
-function startHero(){
-  clearInterval(S.heroTimer);
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  if (app.querySelectorAll('.hero-slide').length > 1) S.heroTimer = setInterval(()=>setHero(S.heroIdx+1), 7500);
+/* banner: the image shows for a few seconds, then the preview video fades in */
+const HERO_IMG_MS = 3500, HERO_STILL_MS = 7500;
+const MUTE_ICON = on => on
+  ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="m16 9.5 5 5m0-5-5 5"/></svg>'
+  : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/></svg>';
+function heroVideoSrc(slide){
+  if (!slide) return '';
+  return (matchMedia('(max-width:640px)').matches && slide.dataset.videoM) || slide.dataset.video || slide.dataset.videoM || '';
 }
+function heroEls(){ return app.querySelectorAll('.hero-slide'); }
+function heroNext(){ if (heroEls().length > 1){ setHero(S.heroIdx + 1); startHero(); } }
+function stopHeroVideo(keep){
+  clearTimeout(S.heroVidT);
+  const v = S.heroVid;
+  if (v && v !== keep){ try { v.pause(); } catch {} v.removeAttribute('src'); v.load?.(); v.remove(); S.heroVid = null; }
+  app.querySelectorAll('.hero-slide.vid-on').forEach(s => { if (!keep || !s.contains(keep)) s.classList.remove('vid-on'); });
+}
+function startHero(){
+  clearTimeout(S.heroTimer); clearInterval(S.heroTimer);
+  const slide = heroEls()[S.heroIdx];
+  if (!slide || matchMedia('(prefers-reduced-motion: reduce)').matches){ stopHeroVideo(); return; }
+  const src = heroVideoSrc(slide);
+  // a render while the video plays (live updates) keeps the same video going
+  const v = S.heroVid;
+  if (src && v && v.dataset.src === src && !v.ended && v.isConnected === false){
+    stopHeroVideo(v);
+    slide.querySelector('.hero-bg')?.appendChild(v);
+    if (v.classList.contains('shown')) slide.classList.add('vid-on');
+    v.play().catch(()=>{});
+    syncMute(slide);
+    return;
+  }
+  stopHeroVideo();
+  if (!src){ if (heroEls().length > 1) S.heroTimer = setTimeout(heroNext, HERO_STILL_MS); return; }
+  S.heroVidT = setTimeout(() => playHeroVideo(slide, src), HERO_IMG_MS);
+}
+function playHeroVideo(slide, src){
+  if (!slide.isConnected || !slide.classList.contains('on')) return;
+  const bg = slide.querySelector('.hero-bg'); if (!bg) return;
+  const v = document.createElement('video');
+  v.className = 'hero-vid'; v.dataset.src = src;
+  v.muted = S.heroMuted !== false; v.defaultMuted = v.muted; v.playsInline = true;
+  v.setAttribute('playsinline',''); v.setAttribute('muted',''); v.setAttribute('aria-hidden','true');
+  v.preload = 'auto'; v.disablePictureInPicture = true;
+  v.src = src;
+  S.heroVid = v;
+  let failed = false;
+  const fail = () => {
+    if (failed || S.heroVid !== v) return; failed = true;
+    v.remove(); S.heroVid = null;
+    const s = v.closest?.('.hero-slide') || slide; s.classList.remove('vid-on');
+    if (heroEls().length > 1) S.heroTimer = setTimeout(heroNext, 4000);
+  };
+  v.addEventListener('playing', () => {
+    if (S.heroVid !== v) return;
+    v.classList.add('shown');
+    const s = v.closest('.hero-slide'); if (s){ s.classList.add('vid-on'); syncMute(s); }
+  });
+  v.addEventListener('ended', () => {
+    if (S.heroVid !== v) return;
+    const s = v.closest('.hero-slide'); s?.classList.remove('vid-on'); v.classList.remove('shown');
+    // fade back to the image, then move on (or replay later if it is the only banner)
+    S.heroTimer = setTimeout(() => {
+      if (S.heroVid !== v) return;
+      if (heroEls().length > 1) heroNext();
+      else { v.currentTime = 0; S.heroTimer = setTimeout(() => { if (S.heroVid === v) v.play().catch(fail); }, HERO_STILL_MS); }
+    }, 1200);
+  });
+  v.addEventListener('error', fail);
+  bg.appendChild(v);
+  const p = v.play(); if (p && p.catch) p.catch(fail);
+}
+function syncMute(slide){
+  const b = slide?.querySelector('.hero-mute'); if (!b) return;
+  const muted = S.heroMuted !== false;
+  b.innerHTML = MUTE_ICON(muted);
+  b.setAttribute('aria-label', muted ? 'Activar sonido' : 'Silenciar');
+  b.setAttribute('aria-pressed', String(!muted));
+}
+app.addEventListener('click', e => {
+  const b = e.target.closest('[data-hero-mute]'); if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  S.heroMuted = !(S.heroMuted !== false);
+  if (S.heroVid){ S.heroVid.muted = S.heroMuted; if (!S.heroMuted) S.heroVid.volume = 1; }
+  syncMute(b.closest('.hero-slide'));
+});
+document.addEventListener('visibilitychange', () => {
+  const v = S.heroVid; if (!v) return;
+  if (document.hidden) v.pause(); else if (v.classList.contains('shown') && !v.ended) v.play().catch(()=>{});
+});
 function logoFallbacks(root){
   root.querySelectorAll('.hero-logo').forEach(img => {
     const fb = img.nextElementSibling;
@@ -522,6 +610,14 @@ function renderEditor(){
     ${isSerie ? renderSeasonsEd(E) : `<div class="fs"><h3>Reproducción</h3><div class="fgrid">
       <label class="field span2"><span>Enlace para ver la película</span><input class="input" id="f-url" data-k="url" value="${esc(E.url)}" placeholder="https://…"><span class="hint">Se reproduce dentro del sitio. Funciona con YouTube, Vimeo, Google Drive, Dailymotion, OK.ru, Internet Archive y archivos .mp4 o .m3u8. Otros enlaces se intentan mostrar igual.</span></label>
     </div></div>`}
+    <div class="fs"><h3>Video del banner principal</h3>
+      <p class="hint" style="margin:0 0 12px">Cuando esta serie aparece en el banner del inicio, se ve la imagen unos segundos y después arranca este video sin sonido (con un botón para activarlo). Al terminar, pasa al siguiente banner. Tiene que ser un archivo de video: los enlaces de YouTube no sirven acá.</p>
+      <div class="vid-grid">
+        ${vidField(E, 'previewVideo', 'Computadora', '1920 × 1080 px (horizontal 16:9)', 'Se recorta arriba y abajo para llenar el banner: dejá lo importante en la franja del medio.')}
+        ${vidField(E, 'previewVideoMobile', 'Celular (opcional)', '1080 × 1350 px (vertical 4:5)', 'Si no cargás uno, en el celular se usa el de computadora recortado al centro.')}
+      </div>
+      <span class="hint">Formato MP4 (H.264) o WebM · entre 15 y 40 segundos · hasta 50 MB (ideal menos de 20 MB para que cargue rápido).</span>
+    </div>
     <div class="fs"><h3>Disponibilidad</h3>
       <div class="seg" role="group" aria-label="Disponibilidad"><button data-avail="disponible" aria-pressed="${!isSoon(E)}">Disponible para ver</button><button data-avail="proximamente" aria-pressed="${isSoon(E)}">Próximamente</button></div>
       ${isSoon(E) ? `<label class="field" style="max-width:320px"><span>Fecha de estreno (opcional)</span><input class="input" id="f-release" data-k="releaseDate" value="${esc(E.releaseDate||'')}" placeholder="15 de noviembre"><span class="hint">Se muestra junto a “Próximamente”. Los enlaces para ver quedan ocultos hasta que lo cambies a disponible.</span></label>`
@@ -537,6 +633,43 @@ function renderEditor(){
       <button class="btn btn-line" data-back>Cancelar</button><button class="btn btn-primary" data-save>Guardar</button></div>
   </div>`;
 }
+function vidField(E, key, label, size, note){
+  const v = safeUrl(E[key]);
+  return `<div class="vid-field">
+    <div class="vid-h"><strong>${esc(label)}</strong><span class="vid-size">${esc(size)}</span></div>
+    <div class="vid-box ${key==='previewVideoMobile'?'m':''}">${v ? `<video src="${esc(v)}" muted loop playsinline autoplay preload="metadata"></video>` : `<span>Sin video</span>`}</div>
+    <div class="vid-actions">
+      <button class="btn btn-line btn-sm" data-vidup="${key}">${v ? 'Cambiar video' : 'Subir video'}</button>
+      ${v ? `<button class="btn btn-line btn-sm" data-vidclear="${key}">Quitar</button>` : ''}
+    </div>
+    <label class="field"><span>o pegá un enlace directo (.mp4 / .webm)</span><input class="input" data-k="${key}" value="${esc(E[key]||'')}" placeholder="https://…/video.mp4"></label>
+    <span class="hint">${esc(note)}</span>
+  </div>`;
+}
+const VIDEO_MAX_MB = 50;
+async function uploadVideo(file){
+  if (!/^video\/(mp4|webm|quicktime)$/.test(file.type) && !/\.(mp4|webm|mov|m4v)$/i.test(file.name)) throw new Error('Elegí un archivo MP4 o WebM.');
+  if (file.size > VIDEO_MAX_MB * 1024 * 1024) throw new Error(`El video pesa ${(file.size/1048576).toFixed(0)} MB. El máximo es ${VIDEO_MAX_MB} MB: achicalo o recortalo antes de subirlo.`);
+  const ext = (file.name.match(/\.(mp4|webm|mov|m4v)$/i)?.[1] || (file.type.split('/')[1]) || 'mp4').toLowerCase().replace('quicktime','mov');
+  const path = `video/${uid('v')}.${ext}`;
+  const { error } = await S.sb.storage.from(BUCKET).upload(path, file, { contentType: file.type || 'video/mp4', cacheControl: '31536000', upsert:false });
+  if (error) throw new Error('No se pudo subir el video: ' + error.message);
+  return S.sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
+app.addEventListener('click', async e => {
+  const up = e.target.closest('[data-vidup]'), clr = e.target.closest('[data-vidclear]');
+  if (!S.editing || (!up && !clr)) return;
+  e.preventDefault();
+  if (clr){ S.editing[clr.dataset.vidclear] = ''; markDirty(); rerenderPanel(); return; }
+  const key = up.dataset.vidup;
+  const file = await pickFile('video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov,.m4v'); if (!file) return;
+  const label = up.textContent; up.disabled = true; up.textContent = 'Subiendo…';
+  try {
+    const url = await uploadVideo(file);
+    S.editing[key] = url; markDirty(); rerenderPanel();
+    toast('Video subido. Tocá Guardar para publicarlo.');
+  } catch(err){ toast(err.message || 'No se pudo subir el video', true); up.disabled = false; up.textContent = label; }
+});
 function renderSeasonsEd(E){
   return `<div class="fs"><h3>Temporadas y capítulos <small>${E.seasons.length} temp. · ${epCount(E)} ep.</small></h3>
     ${E.seasons.map((s,si)=>`<div class="season">
@@ -916,7 +1049,7 @@ function inlineConfirm(holder, label, onYes){
   holder.querySelector('[data-no]').onclick = e => { e.stopPropagation(); holder.innerHTML = prev; };
 }
 function collectRefs(t){
-  const r = [t.poster,t.backdrop,t.logo,t.thumbWide,t.bannerImage,t.bannerImageMobile,t.backdropMobile,...(t.cast||[]).map(c=>c.photo)];
+  const r = [t.poster,t.backdrop,t.logo,t.thumbWide,t.bannerImage,t.bannerImageMobile,t.backdropMobile,t.previewVideo,t.previewVideoMobile,...(t.cast||[]).map(c=>c.photo)];
   (t.seasons||[]).forEach(s=>(s.episodes||[]).forEach(e=>r.push(e.thumb)));
   return r.filter(Boolean);
 }
