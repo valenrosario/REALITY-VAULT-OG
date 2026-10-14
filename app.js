@@ -1190,6 +1190,19 @@ async function loadTop10(){
   S.top10 = ids;
   if (S.route === 'home' && !S.q.trim() && !S.playerOpen){ const y = window.scrollY; render(); window.scrollTo(0, y); }
 }
+// count a visit to a title page (once per title per hour in this browser) for "Top 10 hoy"
+function viewerId(){
+  if (S.session?.user?.id) return S.session.user.id;
+  try { let v = localStorage.getItem('rv-viewer'); if (!v){ v = 'a-' + uid(''); localStorage.setItem('rv-viewer', v); } return v; } catch { return 'a-' + uid(''); }
+}
+function trackView(tid){
+  if (!tid || !S.sb || !byId(tid)) return;
+  const key = 'rv-seen-' + tid; let last = 0;
+  try { last = +localStorage.getItem(key) || 0; } catch {}
+  if (Date.now() - last < 3600e3) return;
+  try { localStorage.setItem(key, String(Date.now())); } catch {}
+  S.sb.from('title_views').insert({ title_id: tid, viewer: viewerId() }).then(({ error }) => { if (!error) setTimeout(loadTop10, 600); });
+}
 function top10Row(){
   const list = S.top10.map(byId).filter(t => t && t.status !== 'borrador').slice(0, 10);
   if (!list.length) return '';
@@ -1572,7 +1585,7 @@ function render(){
   else if (!S.loaded.t && S.route!=='admin') html = `<div class="skel" aria-hidden="true"><div class="skel-hero"></div><div class="skel-row"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>`;
   else if (S.route==='admin') html = renderAdmin();
   else if (S.q.trim()) html = renderSearch();
-  else if (S.route==='title') html = renderTitlePage(currentTitleId());
+  else if (S.route==='title'){ const tid = currentTitleId(); html = renderTitlePage(tid); trackView(tid); }
   else if (S.route==='mi-lista') html = renderMyList();
   else if (S.route==='persona') html = renderPerson(S.personSlug);
   else if (S.route==='series' || S.route==='peliculas') html = renderBrowse(S.route);

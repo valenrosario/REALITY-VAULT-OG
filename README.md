@@ -65,7 +65,7 @@ En Supabase → **SQL Editor → New query**, pegá el contenido de `supabase/03
 
 ## Paso 8 · "Top 10 hoy"
 
-En Supabase → **SQL Editor → New query**, pegá el contenido de `supabase/04-top-10.sql` y tocá **Run**. En el inicio aparece la fila **Top 10 hoy** con los títulos que más personas abrieron en las últimas 24 horas. Se actualiza sola cada minuto.
+En Supabase → **SQL Editor → New query**, pegá el contenido de `supabase/04-top-10.sql` y tocá **Run**. Después hacé lo mismo con `supabase/05-top-10-visitas.sql`. En el inicio aparece la fila **Top 10 hoy** con los títulos cuya página abrieron más personas en las últimas 24 horas (con o sin cuenta). Se actualiza sola cada minuto.
 
 ---
 
