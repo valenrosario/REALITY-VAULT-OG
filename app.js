@@ -56,7 +56,7 @@ async function processImage(file, maxW, maxH, alpha){
   x.drawImage(src,0,0,c.width,c.height);
   return await new Promise((res, rej) => c.toBlob(bl => bl ? res(bl) : rej(new Error('No se pudo procesar la imagen')), type, .88));
 }
-const IMG_SPECS = { mobilebanner:[1350,1700,false], mobile:[1600,1000,false], sitelogo:[1400,460,true], poster:[1200,1800,false], backdrop:[2560,1440,false], logo:[1400,560,true], thumb:[1280,720,false], face:[400,400,false], banner:[3000,1000,false] };
+const IMG_SPECS = { frow:[1000,1480,false], mobilebanner:[1350,1700,false], mobile:[1600,1000,false], sitelogo:[1400,460,true], poster:[1200,1800,false], backdrop:[2560,1440,false], logo:[1400,560,true], thumb:[1280,720,false], face:[400,400,false], banner:[3000,1000,false] };
 const BUCKET = 'media';
 async function uploadImage(file, kind){
   const [w,h,alpha] = IMG_SPECS[kind] || IMG_SPECS.backdrop;
@@ -81,7 +81,7 @@ function removeMedia(urls){
 }
 /* --- crop before upload --- */
 // [aspect ratio, output width]; logos are not cropped (they keep their transparent edges)
-const CROP_SPECS = { poster:[2/3,1200], backdrop:[16/9,2560], banner:[3,3000], mobilebanner:[4/5,1350], mobile:[16/10,1600], thumb:[16/9,1280], face:[1,400] };
+const CROP_SPECS = { frow:[3/4.45,900], poster:[2/3,1200], backdrop:[16/9,2560], banner:[3,3000], mobilebanner:[4/5,1350], mobile:[16/10,1600], thumb:[16/9,1280], face:[1,400] };
 function cropImage(file, aspect, outW){
   return new Promise(async (resolve, reject) => {
     const src = URL.createObjectURL(file);
@@ -308,6 +308,7 @@ function renderHome(){
     ${continueRow()}
     ${top10Row()}
     ${listRow()}
+    ${(S.frows||[]).map(featRow).join('')}
     ${row('Destacados', feat)}
     ${row('Novedades', newest)}
     ${row('Series', series, '/series')}
@@ -440,9 +441,10 @@ function renderAdmin(){
     <button data-tab="catalogo" aria-current="${tab==='catalogo'}">Catálogo <span>${S.titles.length}</span></button>
     <button data-tab="banners" aria-current="${tab==='banners'}">Banners <span>${S.banners.length}</span></button>
     <button data-tab="etiquetas" aria-current="${tab==='etiquetas'}">Géneros y etiquetas</button>
+    <button data-tab="filas" aria-current="${tab==='filas'}">Filas destacadas <span>${(S.frows||[]).length}</span></button>
     <button data-tab="sitio" aria-current="${tab==='sitio'}">Sitio</button>
     <button data-logout style="margin-top:auto">Cerrar sesión</button>
-    </aside><section class="panel" id="panel">${tab==='catalogo' ? (S.editing ? renderEditor() : renderCatalog()) : tab==='banners' ? renderBanners() : tab==='sitio' ? renderSite() : renderTaxonomy()}</section></div>`;
+    </aside><section class="panel" id="panel">${tab==='catalogo' ? (S.editing ? renderEditor() : renderCatalog()) : tab==='banners' ? renderBanners() : tab==='sitio' ? renderSite() : tab==='filas' ? renderFrowsAdmin() : renderTaxonomy()}</section></div>`;
 }
 function renderCatalog(){
   const f = S.adminFilter.toLowerCase();
@@ -586,6 +588,112 @@ function renderBanners(){
           <div class="span2" data-row="b-${esc(b.id)}"><button class="btn btn-danger btn-sm" data-bdel="${esc(b.id)}">Eliminar banner</button></div>
         </div></div>`; }).join('') || '<p class="empty-note" style="padding:12px 0">Todavía no hay banners.</p>'}</div>`;
 }
+/* ---------- Filas destacadas (Disney+ style feature cards) ---------- */
+S.frows = [];
+const tintCache = new Map();
+function fallbackTint(t){ return `hsl(${hue(t.title||t.id)},55%,22%)`; }
+function computeTint(url){
+  if (tintCache.has(url)) return tintCache.get(url);
+  let saved = null; try { saved = JSON.parse(localStorage.getItem('rv-tints') || '{}')[url]; } catch {}
+  if (saved){ const p = Promise.resolve(saved); tintCache.set(url, p); return p; }
+  const p = new Promise(res => {
+    const im = new Image(); im.crossOrigin = 'anonymous';
+    im.onload = () => {
+      try {
+        const c = document.createElement('canvas'); c.width = c.height = 48; const g = c.getContext('2d'); g.drawImage(im, 0, 0, 48, 48);
+        const d = g.getImageData(0, 0, 48, 48).data; const bins = {};
+        for (let i = 0; i < d.length; i += 4){
+          const r = d[i]/255, gg = d[i+1]/255, b = d[i+2]/255, mx = Math.max(r,gg,b), mn = Math.min(r,gg,b), l = (mx+mn)/2, dl = mx-mn;
+          if (dl < .12 || l < .12 || l > .92) continue;
+          const sat = dl / (1 - Math.abs(2*l - 1));
+          let h = mx === r ? ((gg-b)/dl) % 6 : mx === gg ? (b-r)/dl + 2 : (r-gg)/dl + 4; h = (h*60 + 360) % 360;
+          const k = Math.round(h/15), w = sat*sat; const bin = bins[k] || (bins[k] = { w:0, h:0, s:0 }); bin.w += w; bin.h += h*w; bin.s += sat*w;
+        }
+        let best = null; for (const k in bins) if (!best || bins[k].w > best.w) best = bins[k];
+        const out = best ? `hsl(${Math.round(best.h/best.w)},${Math.min(70, Math.round(best.s/best.w*100))}%,20%)` : 'hsl(0,0%,8%)';
+        try { const all = JSON.parse(localStorage.getItem('rv-tints') || '{}'); all[url] = out; const keys = Object.keys(all); if (keys.length > 300) delete all[keys[0]]; localStorage.setItem('rv-tints', JSON.stringify(all)); } catch {}
+        res(out);
+      } catch { res(null); }
+    };
+    im.onerror = () => res(null);
+    im.src = url;
+  });
+  tintCache.set(url, p); return p;
+}
+function applyTints(root){
+  root.querySelectorAll('[data-tint-src]').forEach(el => {
+    const u = el.getAttribute('data-tint-src'); el.removeAttribute('data-tint-src');
+    computeTint(u).then(c => { if (c) el.style.setProperty('--tint', c); });
+  });
+}
+function featRow(r){
+  const items = (r.items || []).map(it => ({ it, t: byId(it.titleId) })).filter(x => x.t && x.t.status !== 'borrador');
+  if (!items.length) return '';
+  return `<section class="row frow"><div class="row-head"><h2>${esc(r.title || 'Destacados')}</h2></div>
+    <div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button>
+    <div class="rail rail-feat">${items.map(({ it, t }) => {
+      const img = it.image || t.backdrop || t.bannerImage || t.poster || '';
+      const meta = [t.year, (t.genres||[]).slice(0,2).join(', ')].filter(Boolean).join(' • ');
+      return `<button class="fc" data-open="${esc(t.id)}" aria-label="${esc(t.title)}" style="--tint:${fallbackTint(t)}" ${img ? `data-tint-src="${esc(img)}"` : ''}>
+        <span class="fc-bg" ${img ? `data-src="${esc(img)}"` : ''}>${genBlock(t, '', '')}</span><span class="fc-sh"></span>
+        <span class="fc-ct">${it.label ? `<span class="fc-chip">${esc(it.label)}</span>` : ''}
+          ${t.logo ? `<img class="fc-logo" alt="${esc(t.title)}" data-img="${esc(t.logo)}" hidden><b class="fc-title logo-fallback" hidden>${esc(t.title)}</b>` : `<b class="fc-title">${esc(t.title)}</b>`}
+          <span class="fc-meta">${t.rating ? `<i>${esc(t.rating)}</i>` : ''}${esc(meta)}</span></span></button>`; }).join('')}</div>
+    <button class="rail-btn r" data-scroll="1" aria-label="Siguiente">›</button></div></section>`;
+}
+let frowSaveT = null;
+function saveFrows(now){
+  clearTimeout(frowSaveT);
+  const run = async () => { try { await S.db.doc('site/rows').set({ rows: S.frows, updatedAt: Date.now() }); } catch(err){ toast('No se pudieron guardar las filas', true); } };
+  if (now) return run();
+  frowSaveT = setTimeout(run, 600);
+}
+function renderFrowsAdmin(){
+  const opts = sel => `<option value="">Elegí un título…</option>` + S.titles.slice().sort((a,b)=>(a.title||'').localeCompare(b.title||'')).map(t => `<option value="${esc(t.id)}" ${sel===t.id?'selected':''}>${esc(t.title||'Sin título')}</option>`).join('');
+  const rows = S.frows || [];
+  return `<div class="panel-head"><h1>Filas destacadas</h1><button class="btn btn-primary" data-frow-add>+ Nueva fila</button></div>
+    <p style="margin:0;color:var(--muted);max-width:68ch">Filas con tarjetas grandes estilo Disney+: foto de fondo, logo y un degradado del color de la imagen. Aparecen en el inicio en este orden. Los cambios se guardan solos.</p>
+    ${rows.length ? rows.map((r, ri) => `<div class="fs frow-ed" data-frow="${esc(r.id)}">
+      <div class="frow-head">
+        <input class="input" id="fr-t-${esc(r.id)}" data-frow-title="${esc(r.id)}" value="${esc(r.title||'')}" placeholder="Nombre de la fila (ej: También te podría gustar)">
+        <button class="iconbtn" data-frow-move="${esc(r.id)}" data-d="-1" aria-label="Subir fila" ${ri===0?'disabled':''}>↑</button>
+        <button class="iconbtn" data-frow-move="${esc(r.id)}" data-d="1" aria-label="Bajar fila" ${ri===rows.length-1?'disabled':''}>↓</button>
+        <span data-row="frow-${esc(r.id)}"><button class="btn btn-danger btn-sm" data-frow-del="${esc(r.id)}">Eliminar fila</button></span>
+      </div>
+      <div class="frow-items">${(r.items||[]).map((it, ii) => { const t = byId(it.titleId); return `<div class="frow-item">
+        ${slot('frow', `frow:${r.id}:${ii}`, it.image || (t ? (t.backdrop || t.bannerImage || t.poster) : ''), 'r34', 'Imagen de la tarjeta')}
+        <select class="select" id="fr-s-${esc(r.id)}-${ii}" data-frow-item="${esc(r.id)}" data-i="${ii}" data-f="titleId" aria-label="Título">${opts(it.titleId)}</select>
+        <input class="input" id="fr-l-${esc(r.id)}-${ii}" data-frow-item="${esc(r.id)}" data-i="${ii}" data-f="label" value="${esc(it.label||'')}" placeholder="Etiqueta (opcional): Nueva serie">
+        <span class="hint">${it.image ? 'Imagen propia para esta fila.' : 'Usa el fondo de la ficha. Tocá para poner otra.'} <b>900 × 1335 px</b></span>
+        <div class="frow-item-act">
+          <button class="iconbtn" data-frow-imove="${esc(r.id)}" data-i="${ii}" data-d="-1" aria-label="Mover antes" ${ii===0?'disabled':''}>←</button>
+          <button class="iconbtn" data-frow-imove="${esc(r.id)}" data-i="${ii}" data-d="1" aria-label="Mover después" ${ii===(r.items.length-1)?'disabled':''}>→</button>
+          <button class="iconbtn" data-frow-idel="${esc(r.id)}" data-i="${ii}" aria-label="Quitar de la fila">✕</button>
+        </div></div>`; }).join('')}
+        <button class="frow-add-item" data-frow-iadd="${esc(r.id)}">+ Agregar título</button>
+      </div></div>`).join('') : '<p class="empty-note" style="padding:12px 0">Todavía no hay filas destacadas. Tocá “+ Nueva fila”.</p>'}`;
+}
+document.addEventListener('input', e => {
+  const el = e.target; if (!S.owner) return;
+  if (el.dataset.frowTitle){ const r = S.frows.find(x => x.id === el.dataset.frowTitle); if (r){ r.title = el.value; saveFrows(); } }
+  if (el.dataset.frowItem && el.dataset.f === 'label'){ const r = S.frows.find(x => x.id === el.dataset.frowItem); if (r){ r.items[+el.dataset.i].label = el.value; saveFrows(); } }
+});
+document.addEventListener('change', e => {
+  const el = e.target; if (!S.owner) return;
+  if (el.dataset.frowItem && el.dataset.f === 'titleId'){ const r = S.frows.find(x => x.id === el.dataset.frowItem); if (r){ r.items[+el.dataset.i].titleId = el.value; saveFrows(true); rerenderPanel(); } }
+});
+document.addEventListener('click', e => {
+  if (!S.owner) return;
+  const b = e.target.closest('[data-frow-add],[data-frow-move],[data-frow-del],[data-frow-iadd],[data-frow-imove],[data-frow-idel]'); if (!b) return;
+  const d = b.dataset; const find = id => S.frows.find(x => x.id === id);
+  if (d.frowAdd !== undefined){ S.frows.push({ id: uid('r'), title: 'También te podría gustar', items: [] }); saveFrows(true); rerenderPanel(); return; }
+  if (d.frowMove){ const i = S.frows.findIndex(x => x.id === d.frowMove), j = i + +d.d; if (j < 0 || j >= S.frows.length) return; [S.frows[i], S.frows[j]] = [S.frows[j], S.frows[i]]; saveFrows(true); rerenderPanel(); return; }
+  if (d.frowDel){ inlineConfirm(b.closest('[data-row]'), '¿Eliminar la fila?', () => { S.frows = S.frows.filter(x => x.id !== d.frowDel); saveFrows(true); rerenderPanel(); toast('Fila eliminada'); }); return; }
+  if (d.frowIadd){ const r = find(d.frowIadd); r.items.push({ titleId: '', label: '', image: '' }); saveFrows(); rerenderPanel(); return; }
+  if (d.frowImove){ const r = find(d.frowImove), i = +d.i, j = i + +d.d; if (j < 0 || j >= r.items.length) return; [r.items[i], r.items[j]] = [r.items[j], r.items[i]]; saveFrows(true); rerenderPanel(); return; }
+  if (d.frowIdel){ const r = find(d.frowIdel); r.items.splice(+d.i, 1); saveFrows(true); rerenderPanel(); return; }
+});
+
 function renderSite(){
   return `<div class="panel-head"><h1>Sitio</h1></div>
     <div class="fs"><h3>Logo del sitio <small>aparece arriba a la izquierda · PNG transparente de 600 × 160 px aprox.</small></h3>
@@ -786,6 +894,7 @@ async function importBackup(){
 
 /* --- admin interactions --- */
 async function applyImage(path, ref){
+  if (path.startsWith('frow:')){ const [, rid, idx] = path.split(':'); const r = S.frows.find(x => x.id === rid); if (r && r.items[+idx]){ r.items[+idx].image = ref; await saveFrows(true); rerenderPanel(); } return; }
   if (path.startsWith('site:')){ await S.db.doc('site/config').set({ ...S.site, [path.slice(5)]:ref, updatedAt:Date.now() }); toast('Imagen actualizada'); }
   else if (path.startsWith('bannerm:')){ await S.db.doc('banners/'+path.slice(8)).update({imageMobile:ref}); toast('Imagen para celular actualizada'); }
   else if (path.startsWith('banner:')){ await S.db.doc('banners/'+path.slice(7)).update({image:ref}); toast('Imagen del banner actualizada'); }
@@ -796,7 +905,7 @@ function markDirty(){ S.dirty = true; const s = document.getElementById('saveSta
 function rerenderPanel(){
   const panel = document.getElementById('panel'); if (!panel) return render();
   const y = window.scrollY;
-  panel.innerHTML = S.adminTab==='catalogo' ? (S.editing ? renderEditor() : renderCatalog()) : S.adminTab==='banners' ? renderBanners() : S.adminTab==='sitio' ? renderSite() : renderTaxonomy();
+  panel.innerHTML = S.adminTab==='catalogo' ? (S.editing ? renderEditor() : renderCatalog()) : S.adminTab==='banners' ? renderBanners() : S.adminTab==='sitio' ? renderSite() : S.adminTab==='filas' ? renderFrowsAdmin() : renderTaxonomy();
   hydrate(panel); window.scrollTo(0,y);
 }
 function inlineConfirm(holder, label, onYes){
@@ -915,6 +1024,7 @@ app.addEventListener('click', async e => {
   if (d.epAdd !== undefined){ const s = E.seasons[+d.epAdd]; const n = Math.max(0,...s.episodes.map(x=>+x.number||0))+1; s.episodes.push({id:uid('e'),number:n,title:'',description:'',duration:'',thumb:'',url:''}); markDirty(); rerenderPanel(); document.getElementById(`e-t-${d.epAdd}-${s.episodes.length-1}`)?.focus(); return; }
   if (d.epX){ const [si,ei]=d.epX.split('.').map(Number); E.seasons[si].episodes.splice(ei,1); markDirty(); rerenderPanel(); return; }
   if (d.clear){ e.stopPropagation();
+    if (d.clear.startsWith('frow:')){ const [, rid, idx] = d.clear.split(':'); const r = S.frows.find(x => x.id === rid); if (r && r.items[+idx]){ r.items[+idx].image = ''; await saveFrows(true); rerenderPanel(); } return; }
     if (d.clear.startsWith('site:')){ await S.db.doc('site/config').set({ ...S.site, [d.clear.slice(5)]:'' }).catch(()=>toast('No se pudo quitar',true)); return; }
     if (d.clear.startsWith('bannerm:')){ await S.db.doc('banners/'+d.clear.slice(8)).update({imageMobile:''}).catch(()=>toast('No se pudo quitar',true)); return; }
     if (d.clear.startsWith('banner:')){ const id=d.clear.slice(7); await S.db.doc('banners/'+id).update({image:''}).catch(()=>toast('No se pudo quitar',true)); return; }
@@ -1591,7 +1701,7 @@ function render(){
   else if (S.route==='series' || S.route==='peliculas') html = renderBrowse(S.route);
   else html = renderHome();
   app.innerHTML = html + (S.route==='admin' ? '' : renderFooter());
-  hydrate(app); logoFallbacks(app); startHero();
+  hydrate(app); logoFallbacks(app); applyTints(app); startHero();
 }
 
 document.getElementById('q').addEventListener('input', e => { S.q = e.target.value; if (S.route==='admin'){ history.pushState(null,'','/'); S.route='home'; } render(); });
@@ -1622,14 +1732,14 @@ function loadCache(){
   try {
     const c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
     if (!c) return;
-    S.titles = c.titles || []; S.banners = c.banners || []; S.site = c.site || {}; S.siteLoaded = true;
+    S.titles = c.titles || []; S.banners = c.banners || []; S.site = c.site || {}; S.frows = c.frows || []; S.siteLoaded = true;
     S.loaded.t = true; S.loaded.b = true;
   } catch {}
 }
 let cacheT;
 function saveCache(){
   clearTimeout(cacheT);
-  cacheT = setTimeout(() => { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ titles:S.titles, banners:S.banners, site:S.site, at:Date.now() })); } catch {} }, 300);
+  cacheT = setTimeout(() => { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ titles:S.titles, banners:S.banners, site:S.site, frows:S.frows, at:Date.now() })); } catch {} }, 300);
 }
 loadCache();
 S.route = routeFromPath();
@@ -1712,6 +1822,13 @@ async function checkOwner(){
     if (S.route==='admin' && S.owner){ if (!S.editing) rerenderPanel(); else { const side = document.querySelector('.side'); if (side) side.querySelector('[data-tab="catalogo"] span').textContent = S.titles.length; } }
     else { const y = window.scrollY; render(); if (S.route==='title') window.scrollTo(0,y); }
   }, err => { console.error(err); S.loaded.t = true; render(); });
+  db.doc('site/rows').onSnapshot(snap => {
+    const rows = snap.exists ? (snap.data().rows || []) : [];
+    if (S.route === 'admin' && S.adminTab === 'filas' && document.activeElement?.closest?.('.frow-ed')) return; // don't clobber typing
+    S.frows = rows; saveCache();
+    if (S.route === 'admin'){ if (S.owner && S.adminTab === 'filas') rerenderPanel(); }
+    else if (S.route === 'home' && S.loaded.t){ const y = window.scrollY; render(); window.scrollTo(0, y); }
+  }, () => {});
   db.doc('site/config').onSnapshot(snap => {
     S.site = snap.exists ? { ...snap.data() } : {}; S.siteLoaded = true;
     saveCache(); renderBrand();
