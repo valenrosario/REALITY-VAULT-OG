@@ -412,13 +412,25 @@ function blankTitle(type){
 function renderLock(){
   if (S.session) return `<div class="lock"><div class="dial" style="width:64px;height:64px" aria-hidden="true"></div><h1>Acceso restringido</h1>
     <p>La cuenta ${esc(S.session.user?.email||'')} no tiene permiso para usar el panel.</p><button class="btn btn-line" data-logout>Cerrar sesión</button></div>`;
-  return `<form class="lock" id="loginForm" style="text-align:left;align-items:stretch"><div class="dial" style="width:56px;height:56px;align-self:center" aria-hidden="true"></div>
-    <h1 style="text-align:center">Panel de control</h1>
-    <p style="text-align:center">Entrá con la cuenta de administrador.</p>
-    <label class="field"><span>Email</span><input class="input" id="login-email" type="email" autocomplete="username" required></label>
-    <label class="field"><span>Contraseña</span><input class="input" id="login-pass" type="password" autocomplete="current-password" required></label>
-    <button class="btn btn-primary" type="submit">Entrar</button>
-    <p id="loginMsg" style="color:var(--danger);text-align:center;min-height:1.4em"></p></form>`;
+  const posters = published().map(t => t.poster).filter(Boolean);
+  const wall = posters.length ? Array.from({ length: 24 }, (_, k) => posters[k % posters.length]) : [];
+  const ICON_MAIL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/></svg>';
+  const ICON_LOCK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>';
+  const ICON_EYE = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  return `<section class="login-screen">
+    ${wall.length ? `<div class="login-wall" aria-hidden="true">${wall.map(u => `<i style="background-image:url('${esc(u)}')"></i>`).join('')}</div>` : ''}
+    <form class="login-card" id="loginForm" novalidate>
+      <div class="login-brand">${S.site.logo ? `<img src="${esc(S.site.logo)}" alt="REALITY VAULT">` : '<b>REALITY <span>VAULT</span></b>'}</div>
+      <div class="login-head"><span class="login-eyebrow">Acceso privado</span><h1>Panel de control</h1><p>Entrá con tu cuenta de administrador para manejar el catálogo.</p></div>
+      <label class="login-field"><span class="lf-label">Email</span>
+        <span class="lf-box">${ICON_MAIL}<input id="login-email" type="email" autocomplete="username" inputmode="email" placeholder="tu@email.com" required></span></label>
+      <label class="login-field"><span class="lf-label">Contraseña</span>
+        <span class="lf-box">${ICON_LOCK}<input id="login-pass" type="password" autocomplete="current-password" placeholder="••••••••" required><button type="button" class="lf-eye" data-toggle-pass aria-label="Mostrar contraseña" title="Mostrar contraseña">${ICON_EYE}</button></span></label>
+      <p id="loginMsg" class="login-msg" role="alert"></p>
+      <button class="login-btn" type="submit">Entrar al panel</button>
+      <a class="login-back" href="/">← Volver al sitio</a>
+    </form>
+  </section>`;
 }
 function renderAdmin(){
   if (!S.owner) return renderLock();
@@ -1072,10 +1084,19 @@ app.addEventListener('submit', async e => {
   if (e.target.id === 'tmdbForm'){ e.preventDefault(); S.tmdb.specials = !!document.getElementById('tmdb-specials')?.checked; const q = document.getElementById('tmdb-q').value.trim(); if (q) tmdbSearch(q); return; }
   if (e.target.id !== 'loginForm') return;
   e.preventDefault();
-  const msg = document.getElementById('loginMsg'); msg.textContent = '';
+  const msg = document.getElementById('loginMsg'); msg.textContent = ''; e.target.classList.remove('shake');
+  const em = document.getElementById('login-email').value.trim(), pw = document.getElementById('login-pass').value;
+  if (!em || !pw){ msg.textContent = 'Completá el email y la contraseña.'; void e.target.offsetWidth; e.target.classList.add('shake'); return; }
   const btn = e.target.querySelector('button[type="submit"]'); btn.disabled = true; btn.textContent = 'Entrando…';
   const { error } = await S.sb.auth.signInWithPassword({ email: document.getElementById('login-email').value.trim(), password: document.getElementById('login-pass').value });
-  if (error){ msg.textContent = 'Email o contraseña incorrectos.'; btn.disabled = false; btn.textContent = 'Entrar'; }
+  if (error){ msg.textContent = 'Email o contraseña incorrectos.'; btn.disabled = false; btn.textContent = 'Entrar al panel'; void e.target.offsetWidth; e.target.classList.add('shake'); }
+});
+
+app.addEventListener('click', e => {
+  const b = e.target.closest('[data-toggle-pass]'); if (!b) return;
+  const inp = document.getElementById('login-pass'); const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password'; b.classList.toggle('on', show);
+  b.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña'); inp.focus();
 });
 
 /* ---------- router ---------- */
