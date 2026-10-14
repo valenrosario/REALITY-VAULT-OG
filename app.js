@@ -837,6 +837,8 @@ function renderSite(){
       <div class="field span2" style="max-width:300px"><span>Logo del pie (opcional · PNG transparente, 300 × 100 px aprox.)</span>${slot('sitelogo','site:footerLogo',S.site.footerLogo,'r31 contain','Subir logo (PNG transparente)')}<span class="hint">Se muestra chico junto al texto principal.</span></div>
       <label class="field span2"><span>Texto principal</span><input class="input" id="s-foot" data-site="footerText" value="${esc(S.site.footerText ?? 'REALITY VAULT')}"></label>
       <label class="field span2"><span>Texto secundario</span><input class="input" id="s-foot2" data-site="footerSub" value="${esc(S.site.footerSub ?? '')}" placeholder="© 2026 · Todos los derechos reservados"></label>
+      <label class="field span2"><span>Texto del DMCA (ventana que se abre desde el pie)</span><textarea class="textarea" id="s-dmca" data-site="dmcaText" rows="10">${esc(S.site.dmcaText || DMCA_DEFAULT)}</textarea><span class="hint">La primera línea es el título. Cada línea nueva es un párrafo.</span></label>
+      <label class="field span2"><span>Email de contacto para reclamos (opcional)</span><input class="input" id="s-dmca-mail" data-site="dmcaEmail" type="email" value="${esc(S.site.dmcaEmail || '')}" placeholder="contacto@…"><span class="hint">Si lo completás, aparece al final del DMCA.</span></label>
       <label class="field"><span>Instagram</span><input class="input" id="s-ig" data-site="instagram" value="${esc(S.site.instagram ?? '')}" placeholder="https://instagram.com/tuusuario"></label>
       <label class="field"><span>TikTok</span><input class="input" id="s-tt" data-site="tiktok" value="${esc(S.site.tiktok ?? '')}" placeholder="https://tiktok.com/@tuusuario"></label>
       <span class="hint span2">Los íconos aparecen solo si cargás el enlace. Dejá un campo vacío para ocultarlo.</span>
@@ -1324,12 +1326,31 @@ function renderPerson(slug){
     <div class="grid person-grid">${credits.map(({ t, roles }) => `<div class="person-credit">${card(t)}<span class="credit-role">${esc(roles.join(' · '))}</span></div>`).join('')}</div>
   </main>`;
 }
+const DMCA_DEFAULT = "DMCA / Descargo de responsabilidad y términos y condiciones\nNuestro sitio web funciona mediante un sistema automatizado que utiliza identificadores (IDs) de TMDb para obtener y mostrar información relacionada con películas y series. Debido a este funcionamiento, algunos identificadores pueden aparecer como si hubiera contenido disponible, aunque en realidad no exista ningún archivo alojado en nuestros servidores.\nNo tenemos control total sobre los identificadores proporcionados por TMDb ni sobre la disponibilidad del contenido procedente de fuentes externas. Sin embargo, hemos implementado medidas para bloquear determinados identificadores y contenidos sensibles, con el objetivo de evitar que puedan accederse desde nuestro sitio web.\nLas reclamaciones por posibles infracciones de derechos de autor deben dirigirse al sitio web o proveedor externo que aloja el contenido en cuestión. Si considera que algún material al que se accede a través de nuestro sitio infringe sus derechos de autor, puede ponerse en contacto con nosotros para que evaluemos el caso y tomemos las medidas que correspondan.\nNuestro sitio web no almacena ni aloja archivos de películas, series u otros contenidos audiovisuales en sus propios servidores. La información que se muestra se obtiene mediante procesos automatizados a partir de fuentes externas, como TMDb, y de servicios de terceros. Por lo tanto, determinados identificadores pueden dar la impresión de que existe contenido disponible sin que necesariamente conozcamos su origen, sus características o las condiciones bajo las cuales es distribuido por dichos servicios.\nAunque el funcionamiento de estos procesos es automatizado, nos comprometemos a actuar de buena fe ante las notificaciones relacionadas con posibles infracciones de derechos de autor. Cuando recibamos una reclamación suficientemente detallada, podremos revisar el material señalado y, cuando corresponda, bloquear el acceso al identificador o enlace relacionado desde nuestro sitio web.\nLa inclusión de información, identificadores o enlaces de terceros no implica que seamos propietarios, distribuidores ni responsables del contenido alojado por dichos servicios externos. La disponibilidad, legalidad y condiciones de acceso a ese contenido dependen de los respectivos proveedores y de las leyes aplicables.\nEste descargo de responsabilidad no pretende excluir ni limitar ninguna obligación legal que pudiera corresponder al sitio web conforme a la legislación aplicable.\n© 2026 Reality Vault. Todos los derechos reservados.";
+function openDmca(){
+  closeDmca();
+  const raw = (S.site.dmcaText || DMCA_DEFAULT).trim();
+  const lines = raw.split(/\n+/).map(l => l.trim()).filter(Boolean);
+  const title = lines.length > 1 ? lines.shift() : 'DMCA';
+  const mail = String(S.site.dmcaEmail || '').trim();
+  const box = document.createElement('div'); box.className = 'trailer-pop dmca-pop'; box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true'); box.setAttribute('aria-label', title);
+  box.innerHTML = `<div class="tp-card dmca-card"><div class="tp-head"><strong>${esc(title)}</strong><button class="pl-btn" data-dmca-close aria-label="Cerrar">✕</button></div>
+    <div class="dmca-body">${lines.map(l => `<p>${esc(l)}</p>`).join('')}${/^[^\s@]+@[^\s@]+$/.test(mail) ? `<p>Contacto: <a href="mailto:${esc(mail)}">${esc(mail)}</a></p>` : ''}</div></div>`;
+  document.body.appendChild(box); document.body.style.overflow = 'hidden';
+  box.querySelector('[data-dmca-close]').focus();
+}
+function closeDmca(){ const b = document.querySelector('.dmca-pop'); if (b){ b.remove(); document.body.style.overflow = ''; } }
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-dmca]')){ e.preventDefault(); openDmca(); return; }
+  if (e.target.closest('[data-dmca-close]') || e.target.classList?.contains('dmca-pop')) closeDmca();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.querySelector('.dmca-pop')) closeDmca(); });
 function renderFooter(){
   const st = S.site || {};
   const left = st.footerText ?? 'REALITY VAULT';
   const sub = st.footerSub ?? '';
   const ig = safeUrl(st.instagram), tt = safeUrl(st.tiktok);
-  return `<footer><div class="foot-l"><div class="foot-brand">${st.footerLogo?`<img class="foot-logo" alt="" data-img="${esc(st.footerLogo)}" hidden>`:''}${left?`<span>${esc(left)}</span>`:''}</div>${sub?`<span style="color:var(--faint)">${esc(sub)}</span>`:''}</div>
+  return `<footer><div class="foot-l"><div class="foot-brand">${st.footerLogo?`<img class="foot-logo" alt="" data-img="${esc(st.footerLogo)}" hidden>`:''}${left?`<span>${esc(left)}</span>`:''}</div>${sub?`<span style="color:var(--faint)">${esc(sub)}</span>`:''}<button class="foot-link" data-dmca>DMCA</button></div>
     <div class="foot-r">${ig||tt ? `<div class="social">${ig?`<a href="${esc(ig)}" target="_blank" rel="noopener" aria-label="Instagram">${ICONS.ig}</a>`:''}${tt?`<a href="${esc(tt)}" target="_blank" rel="noopener" aria-label="TikTok">${ICONS.tt}</a>`:''}</div>` : ''}</div></footer>`;
 }
 
