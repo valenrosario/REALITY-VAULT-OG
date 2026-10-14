@@ -1190,7 +1190,7 @@ async function loadTop10(){
   S.top10 = ids;
   if (S.route === 'home' && !S.q.trim() && !S.playerOpen){ const y = window.scrollY; render(); window.scrollTo(0, y); }
 }
-// count a visit to a title page (once per title per hour in this browser) for "Top 10 hoy"
+// count a visit to a title page (once per title every 10 minutes in this browser) for "Top 10 hoy"
 function viewerId(){
   if (S.session?.user?.id) return S.session.user.id;
   try { let v = localStorage.getItem('rv-viewer'); if (!v){ v = 'a-' + uid(''); localStorage.setItem('rv-viewer', v); } return v; } catch { return 'a-' + uid(''); }
@@ -1199,7 +1199,7 @@ function trackView(tid){
   if (!tid || !S.sb || !byId(tid)) return;
   const key = 'rv-seen-' + tid; let last = 0;
   try { last = +localStorage.getItem(key) || 0; } catch {}
-  if (Date.now() - last < 3600e3) return;
+  if (Date.now() - last < 600e3) return;
   try { localStorage.setItem(key, String(Date.now())); } catch {}
   S.sb.from('title_views').insert({ title_id: tid, viewer: viewerId() }).then(({ error }) => { if (!error) setTimeout(loadTop10, 600); });
 }
