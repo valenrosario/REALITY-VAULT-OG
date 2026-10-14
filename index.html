@@ -678,6 +678,15 @@ a.cast-card:hover strong{color:var(--accent-2)}
 .login-card.shake{animation:shake .38s}
 @keyframes shake{20%{transform:translateX(-8px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
 @media (max-width:640px){.login-screen{min-height:calc(100vh - 62px);padding:24px 16px;align-items:start}.login-card{margin-top:4vh;padding:28px 20px 20px}.login-wall{grid-template-columns:repeat(4,1fr)}}
+
+/* Top 10 hoy */
+.rail-top{display:flex;gap:4px;align-items:flex-end}
+.t10{flex:0 0 auto;display:flex;align-items:flex-end;border:0;padding:0;background:none;cursor:pointer;scroll-snap-align:start}
+.t10-num{font-family:var(--display);font-weight:700;font-size:clamp(150px,15vw,250px);line-height:.78;letter-spacing:-.06em;color:var(--bg);-webkit-text-stroke:5px var(--accent);margin-right:-.07em;position:relative;z-index:0;user-select:none}
+.t10-num.ten{letter-spacing:-.13em;margin-right:-.05em}
+.t10 .poster{position:relative;z-index:1;display:block;width:clamp(104px,10.5vw,170px);flex-shrink:0}
+.t10:hover .poster{transform:scale(1.03)}
+@media (max-width:640px){.t10-num{font-size:150px;-webkit-text-stroke:4px var(--accent)}.t10 .poster{width:100px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
 </head>

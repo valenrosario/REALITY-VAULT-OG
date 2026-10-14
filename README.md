@@ -63,6 +63,10 @@ Para ver un capítulo o una película, el sitio pide crear una cuenta gratis. Co
 
 En Supabase → **SQL Editor → New query**, pegá el contenido de `supabase/03-seguir-viendo.sql` y tocá **Run**. Desde ahí, cada usuario ve en el inicio la fila **Seguir viendo** con lo último que abrió, y el botón de cada serie pasa a decir **Continuar T1:E3**.
 
+## Paso 8 · "Top 10 hoy"
+
+En Supabase → **SQL Editor → New query**, pegá el contenido de `supabase/04-top-10.sql` y tocá **Run**. En el inicio aparece la fila **Top 10 hoy** con los títulos que más personas abrieron en las últimas 24 horas. Se actualiza sola cada minuto.
+
 ---
 
 ## Cómo se usa

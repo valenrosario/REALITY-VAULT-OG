@@ -306,6 +306,7 @@ function renderHome(){
   const genreRows = Object.entries(genres).sort((a,b)=>b[1].length-a[1].length).slice(0,8);
   return mobileChips('home') + renderHero() + `<main>
     ${continueRow()}
+    ${top10Row()}
     ${listRow()}
     ${row('Destacados', feat)}
     ${row('Novedades', newest)}
@@ -1151,6 +1152,7 @@ async function recordWatch(tid, season, episode){
   const row = { user_id: S.session.user.id, title_id: tid, last_season: season === '' || season == null ? null : +season, last_episode: episode === '' || episode == null ? null : +episode, watched: [...watched], updated_at: new Date().toISOString() };
   S.progress.delete(tid); S.progress = new Map([[tid, row], ...S.progress]);
   const { error } = await S.sb.from('watch_progress').upsert(row);
+  setTimeout(loadTop10, 800);
   if (error) console.warn('No se pudo guardar el progreso', error.message);
   setTimeout(() => { const y = window.scrollY; render(); window.scrollTo(0, y); }, 400);
 }
@@ -1176,6 +1178,27 @@ function listRow(){
 function wideCard(t){
   return `<div class="wide-card"><button class="wide-main" data-open="${esc(t.id)}" aria-label="${esc(t.title)}">${wideArt(t)}</button>
     <button class="wa-heart" data-mylist="${esc(t.id)}" data-heart="1" aria-label="Quitar de Mi lista" title="Quitar de Mi lista">${ICON_HEART_FILL}</button></div>`;
+}
+/* --- Top 10 hoy --- */
+S.top10 = [];
+async function loadTop10(){
+  if (!S.sb) return;
+  const { data, error } = await S.sb.rpc('top10');
+  if (error || !Array.isArray(data)) return;
+  const ids = data.map(r => r.title_id);
+  if (ids.join() === S.top10.join()) return;
+  S.top10 = ids;
+  if (S.route === 'home' && !S.q.trim() && !S.playerOpen){ const y = window.scrollY; render(); window.scrollTo(0, y); }
+}
+function top10Row(){
+  const list = S.top10.map(byId).filter(t => t && t.status !== 'borrador').slice(0, 10);
+  if (!list.length) return '';
+  return `<section class="row top10"><div class="row-head"><h2>Top 10 hoy</h2></div>
+    <div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button>
+    <div class="rail rail-top">${list.map((t, i) => `<button class="t10" data-open="${esc(t.id)}" aria-label="${i+1}. ${esc(t.title)}">
+      <span class="t10-num ${i===9?'ten':''}" aria-hidden="true">${i+1}</span>
+      <span class="poster" ${t.poster?`data-src="${esc(t.poster)}"`:''}>${genBlock(t)}</span></button>`).join('')}</div>
+    <button class="rail-btn r" data-scroll="1" aria-label="Siguiente">›</button></div></section>`;
 }
 function continueRow(){
   if (!S.session) return '';
@@ -1658,6 +1681,7 @@ async function checkOwner(){
   if (!window.supabase || !cfg.supabaseUrl || !cfg.supabaseAnonKey || /TU_|xxxx/i.test(cfg.supabaseUrl + cfg.supabaseAnonKey)){ S.noDb = true; render(); return; }
   S.sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
   const db = makeDb(S.sb);
+  loadTop10(); setInterval(loadTop10, 60000);
   const authReady = (async () => { await checkOwner(); await loadMyList(); await loadProgress(); render(); })();
   // Supabase pide no llamar a otras funciones suyas dentro de este aviso: se difiere con setTimeout.
   S.sb.auth.onAuthStateChange((evt) => {
