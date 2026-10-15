@@ -56,7 +56,7 @@ async function processImage(file, maxW, maxH, alpha){
   x.drawImage(src,0,0,c.width,c.height);
   return await new Promise((res, rej) => c.toBlob(bl => bl ? res(bl) : rej(new Error('No se pudo procesar la imagen')), type, .88));
 }
-const IMG_SPECS = { frow:[1000,1480,false], mobilebanner:[1350,1700,false], mobile:[1600,1000,false], sitelogo:[1400,460,true], poster:[1200,1800,false], backdrop:[2560,1440,false], logo:[1400,560,true], thumb:[1280,720,false], face:[400,400,false], banner:[3000,1000,false] };
+const IMG_SPECS = { tv:[1920,1080,false], frow:[1000,1480,false], mobilebanner:[1350,1700,false], mobile:[1600,1000,false], sitelogo:[1400,460,true], poster:[1200,1800,false], backdrop:[2560,1440,false], logo:[1400,560,true], thumb:[1280,720,false], face:[400,400,false], banner:[3000,1000,false] };
 const BUCKET = 'media';
 async function uploadImage(file, kind){
   const [w,h,alpha] = IMG_SPECS[kind] || IMG_SPECS.backdrop;
@@ -81,7 +81,7 @@ function removeMedia(urls){
 }
 /* --- crop before upload --- */
 // [aspect ratio, output width]; logos are not cropped (they keep their transparent edges)
-const CROP_SPECS = { frow:[3/4.45,900], poster:[2/3,1200], backdrop:[16/9,2560], banner:[3,3000], mobilebanner:[4/5,1350], mobile:[16/10,1600], thumb:[16/9,1280], face:[1,400] };
+const CROP_SPECS = { tv:[16/9,1920], frow:[3/4.45,900], poster:[2/3,1200], backdrop:[16/9,2560], banner:[3,3000], mobilebanner:[4/5,1350], mobile:[16/10,1600], thumb:[16/9,1280], face:[1,400] };
 function cropImage(file, aspect, outW){
   return new Promise(async (resolve, reject) => {
     const src = URL.createObjectURL(file);
@@ -594,6 +594,11 @@ function renderEditor(){
         <div class="field"><span>Banner principal · celular</span>${slot('mobilebanner','bannerImageMobile',E.bannerImageMobile,'r45','Subir banner para celular')}<span class="hint"><b>1080 × 1350 px</b> (vertical 4:5). Ocupa toda la portada del celular; el logo y los botones van abajo al centro.</span></div>
         <div class="field"><span>Fondo de la ficha · celular</span>${slot('mobile','backdropMobile',E.backdropMobile,'r1610','Subir fondo para celular')}<span class="hint"><b>1280 × 800 px</b> (16:10). Se muestra arriba al abrir el título en el celular.</span></div>
       </div>
+      <h3 style="margin-top:8px">Versión TV <small>opcional · solo para la app de la tele · si no las cargás, se usan las de arriba</small></h3>
+      <div class="imgs imgs-m">
+        <div class="field"><span>Banner principal · TV</span>${slot('tv','bannerImageTv',E.bannerImageTv,'r169','Subir banner para TV')}<span class="hint"><b>1920 × 1080 px</b> (16:9). Ocupa toda la pantalla del inicio en la tele. Dejá lo importante a la derecha: abajo a la izquierda van el logo, el texto y los botones.</span></div>
+        <div class="field"><span>Fondo de la ficha · TV</span>${slot('tv','backdropTv',E.backdropTv,'r169','Subir fondo para TV')}<span class="hint"><b>1920 × 1080 px</b> (16:9). Se ve a pantalla completa al abrir el título en la tele. También de ahí sale el color del fondo de los capítulos.</span></div>
+      </div>
     </div>
     <div class="fs"><h3>Géneros y etiquetas</h3><div class="fgrid">
       ${chipField('genres','Géneros (arman las filas del inicio)',E.genres,allGenres)}
@@ -1051,7 +1056,7 @@ function inlineConfirm(holder, label, onYes){
   holder.querySelector('[data-no]').onclick = e => { e.stopPropagation(); holder.innerHTML = prev; };
 }
 function collectRefs(t){
-  const r = [t.poster,t.backdrop,t.logo,t.thumbWide,t.bannerImage,t.bannerImageMobile,t.backdropMobile,t.previewVideo,t.previewVideoMobile,...(t.cast||[]).map(c=>c.photo)];
+  const r = [t.poster,t.backdrop,t.logo,t.thumbWide,t.bannerImage,t.bannerImageMobile,t.backdropMobile,t.bannerImageTv,t.backdropTv,t.previewVideo,t.previewVideoMobile,...(t.cast||[]).map(c=>c.photo)];
   (t.seasons||[]).forEach(s=>(s.episodes||[]).forEach(e=>r.push(e.thumb)));
   return r.filter(Boolean);
 }

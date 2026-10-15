@@ -22,18 +22,26 @@ data class Episode(
 
 data class Season(val number: Int, val name: String, val episodes: List<Episode>)
 
+data class CastMember(val name: String, val role: String, val photo: String)
+
 data class Title(
     val id: String, val type: String, val title: String, val tagline: String,
     val description: String, val year: String, val yearEnd: String, val rating: String,
     val duration: String, val genres: List<String>, val poster: String, val backdrop: String,
     val logo: String, val thumbWide: String, val bannerImage: String, val url: String,
     val trailer: String, val featured: Boolean, val status: String, val availability: String,
-    val releaseDate: String, val createdAt: Long, val seasons: List<Season>
+    val releaseDate: String, val createdAt: Long, val seasons: List<Season>,
+    val cast: List<CastMember> = emptyList(), val bannerTv: String = "", val backdropTv: String = ""
 ) {
     val isSerie get() = type == "serie"
     val isSoon get() = availability == "proximamente"
     val wide get() = thumbWide.ifBlank { backdrop.ifBlank { bannerImage.ifBlank { poster } } }
     val bg get() = backdrop.ifBlank { bannerImage.ifBlank { thumbWide.ifBlank { poster } } }
+    /** Fondo de la ficha en la tele (imagen solo para TV si la cargaste). */
+    val tvBg get() = backdropTv.ifBlank { bg }
+    /** Imagen del banner del inicio en la tele. */
+    val tvHero get() = bannerTv.ifBlank { backdropTv.ifBlank { backdrop.ifBlank { bannerImage.ifBlank { thumbWide.ifBlank { poster } } } } }
+    fun kind() = if (isSerie) "Serie" else "Película"
     fun meta(): String {
         val parts = mutableListOf<String>()
         if (year.isNotBlank()) parts += if (yearEnd.isNotBlank()) "$year–$yearEnd" else year
@@ -87,7 +95,9 @@ fun parseTitle(o: JSONObject): Title {
         logo = o.s("logo"), thumbWide = o.s("thumbWide"), bannerImage = o.s("bannerImage"), url = o.s("url").trim(),
         trailer = o.s("trailer").trim(), featured = o.optBoolean("featured"), status = o.s("status"),
         availability = o.s("availability"), releaseDate = o.s("releaseDate"), createdAt = o.optLong("createdAt"),
-        seasons = seasons.sortedBy { it.number }
+        seasons = seasons.sortedBy { it.number },
+        cast = o.optJSONArray("cast")?.let { a -> (0 until a.length()).mapNotNull { k -> a.optJSONObject(k)?.let { c -> CastMember(c.s("name"), c.s("role"), c.s("photo")).takeIf { it.name.isNotBlank() } } } } ?: emptyList(),
+        bannerTv = o.s("bannerImageTv"), backdropTv = o.s("backdropTv")
     )
 }
 

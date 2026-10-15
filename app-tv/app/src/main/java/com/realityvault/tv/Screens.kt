@@ -85,6 +85,7 @@ sealed class Screen {
     data class Detail(val id: String) : Screen()
     data class Player(val titleId: String, val url: String, val season: Int?, val episode: Int?, val trailer: Boolean = false) : Screen()
     data class Login(val then: Screen? = null) : Screen()
+    data class Person(val name: String) : Screen()
 }
 
 private val mainScreens = listOf(Screen.Search, Screen.Home, Screen.Series, Screen.Movies, Screen.MyList, Screen.Account)
@@ -114,327 +115,6 @@ class Nav {
     }
 }
 
-@Composable
-fun App(nav: Nav, onExit: () -> Unit) {
-    BackHandler {
-        if (!nav.back()) {
-            if (nav.top != Screen.Home) nav.section(Screen.Home) else onExit()
-        }
-    }
-    Box(Modifier.fillMaxSize().background(C.bg)) {
-        when (val s = nav.top) {
-            is Screen.Player -> PlayerScreen(s, nav)
-            is Screen.Detail -> DetailScreen(s.id, nav)
-            is Screen.Login -> LoginScreen(s, nav)
-            else -> Row(Modifier.fillMaxSize()) {
-                Rail(nav)
-                Box(Modifier.weight(1f).fillMaxHeight()) {
-                    when (s) {
-                        Screen.Home -> HomeScreen(nav)
-                        Screen.Series -> GridScreen(nav, "series")
-                        Screen.Movies -> GridScreen(nav, "peliculas")
-                        Screen.MyList -> GridScreen(nav, "milista")
-                        Screen.Search -> SearchScreen(nav)
-                        Screen.Account -> AccountScreen(nav)
-                        else -> {}
-                    }
-                }
-            }
-        }
-    }
-}
-
-/* ---------------- menú lateral ---------------- */
-
-@Composable
-fun Rail(nav: Nav) {
-    var open by remember { mutableStateOf(false) }
-    val w by animateDpAsState(if (open) 190.dp else 64.dp, tween(180), label = "rail")
-    val items = listOf(
-        Triple(Screen.Search, Ic.search, "Buscar"), Triple(Screen.Home, Ic.home, "Inicio"),
-        Triple(Screen.Series, Ic.tv, "Series"), Triple(Screen.Movies, Ic.film, "Películas"),
-        Triple(Screen.MyList, Ic.plus, "Mi lista"),
-        Triple(Screen.Account, Ic.user, if (Store.session != null) "Mi cuenta" else "Entrar")
-    )
-    Box(Modifier.width(64.dp).fillMaxHeight()) {
-        Column(
-            Modifier.width(w).fillMaxHeight()
-                .background(if (open) Brush.horizontalGradient(listOf(Color.Black, Color.Black.copy(alpha = .9f), Color.Transparent)) else Brush.horizontalGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent)))
-                .onFocusChanged { open = it.hasFocus }
-                .padding(start = 12.dp, top = 30.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items.forEachIndexed { i, (screen, icon, label) ->
-                if (i == items.lastIndex) Spacer(Modifier.weight(1f))
-                val selected = nav.top == screen
-                Focusable(
-                    onClick = { if (nav.top != screen) nav.section(screen) },
-                    modifier = Modifier.height(38.dp).width(if (open) 160.dp else 40.dp),
-                    shape = RoundedCornerShape(99.dp), scale = 1.04f, ring = false
-                ) { f ->
-                    Row(
-                        Modifier.fillMaxSize().background(if (f) Color.White else if (selected) Color.White.copy(alpha = .14f) else Color.Transparent)
-                            .padding(horizontal = 11.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(icon, label, tint = if (f) Color.Black else if (selected) Color.White else C.muted, modifier = Modifier.size(18.dp))
-                        if (open) {
-                            Spacer(Modifier.width(12.dp))
-                            Text(label, style = ts(13, FontWeight.Bold, if (f) Color.Black else C.fg), maxLines = 1)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/* ---------------- inicio ---------------- */
-
-data class Slide(val t: Title, val image: String, val headline: String, val text: String)
-
-fun slides(): List<Slide> {
-    val pub = Store.published()
-    val fromBanners = Store.banners.mapNotNull { b ->
-        val t = Store.byId(b.titleId)?.takeIf { it.status != "borrador" } ?: return@mapNotNull null
-        Slide(t, b.image.ifBlank { t.bannerImage.ifBlank { t.bg } }, b.headline, b.text.ifBlank { t.description })
-    }
-    if (fromBanners.isNotEmpty()) return fromBanners
-    return pub.filter { it.featured }.take(5).map { Slide(it, it.bannerImage.ifBlank { it.bg }, "", it.description) }
-}
-
-class RowSpec(val key: String, val title: String, val kind: String, val titles: List<Title>, val feat: List<Pair<Title, FeatItem>> = emptyList())
-
-fun homeRows(): List<RowSpec> {
-    val pub = Store.published()
-    val rows = mutableListOf<RowSpec>()
-    val cont = Store.progress.mapNotNull { p -> Store.byId(p.titleId)?.takeIf { it.status != "borrador" } }
-    if (cont.isNotEmpty()) rows += RowSpec("cont", "Seguir viendo", "wide", cont)
-    val top = Store.top10.mapNotNull { id -> pub.firstOrNull { it.id == id } }.take(10)
-    if (top.isNotEmpty()) rows += RowSpec("top", "Top 10 hoy", "top", top)
-    val list = Store.myList.mapNotNull { id -> pub.firstOrNull { it.id == id } }
-    if (list.isNotEmpty()) rows += RowSpec("list", "Mi lista", "wide", list)
-    Store.featRows.forEach { r ->
-        val items = r.items.mapNotNull { i -> pub.firstOrNull { it.id == i.titleId }?.let { it to i } }
-        if (items.isNotEmpty()) rows += RowSpec("f-" + r.id, r.title, "feat", emptyList(), items)
-    }
-    val feat = pub.filter { it.featured }
-    if (feat.isNotEmpty()) rows += RowSpec("feat", "Destacados", "poster", feat)
-    val newest = pub.sortedByDescending { it.createdAt }.take(20)
-    if (newest.isNotEmpty()) rows += RowSpec("new", "Novedades", "poster", newest)
-    val series = pub.filter { it.isSerie }; if (series.isNotEmpty()) rows += RowSpec("series", "Series", "poster", series)
-    val movies = pub.filter { !it.isSerie }; if (movies.isNotEmpty()) rows += RowSpec("movies", "Películas", "poster", movies)
-    pub.flatMap { t -> t.genres.map { it to t } }.groupBy({ it.first }, { it.second })
-        .entries.sortedByDescending { it.value.size }.take(8)
-        .forEach { (g, l) -> rows += RowSpec("g-$g", g, "poster", l) }
-    return rows
-}
-
-/** Fila enfocada siempre arriba (como Google TV): la de antes se va y se ve la que sigue. */
-@OptIn(ExperimentalFoundationApi::class)
-class PivotSpec(private val pivotPx: Float, private val atTop: () -> Boolean) : BringIntoViewSpec {
-    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
-        if (atTop()) 0f else offset - pivotPx
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun HomeScreen(nav: Nav) {
-    val all = slides()
-    val rows = homeRows()
-    val mem = nav.memory
-    val listState = mem.list("home")
-    var heroIdx by remember { mutableIntStateOf(0) }
-    var heroFocused by remember { mutableStateOf(mem.focus["home"] == null) }
-    var bgTitle by remember { mutableStateOf<Title?>(null) }
-    val slide = all.getOrNull(if (all.isEmpty()) 0 else heroIdx % all.size)
-    val heroReq = remember { FocusRequester() }
-    val restoreKey = mem.focus["home"]
-    val density = LocalDensity.current
-    val defaultSpec = LocalBringIntoViewSpec.current
-    val spec = remember { PivotSpec(with(density) { 52.dp.toPx() }) { heroFocused } }
-
-    // el banner cambia solo cada 9 segundos mientras no lo estés mirando con el control
-    LaunchedEffect(heroIdx, heroFocused, all.size) {
-        if (all.size > 1 && !heroFocused) { delay(9000); heroIdx = (heroIdx + 1) % all.size }
-    }
-    LaunchedEffect(heroFocused) { if (heroFocused && listState.firstVisibleItemIndex + listState.firstVisibleItemScrollOffset > 0) listState.animateScrollToItem(0) }
-    if (restoreKey == null) AutoFocus(heroReq, slide?.t?.id)
-
-    if (!Store.loaded) { Loading(); return }
-    if (all.isEmpty() && rows.isEmpty()) { Empty("Todavía no hay títulos publicados."); return }
-
-    val bgUrl = if (heroFocused || bgTitle == null) slide?.image ?: "" else bgTitle!!.bg
-    Box(Modifier.fillMaxSize()) {
-        // fondo: la imagen del banner o de lo que tengas seleccionado
-        Crossfade(bgUrl, animationSpec = tween(350), label = "bg") { u ->
-            Box(Modifier.fillMaxSize()) {
-                if (u.isNotBlank()) Img(u, Modifier.fillMaxSize(), alignment = Alignment.TopEnd, crossfade = false)
-            }
-        }
-        Box(Modifier.fillMaxSize().background(leftScrim))
-        Box(Modifier.fillMaxSize().background(bottomScrim))
-        if (!heroFocused) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .5f)))
-
-        CompositionLocalProvider(LocalBringIntoViewSpec provides spec) {
-            LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 200.dp)) {
-                item(key = "hero") {
-                    if (slide != null) Hero(slide, all.size, heroIdx, nav, heroReq) { heroFocused = it }
-                    else Spacer(Modifier.height(40.dp))
-                }
-                items(rows, key = { it.key }) { r ->
-                    CompositionLocalProvider(LocalBringIntoViewSpec provides defaultSpec) {
-                        TitleRow(r, nav, "home", mem.list("row-" + r.key)) { bgTitle = it }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun Hero(slide: Slide, count: Int, idx: Int, nav: Nav, req: FocusRequester, onFocus: (Boolean) -> Unit) {
-    val t = slide.t
-    val target = Store.playTarget(t)
-    val scope = rememberCoroutineScope()
-    Box(Modifier.fillMaxWidth().height(330.dp).onFocusChanged { onFocus(it.hasFocus) }) {
-        Store.siteLogo.takeIf { it.isNotBlank() }?.let {
-            Img(it, Modifier.padding(start = 28.dp, top = 22.dp).height(22.dp).width(150.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
-        }
-        Column(Modifier.align(Alignment.BottomStart).padding(start = 28.dp, bottom = 26.dp).width(400.dp)) {
-            if (slide.headline.isNotBlank()) Text(slide.headline, style = ts(30, FontWeight.Bold, Color.White), maxLines = 2)
-            else TitleLogo(t, 260.dp, 80.dp, 30)
-            Spacer(Modifier.height(12.dp))
-            MetaLine(t)
-            if (slide.text.isNotBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Text(slide.text, style = ts(13, FontWeight.Light, C.fg2), maxLines = 3, overflow = TextOverflow.Ellipsis)
-            }
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                when {
-                    t.isSoon -> PillButton(if (t.releaseDate.isNotBlank()) "Próximamente · ${t.releaseDate}" else "Próximamente", { nav.go(Screen.Detail(t.id)) }, icon = null, requester = req)
-                    target != null -> PillButton(target.label, { nav.play(t, target.url, target.season, target.episode) }, requester = req)
-                    else -> PillButton("Más información", { nav.go(Screen.Detail(t.id)) }, icon = null, requester = req)
-                }
-                if (t.isSoon || target != null) TextButtonTv("Más información", { nav.go(Screen.Detail(t.id)) })
-                ListButton(t, nav, scope)
-                if (count > 1) Text("${idx % count + 1} · $count", style = ts(12, FontWeight.Bold, C.muted), modifier = Modifier.padding(start = 4.dp))
-            }
-        }
-    }
-}
-
-@Composable
-fun ListButton(t: Title, nav: Nav, scope: kotlinx.coroutines.CoroutineScope) {
-    val on = t.id in Store.myList
-    RoundButton(if (on) Ic.check else Ic.plus, if (on) "Quitar de Mi lista" else "Agregar a Mi lista", {
-        if (Store.session == null) nav.go(Screen.Login()) else scope.launch { Store.toggleList(t.id) }
-    })
-}
-
-/* ---------------- filas ---------------- */
-
-const val POSTER_W = 92
-const val WIDE_W = 184
-const val FEAT_W = 118
-
-@Composable
-fun TitleRow(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState, onFocusTitle: (Title) -> Unit) {
-    val restore = nav.memory.focus[screenKey]
-    Column(Modifier.padding(top = 2.dp)) {
-        Text(r.title, style = ts(15, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 28.dp))
-        LazyRow(
-            state = state,
-            contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(if (r.kind == "top") 4.dp else 12.dp)
-        ) {
-            if (r.kind == "feat") {
-                itemsIndexed(r.feat, key = { i, _ -> "f$i" }) { i, (t, item) ->
-                    val k = "${r.key}/$i"
-                    CardBox(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, { onFocusTitle(t) }, Modifier.width(FEAT_W.dp).aspectRatio(3f / 4.45f)) {
-                        FeatCard(t, item)
-                    }
-                }
-            } else itemsIndexed(r.titles, key = { _, t -> t.id }) { i, t ->
-                val k = "${r.key}/${t.id}"
-                when (r.kind) {
-                    "wide" -> {
-                        val p = if (r.key == "cont") Store.progress.firstOrNull { it.titleId == t.id } else null
-                        CardBox(k, restore, nav, screenKey, {
-                            val tg = Store.playTarget(t)
-                            if (r.key == "cont" && tg != null) nav.play(t, tg.url, tg.season, tg.episode) else nav.go(Screen.Detail(t.id))
-                        }, { onFocusTitle(t) }, Modifier.width(WIDE_W.dp).aspectRatio(16f / 9f)) {
-                            WideCard(t, if (p?.season != null) "T${p.season}:E${p.episode}" else null)
-                        }
-                    }
-                    "top" -> Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            "${i + 1}", modifier = Modifier.offset(x = 8.dp, y = 8.dp),
-                            style = ts(90, FontWeight.Bold, C.accent).copy(drawStyle = Stroke(width = 4f))
-                        )
-                        CardBox(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, { onFocusTitle(t) }, Modifier.width(POSTER_W.dp).aspectRatio(2f / 3f)) {
-                            PosterCard(t)
-                        }
-                    }
-                    else -> CardBox(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, { onFocusTitle(t) }, Modifier.width(POSTER_W.dp).aspectRatio(2f / 3f)) {
-                        PosterCard(t)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun CardBox(
-    key: String, restore: String?, nav: Nav, screenKey: String, onClick: () -> Unit, onFocus: () -> Unit,
-    modifier: Modifier, content: @Composable () -> Unit
-) {
-    val req = remember { FocusRequester() }
-    if (key == restore) AutoFocus(req, key)
-    Focusable(onClick, modifier, shape = RoundedCornerShape(8.dp), requester = req, onFocus = { nav.memory.focus[screenKey] = key; onFocus() }) { content() }
-}
-
-@Composable
-fun PosterCard(t: Title) {
-    Box(Modifier.fillMaxSize().background(C.surface)) {
-        if (t.poster.isNotBlank()) Img(t.poster, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
-        if (t.isSoon) Text(
-            "Próximamente", style = ts(8, FontWeight.Bold, Color.Black),
-            modifier = Modifier.align(Alignment.TopStart).padding(6.dp).background(C.accent, RoundedCornerShape(99.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
-        )
-    }
-}
-
-@Composable
-fun WideCard(t: Title, label: String?) {
-    Box(Modifier.fillMaxSize().background(C.surface)) {
-        if (t.wide.isNotBlank()) Img(t.wide, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
-        if (label != null) {
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .55f), Color.Transparent, Color.Transparent))))
-            Text(label, style = ts(11, FontWeight.Bold, Color.White), modifier = Modifier.padding(8.dp))
-        }
-    }
-}
-
-@Composable
-fun FeatCard(t: Title, item: FeatItem) {
-    val img = item.image.ifBlank { t.wide }
-    Box(Modifier.fillMaxSize().background(C.surface)) {
-        if (img.isNotBlank()) Img(img, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .45f to Color.Transparent, 1f to Color.Black)))
-        Column(Modifier.align(Alignment.BottomCenter).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            if (t.logo.isNotBlank()) Img(t.logo, Modifier.fillMaxWidth(.8f).height(34.dp), scale = ContentScale.Fit, alignment = Alignment.BottomCenter)
-            else Text(t.title, style = ts(12, FontWeight.Bold, Color.White), maxLines = 2)
-            if (item.label.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(item.label, style = ts(9, FontWeight.Bold, C.fg2), maxLines = 1)
-            }
-        }
-    }
-}
-
 /* ---------------- grillas: series, películas, mi lista ---------------- */
 
 @Composable
@@ -453,7 +133,7 @@ fun GridScreen(nav: Nav, kind: String) {
     val firstReq = remember { FocusRequester() }
     val restore = nav.memory.focus[kind]
 
-    Column(Modifier.fillMaxSize().padding(start = 28.dp, top = 26.dp)) {
+    Column(Modifier.fillMaxSize().padding(start = 48.dp, top = 74.dp)) {
         Text(title, style = ts(24, FontWeight.Bold, Color.White))
         Text("${list.size} título${if (list.size == 1) "" else "s"}", style = ts(12, color = C.muted))
         if (kind == "milista" && Store.session == null) {
@@ -473,7 +153,7 @@ fun GridScreen(nav: Nav, kind: String) {
         if (list.isEmpty()) { Text(if (kind == "milista") "Todavía no agregaste nada." else "No hay títulos.", style = ts(15, color = C.fg2)); return@Column }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(100.dp), state = nav.memory.grid(kind + genre),
-            contentPadding = PaddingValues(top = 10.dp, end = 24.dp, bottom = 40.dp),
+            contentPadding = PaddingValues(top = 10.dp, end = 48.dp, bottom = 40.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(list, key = { it.id }) { t ->
@@ -498,94 +178,6 @@ fun Chip(text: String, on: Boolean, onClick: () -> Unit) {
     }
 }
 
-/* ---------------- ficha de la serie / película ---------------- */
-
-@Composable
-fun DetailScreen(id: String, nav: Nav) {
-    val t = Store.byId(id)
-    if (t == null) { Empty("Este título ya no está disponible."); return }
-    val scope = rememberCoroutineScope()
-    LaunchedEffect(id) { Store.trackView(id) }
-    val target = Store.playTarget(t)
-    val playReq = remember { FocusRequester() }
-    var season by remember(id) {
-        val p = Store.progress.firstOrNull { it.titleId == id }
-        mutableIntStateOf(t.seasons.indexOfFirst { it.number == p?.season }.coerceAtLeast(0))
-    }
-    AutoFocus(playReq, id)
-    val prog = Store.progress.firstOrNull { it.titleId == id }
-
-    // todo entra en una sola pantalla: nada se corta ni se mueve hacia arriba
-    Box(Modifier.fillMaxSize()) {
-        if (t.bg.isNotBlank()) Img(t.bg, Modifier.fillMaxSize(), alignment = Alignment.TopEnd)
-        Box(Modifier.fillMaxSize().background(leftScrim))
-        Box(Modifier.fillMaxSize().background(bottomScrim))
-        Column(Modifier.fillMaxSize().padding(top = 34.dp)) {
-            Column(Modifier.padding(start = 44.dp).width(400.dp)) {
-                TitleLogo(t, 260.dp, 80.dp, 30)
-                Spacer(Modifier.height(12.dp))
-                MetaLine(t)
-                if (t.description.isNotBlank()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(t.description, style = ts(13, FontWeight.Light, C.fg2), maxLines = 3, overflow = TextOverflow.Ellipsis)
-                }
-                Spacer(Modifier.height(16.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    when {
-                        t.isSoon -> PillButton(if (t.releaseDate.isNotBlank()) "Próximamente · ${t.releaseDate}" else "Próximamente", {}, icon = null, requester = playReq)
-                        target != null -> PillButton(target.label, { nav.play(t, target.url, target.season, target.episode) }, requester = playReq)
-                        else -> PillButton("Sin video por ahora", {}, icon = null, requester = playReq)
-                    }
-                    ListButton(t, nav, scope)
-                    if (mediaFor(t.trailer) != null) RoundButton(Ic.clapper, "Tráiler", { nav.go(Screen.Player(t.id, t.trailer, null, null, trailer = true)) })
-                }
-            }
-            if (t.isSerie && t.seasons.isNotEmpty()) {
-                Spacer(Modifier.weight(1f))
-                val s = t.seasons.getOrNull(season) ?: t.seasons.first()
-                if (t.seasons.size > 1) {
-                    LazyRow(contentPadding = PaddingValues(horizontal = 44.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        itemsIndexed(t.seasons) { i, ss -> Chip(ss.name.ifBlank { "Temporada ${ss.number}" }, i == season) { season = i } }
-                    }
-                } else {
-                    Text(s.name.ifBlank { "Temporada ${s.number}" }, style = ts(15, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 44.dp, bottom = 2.dp))
-                }
-                LazyRow(
-                    contentPadding = PaddingValues(start = 44.dp, end = 44.dp, top = 12.dp, bottom = 26.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    items(s.episodes, key = { "${s.number}-${it.number}" }) { e ->
-                        EpisodeCard(t, s, e, prog) {
-                            if (!t.isSoon && isHttp(e.url)) nav.play(t, e.url, s.number, e.number)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun EpisodeCard(t: Title, s: Season, e: Episode, prog: Progress?, onClick: () -> Unit) {
-    val seen = prog?.watched?.contains("${s.number}:${e.number}") == true
-    val current = prog?.season == s.number && prog?.episode == e.number
-    val hasVideo = isHttp(e.url)
-    Column(Modifier.width(176.dp)) {
-        Focusable(onClick, Modifier.fillMaxWidth().aspectRatio(16f / 9f), shape = RoundedCornerShape(8.dp)) {
-            Box(Modifier.fillMaxSize().background(C.surface)) {
-                val img = e.thumb.ifBlank { t.wide }
-                if (img.isNotBlank()) Img(img, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
-                if (!hasVideo) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .35f)))
-                if (seen || current) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(C.accent))
-            }
-        }
-        Spacer(Modifier.height(7.dp))
-        Text("${e.number}. ${e.title.ifBlank { "Episodio ${e.number}" }}", style = ts(12, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        val sub = listOfNotNull(e.duration.ifBlank { null }, if (!hasVideo) "Sin video" else if (seen) "Visto" else null).joinToString(" · ")
-        if (sub.isNotBlank()) Text(sub, style = ts(11, color = C.muted), maxLines = 1)
-    }
-}
-
 /* ---------------- buscar ---------------- */
 
 @Composable
@@ -598,7 +190,7 @@ fun SearchScreen(nav: Nav) {
     val res = if (n.isBlank()) emptyList() else pub.filter { t ->
         t.title.lowercase().contains(n) || t.genres.any { it.lowercase().contains(n) } || t.description.lowercase().contains(n)
     }
-    Column(Modifier.fillMaxSize().padding(start = 28.dp, top = 26.dp, end = 28.dp)) {
+    Column(Modifier.fillMaxSize().padding(start = 48.dp, top = 74.dp, end = 48.dp)) {
         Text("Buscar", style = ts(24, FontWeight.Bold, Color.White))
         Spacer(Modifier.height(14.dp))
         OutlinedTextField(
@@ -693,7 +285,7 @@ fun AccountScreen(nav: Nav) {
     val s = Store.session
     val req = remember { FocusRequester() }
     AutoFocus(req)
-    Column(Modifier.fillMaxSize().padding(start = 28.dp, top = 26.dp)) {
+    Column(Modifier.fillMaxSize().padding(start = 48.dp, top = 74.dp)) {
         Text(if (s != null) "Mi cuenta" else "Entrar", style = ts(24, FontWeight.Bold, Color.White))
         Spacer(Modifier.height(18.dp))
         if (s != null) {
