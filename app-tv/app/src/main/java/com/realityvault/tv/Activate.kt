@@ -55,14 +55,14 @@ private val siteHost get() = BuildConfig.SITE_URL.removePrefix("https://").remov
 @Composable
 fun LoginScreen(s: Screen.Login, nav: Nav) {
     var useEmail by remember { mutableStateOf(false) }
-    var unavailable by remember { mutableStateOf(false) }
+    var unavailable by remember { mutableStateOf<String?>(null) }
     fun done() { if (s.then != null) nav.replace(s.then) else nav.back() }
-    if (useEmail || unavailable) EmailLogin(nav, ::done, if (unavailable) "La activación con el celular todavía no está configurada. Entrá con tu email y contraseña." else null) { useEmail = false }
-    else ActivateTv(nav, ::done, onEmail = { useEmail = true }, onUnavailable = { unavailable = true })
+    if (useEmail || unavailable != null) EmailLogin(nav, ::done, unavailable?.let { "La activación con el celular no funcionó ($it). Entrá con tu email y contraseña." }) { useEmail = false }
+    else ActivateTv(nav, ::done, onEmail = { useEmail = true }, onUnavailable = { unavailable = it })
 }
 
 @Composable
-fun ActivateTv(nav: Nav, done: () -> Unit, onEmail: () -> Unit, onUnavailable: () -> Unit) {
+fun ActivateTv(nav: Nav, done: () -> Unit, onEmail: () -> Unit, onUnavailable: (String) -> Unit) {
     var round by remember { mutableIntStateOf(0) }
     var code by remember { mutableStateOf("") }
     var secret by remember { mutableStateOf("") }
@@ -78,7 +78,7 @@ fun ActivateTv(nav: Nav, done: () -> Unit, onEmail: () -> Unit, onUnavailable: (
         var tries = 0
         while (true) {
             val c = randomCode(); val sc = randomSecret()
-            val ok = try { Store.tvCreate(c, sc) } catch (e: Api.HttpError) { if (e.code == 404 || e.code == 400) { onUnavailable(); return@LaunchedEffect }; false } catch (e: Exception) { false }
+            val ok = try { Store.tvCreate(c, sc) } catch (e: Api.HttpError) { if (e.code == 404 || e.code == 400) { onUnavailable("código: error ${e.code} · ${e.message}"); return@LaunchedEffect }; false } catch (e: Exception) { false }
             if (ok) { code = c; secret = sc; startedAt = System.currentTimeMillis(); status = "Esperando que actives desde el celular…"; break }
             if (++tries > 4) { status = "Sin conexión. Reintentando…"; delay(4000); tries = 0 }
         }
@@ -91,7 +91,7 @@ fun ActivateTv(nav: Nav, done: () -> Unit, onEmail: () -> Unit, onUnavailable: (
                 "listo" -> {
                     status = "¡Listo! Entrando…"
                     try { Store.tvFinish(code, secret); done(); return@LaunchedEffect }
-                    catch (e: Api.HttpError) { if (e.code == 404) { onUnavailable(); return@LaunchedEffect }; status = "No se pudo entrar. Generando otro código…"; delay(2500); round++; return@LaunchedEffect }
+                    catch (e: Api.HttpError) { if (e.code == 404 || e.code == 401 || e.code == 403) { onUnavailable("función tv-login: error ${e.code} · ${e.message}"); return@LaunchedEffect }; status = "No se pudo entrar (${e.code} · ${e.message}). Generando otro código…"; delay(4000); round++; return@LaunchedEffect }
                     catch (e: Exception) { status = "No se pudo entrar. Generando otro código…"; delay(2500); round++; return@LaunchedEffect }
                 }
                 "vencido" -> { round++; return@LaunchedEffect }
