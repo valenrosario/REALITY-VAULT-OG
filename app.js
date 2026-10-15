@@ -189,11 +189,43 @@ function row(title, list, href){
     <div class="rail">${list.map(card).join('')}</div>
     <button class="rail-btn r" data-scroll="1" aria-label="Siguiente">›</button></div></section>`;
 }
+/* ---------- orden variable y recomendaciones (como las plataformas de streaming) ---------- */
+// Cambia en cada visita, pero no salta mientras navegás.
+S.seed = (Math.random() * 2**31) >>> 0;
+function strHash(s){ let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function rng(key){ let a = (S.seed ^ strHash(key)) >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function shuffled(list, key){ const r = rng(key), a = list.slice(); for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+// Títulos que abrió en este navegador (para recomendar aunque no tenga cuenta)
+function recentOpened(){ try { return JSON.parse(localStorage.getItem('rv-opened') || '[]'); } catch { return []; } }
+function rememberOpened(tid){ try { const l = recentOpened().filter(x => x !== tid); l.unshift(tid); localStorage.setItem('rv-opened', JSON.stringify(l.slice(0, 40))); } catch {} }
+// Cuánto le gusta cada género según lo que vio, guardó y abrió
+function tasteProfile(){
+  const g = new Map(), add = (tid, w) => { const t = byId(tid); if (!t) return; (t.genres||[]).forEach(x => g.set(x, (g.get(x)||0) + w)); };
+  [...S.progress.keys()].forEach(id => add(id, 3));
+  [...S.myList].forEach(id => add(id, 2));
+  recentOpened().forEach((id, i) => add(id, i < 10 ? 1 : .5));
+  return g;
+}
+function tasteScore(t, prof){ return (t.genres||[]).reduce((s, x) => s + (prof.get(x) || 0), 0); }
+// Ordena por gusto del usuario con un poco de azar; sin historial, al azar
+function byTaste(list, key, prof = tasteProfile()){
+  if (!prof.size) return shuffled(list, key);
+  const r = rng(key); const max = Math.max(1, ...[...prof.values()]);
+  return list.map(t => ({ t, s: tasteScore(t, prof) / max + r() * .6 })).sort((a, b) => b.s - a.s).map(x => x.t);
+}
+function recommendedRow(){
+  const prof = tasteProfile(); if (!prof.size) return '';
+  const seen = new Set([...S.progress.keys(), ...recentOpened().slice(0, 3)]);
+  const list = byTaste(published().filter(t => !seen.has(t.id) && tasteScore(t, prof) > 0), 'rec', prof).slice(0, 20);
+  return list.length >= 3 ? row('Recomendado para vos', list) : '';
+}
 function heroSlides(){
   const pub = published();
-  let slides = S.banners.filter(b => b.active !== false).sort((a,b)=>(a.order||0)-(b.order||0))
+  const act = S.banners.filter(b => b.active !== false);
+  const pinned = act.filter(b => b.pinned).sort((a,b)=>(a.order||0)-(b.order||0));
+  let slides = [...pinned, ...shuffled(act.filter(b => !b.pinned), 'banners')]
     .map(b => ({ b, t: byId(b.titleId) })).filter(x => !x.b.titleId || (x.t && x.t.status!=='borrador'));
-  if (!slides.length) slides = pub.filter(t=>t.featured).slice(0,5).map(t => ({ b:{}, t }));
+  if (!slides.length) slides = shuffled(pub.filter(t=>t.featured), 'featban').slice(0,5).map(t => ({ b:{}, t }));
   return slides;
 }
 function renderHero(){
@@ -391,21 +423,25 @@ function renderHome(){
   const feat = pub.filter(t=>t.featured);
   const genres = {};
   pub.forEach(t => (t.genres||[]).forEach(g => (genres[g] ||= []).push(t)));
-  const genreRows = Object.entries(genres).sort((a,b)=>b[1].length-a[1].length).slice(0,8);
+  // solo algunos géneros, que van rotando (con más chance los que le gustan)
+  const prof = tasteProfile(), rg = rng('genres'), maxP = Math.max(1, ...[...prof.values()]);
+  const genreRows = Object.entries(genres).filter(([, l]) => l.length >= 3)
+    .map(([g, l]) => ({ g, l, s: (prof.get(g) || 0) / maxP + rg() * 1.2 })).sort((a, b) => b.s - a.s).slice(0, 3);
   return mobileChips('home') + renderHero() + `<main>
     ${continueRow()}
     ${top10Row()}
+    ${recommendedRow()}
     ${listRow()}
     ${(S.frows||[]).map(featRow).join('')}
-    ${row('Destacados', feat)}
+    ${row('Destacados', byTaste(feat, 'feat', prof))}
     ${row('Novedades', newest)}
-    ${row('Series', series, '/series')}
-    ${row('Películas', movies, '/peliculas')}
-    ${genreRows.map(([g,l]) => row(g, l)).join('')}
+    ${row('Series', byTaste(series, 'series', prof), '/series')}
+    ${row('Películas', byTaste(movies, 'movies', prof), '/peliculas')}
+    ${genreRows.map(({ g, l }) => row(g, byTaste(l, 'g-' + g, prof))).join('')}
   </main>`;
 }
 function renderBrowse(kind){
-  const base = published().filter(t => kind==='series' ? t.type==='serie' : t.type!=='serie');
+  const base = shuffled(published().filter(t => kind==='series' ? t.type==='serie' : t.type!=='serie'), 'browse-' + kind);
   const genres = [...new Set(base.flatMap(t=>t.genres||[]))].sort();
   const list = S.genre ? base.filter(t => (t.genres||[]).includes(S.genre)) : base;
   return mobileChips(kind) + `<main><div class="page-head"><h1>${kind==='series'?'Series':'Películas'}</h1><p>${list.length} título${list.length===1?'':'s'} en la bóveda</p></div>
@@ -703,7 +739,7 @@ function renderBanners(){
   const bs = S.banners.slice().sort((a,b)=>(a.order||0)-(b.order||0));
   const opts = sel => `<option value="">— Sin título vinculado —</option>` + S.titles.map(t=>`<option value="${esc(t.id)}" ${sel===t.id?'selected':''}>${esc(t.title||'Sin título')}</option>`).join('');
   return `<div class="panel-head"><h1>Banners</h1><button class="btn btn-primary" data-banner-add>+ Nuevo banner</button></div>
-    <p style="margin:0;color:var(--muted);max-width:65ch">Los banners activos rotan en la portada en este orden. Si un campo queda vacío se usa la información del título vinculado. Sin banners activos, la portada muestra los títulos destacados.</p>
+    <p style="margin:0;color:var(--muted);max-width:65ch">Los banners activos aparecen en orden aleatorio en cada visita. Los que marques como <b>Fijar primero</b> salen siempre al principio (en este orden) y después rotan los demás. Si un campo queda vacío se usa la información del título vinculado. Sin banners activos, la portada muestra los títulos destacados.</p>
     <div class="banner-list">${bs.map((b,i)=>{ const t = byId(b.titleId); const img = b.image || t?.bannerImage || t?.backdrop;
       return `<div class="bcard" data-banner="${esc(b.id)}">
         <div class="field">${slot('banner','banner:'+b.id, img, 'r31', 'Subir imagen del banner')}
@@ -715,7 +751,8 @@ function renderBanners(){
           <div class="order"><span class="code">#${i+1}</span>
             <button class="iconbtn" data-bmove="${esc(b.id)}" data-d="-1" aria-label="Subir" ${i===0?'disabled':''}>↑</button>
             <button class="iconbtn" data-bmove="${esc(b.id)}" data-d="1" aria-label="Bajar" ${i===bs.length-1?'disabled':''}>↓</button>
-            <label class="check" style="margin-left:auto"><input type="checkbox" id="b-act-${esc(b.id)}" data-bf="active" ${b.active!==false?'checked':''}> Activo</label></div></div>
+            <label class="check" style="margin-left:auto"><input type="checkbox" id="b-pin-${esc(b.id)}" data-bf="pinned" ${b.pinned?'checked':''}> Fijar primero</label>
+            <label class="check"><input type="checkbox" id="b-act-${esc(b.id)}" data-bf="active" ${b.active!==false?'checked':''}> Activo</label></div></div>
         <div class="fgrid">
           <label class="field span2"><span>Título vinculado</span><select class="select" id="b-t-${esc(b.id)}" data-bf="titleId">${opts(b.titleId)}</select></label>
           <label class="field"><span>Antetítulo</span><input class="input" id="b-e-${esc(b.id)}" data-bf="eyebrow" value="${esc(b.eyebrow)}" placeholder="Estreno · Nueva temporada"></label>
@@ -765,8 +802,10 @@ function applyTints(root){
   });
 }
 function featRow(r){
-  const items = (r.items || []).map(it => ({ it, t: byId(it.titleId) })).filter(x => x.t && x.t.status !== 'borrador');
-  if (!items.length) return '';
+  const raw = (r.items || []).map(it => ({ it, t: byId(it.titleId) })).filter(x => x.t && x.t.status !== 'borrador');
+  if (!raw.length) return '';
+  const order = byTaste(raw.map(x => x.t), 'frow-' + r.id);
+  const items = raw.slice().sort((a, b) => order.indexOf(a.t) - order.indexOf(b.t));
   return `<section class="row frow"><div class="row-head"><h2>${esc(r.title || 'Destacados')}</h2></div>
     <div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button>
     <div class="rail rail-feat">${items.map(({ it, t }) => {
@@ -1126,7 +1165,7 @@ app.addEventListener('change', async e => {
   if (el.dataset.bf){
     const id = el.closest('[data-banner]').dataset.banner;
     const val = el.type==='checkbox' ? el.checked : el.value;
-    try { await S.db.doc('banners/'+id).update({ [el.dataset.bf]: val }); if (el.dataset.bf==='titleId'||el.dataset.bf==='active') toast('Banner actualizado'); }
+    try { await S.db.doc('banners/'+id).update({ [el.dataset.bf]: val }); if (el.dataset.bf==='titleId'||el.dataset.bf==='active'||el.dataset.bf==='pinned') toast('Banner actualizado'); }
     catch(err){ toast('No se pudo guardar el banner', true); }
   }
 });
@@ -1447,7 +1486,7 @@ function wideArt(t, extra){
 }
 function listRow(){
   if (!S.session) return '';
-  const list = [...S.myList].map(byId).filter(t => t && t.status !== 'borrador');
+  const list = shuffled([...S.myList].map(byId).filter(t => t && t.status !== 'borrador'), 'list');
   if (!list.length) return '';
   return `<section class="row"><div class="row-head"><h2 class="h-heart">${ICON_HEART_FILL} Mi lista</h2><span class="count">${list.length}</span><a class="see-all" href="/mi-lista">Ver todo ›</a></div>
     <div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button>
@@ -1475,6 +1514,7 @@ function viewerId(){
   try { let v = localStorage.getItem('rv-viewer'); if (!v){ v = 'a-' + uid(''); localStorage.setItem('rv-viewer', v); } return v; } catch { return 'a-' + uid(''); }
 }
 function trackView(tid){
+  if (tid && byId(tid)) rememberOpened(tid);
   if (!tid || !S.sb || !byId(tid)) return;
   const key = 'rv-seen-' + tid; let last = 0;
   try { last = +localStorage.getItem(key) || 0; } catch {}
@@ -1494,7 +1534,7 @@ function top10Row(){
 }
 function continueRow(){
   if (!S.session) return '';
-  const items = [...S.progress.values()].map(p => ({ p, t: byId(p.title_id) })).filter(x => x.t && x.t.status !== 'borrador').slice(0, 20);
+  const items = shuffled([...S.progress.values()].map(p => ({ p, t: byId(p.title_id) })).filter(x => x.t && x.t.status !== 'borrador'), 'cont').slice(0, 20);
   if (!items.length) return '';
   return `<section class="row"><div class="row-head"><h2>Seguir viendo</h2><span class="count">${items.length}</span></div>
     <div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button>
@@ -1538,7 +1578,7 @@ function refreshListButtons(){
 }
 function renderMyList(){
   if (!S.session) return `<div class="lock"><h1>Mi lista</h1><p>Creá una cuenta gratis para guardar tus series y películas.</p><button class="btn btn-primary" data-auth="signup">Crear cuenta</button><button class="btn btn-line" data-auth="login">Ya tengo cuenta</button></div>`;
-  const list = [...S.myList].map(byId).filter(t => t && t.status !== 'borrador');
+  const list = shuffled([...S.myList].map(byId).filter(t => t && t.status !== 'borrador'), 'list');
   return mobileChips('mi-lista') + `<main><div class="page-head"><h1 class="h-heart">${ICON_HEART_FILL} Mi lista</h1><p>${list.length} título${list.length===1?'':'s'}</p></div>
     ${list.length ? `<div class="grid grid-wide">${list.map(wideCard).join('')}</div>` : '<p class="empty-note">Todavía no agregaste nada. Tocá el botón + en cualquier serie o película para guardarla acá.</p>'}</main>`;
 }
