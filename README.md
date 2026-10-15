@@ -101,6 +101,16 @@ Cada vez que hay un cambio en GitHub, se compila sola una APK nueva (pestaña **
 
 Para instalarla en Android: abrí el enlace desde el celular, descargá el archivo y aceptá **Instalar apps de origen desconocido** cuando lo pida.
 
+## App para la TV (Android TV / Google TV)
+
+En la carpeta `app-tv/` está la app nativa para la tele: se maneja con el control remoto y no abre la página web. Lee todo directo de Supabase, así que lo que cargues en el panel aparece solo (se actualiza al abrirla y cada 3 minutos).
+
+Se compila sola cuando cambia algo de `app-tv/` (pestaña **Actions**, unos 5 minutos). Se descarga siempre desde:
+
+`https://github.com/valenrosario/REALITY-VAULT-OG/releases/download/tv/reality-vault-tv.apk`
+
+Para instalarla en la tele: con la app **Downloader** (buscala en la tienda de la tele) abrí ese enlace, o pasá el archivo con un pendrive y abrilo con un administrador de archivos. Aceptá **Instalar apps de origen desconocido** cuando lo pida.
+
 ## Límites del plan gratis de Supabase
 
 - 500 MB de base de datos y 1 GB de imágenes: alcanza para cientos de títulos.
