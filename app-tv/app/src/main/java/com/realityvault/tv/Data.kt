@@ -257,6 +257,26 @@ object Store {
         else login(email, pass)
     }
 
+    /* ---------- activar la tele desde el celular ---------- */
+
+    private fun unquote(s: String) = s.trim().trim('"')
+
+    suspend fun tvCreate(code: String, secret: String): Boolean {
+        val body = JSONObject().put("p_code", code).put("p_secret", secret).toString()
+        return unquote(Api.call("POST", "/rest/v1/rpc/tv_code_create", body)) == "true"
+    }
+
+    suspend fun tvStatus(code: String, secret: String): String {
+        val body = JSONObject().put("p_code", code).put("p_secret", secret).toString()
+        return unquote(Api.call("POST", "/rest/v1/rpc/tv_code_status", body))
+    }
+
+    suspend fun tvFinish(code: String, secret: String) {
+        val body = JSONObject().put("code", code).put("secret", secret).toString()
+        saveSession(JSONObject(Api.call("POST", "/functions/v1/tv-login", body)))
+        refreshUser()
+    }
+
     fun logout() {
         session = null; myList = emptyList(); progress = emptyList()
         prefs.edit().remove("session").apply()

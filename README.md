@@ -111,6 +111,13 @@ Se compila sola cuando cambia algo de `app-tv/` (pestaña **Actions**, unos 5 mi
 
 Para instalarla en la tele: con la app **Downloader** (buscala en la tienda de la tele) abrí ese enlace, o pasá el archivo con un pendrive y abrilo con un administrador de archivos. Aceptá **Instalar apps de origen desconocido** cuando lo pida.
 
+### Activar la tele con el celular
+
+En la tele aparece un código y un QR; se activa desde `/activar` en el celular. Se configura una sola vez:
+
+1. En Supabase → **SQL Editor → New query**, pegá `supabase/06-activar-tele.sql` y tocá **Run**.
+2. En Supabase → **Edge Functions → Deploy a new function → Via Editor**. Nombre: `tv-login`. Borrá lo que trae, pegá el contenido de `supabase/functions/tv-login/index.ts` y tocá **Deploy function**.
+
 ## Límites del plan gratis de Supabase
 
 - 500 MB de base de datos y 1 GB de imágenes: alcanza para cientos de títulos.

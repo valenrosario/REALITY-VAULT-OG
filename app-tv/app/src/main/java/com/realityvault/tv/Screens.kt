@@ -633,7 +633,7 @@ fun fieldColors() = OutlinedTextFieldDefaults.colors(
 /* ---------------- cuenta ---------------- */
 
 @Composable
-fun LoginScreen(s: Screen.Login, nav: Nav) {
+fun EmailLogin(nav: Nav, done: () -> Unit, note: String?, onBack: () -> Unit) {
     var email by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
     var err by remember { mutableStateOf("") }
@@ -641,7 +641,6 @@ fun LoginScreen(s: Screen.Login, nav: Nav) {
     val scope = rememberCoroutineScope()
     val req = remember { FocusRequester() }
     AutoFocus(req)
-    fun done() { if (s.then != null) nav.replace(s.then) else nav.back() }
     fun run(signup: Boolean) {
         if (busy) return
         if (!email.contains("@") || pass.length < 6) { err = "Escribí tu email y una contraseña de al menos 6 caracteres."; return }
@@ -663,7 +662,7 @@ fun LoginScreen(s: Screen.Login, nav: Nav) {
             if (Store.siteLogo.isNotBlank()) Img(Store.siteLogo, Modifier.width(260.dp).height(48.dp), scale = ContentScale.Fit)
             else LocalLogo(Modifier.width(260.dp).height(48.dp))
             Spacer(Modifier.height(18.dp))
-            Text("Entrá con tu cuenta para ver series y películas", style = ts(14, color = C.fg2))
+            Text(note ?: "Entrá con tu cuenta para ver series y películas", style = ts(14, color = C.fg2), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             Spacer(Modifier.height(24.dp))
             OutlinedTextField(
                 email, { email = it }, Modifier.fillMaxWidth().focusRequester(req),
@@ -683,7 +682,7 @@ fun LoginScreen(s: Screen.Login, nav: Nav) {
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 PillButton(if (busy) "Entrando…" else "Entrar", { run(false) }, icon = null)
                 TextButtonTv("Crear cuenta", { run(true) })
-                TextButtonTv("Ahora no", { nav.back() })
+                TextButtonTv(if (note == null) "Volver" else "Ahora no", { if (note == null) onBack() else nav.back() })
             }
         }
     }

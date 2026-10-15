@@ -1781,6 +1781,75 @@ async function doLogout(){
   if (S.route === 'mi-lista' || S.route === 'admin') navigate('/'); else render();
 }
 
+/* ---------- activar la tele con el celular (/activar) ---------- */
+const ACT_CHARS = 'ABCDEFGHJKLMNPRSTUVWXYZ23456789';
+function actCode(){
+  if (S.act == null){
+    let c = '';
+    try { c = (new URLSearchParams(location.search).get('c') || '').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6); } catch {}
+    S.act = { code: c, state: 'idle', msg: '' };
+  }
+  return S.act;
+}
+const ICON_TV = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8.5 2.5 12 6l3.5-3.5"/></svg>';
+function renderActivate(){
+  const a = actCode();
+  if (a.state === 'done') return `<main class="act"><div class="act-card">
+    <div class="act-ok"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <h1>¡Tu tele está activada!</h1><p>Ya podés mirar Reality Vault en tu televisor. Mi lista y Seguir viendo aparecen allá también.</p>
+    <a class="btn btn-play act-btn" href="/">Volver al inicio</a></div></main>`;
+  const boxes = Array.from({length:6}, (_,i) => `${i===3?'<i class="act-sep"></i>':''}<input class="act-in" data-act="${i}" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Carácter ${i+1} del código" data-v="${esc(a.code[i]||'')}" value="${esc(a.code[i]||'')}">`).join('');
+  const email = S.session?.user?.email || '';
+  return `<main class="act"><div class="act-card">
+    <div class="act-ic">${ICON_TV}</div>
+    <h1>Activar tu tele</h1>
+    ${!S.session ? `<p>Primero entrá con tu cuenta (o creala gratis). Después escribís el código que aparece en tu televisor.</p>
+      <div class="act-actions"><button class="btn btn-play act-btn" data-auth="login">Entrar</button><button class="btn act-ghost" data-auth="signup">Crear cuenta</button></div>`
+    : `<p>Escribí el código que aparece en la pantalla de tu televisor.</p>
+      <div class="act-code" role="group" aria-label="Código de la tele">${boxes}</div>
+      <div class="act-who">Vas a activarla con la cuenta ${esc(email)}</div>
+      ${a.msg ? `<div class="act-err" role="alert">${esc(a.msg)}</div>` : ''}
+      <button class="btn btn-play act-btn" data-act-go ${a.state==='busy'?'disabled':''}>${a.state==='busy'?'Activando…':'Activar'}</button>`}
+  </div></main>`;
+}
+function actRead(){ return [...document.querySelectorAll('.act-in')].map(i => i.value).join(''); }
+function actClean(v){ return String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+app.addEventListener('input', e => {
+  const el = e.target; if (!el.classList?.contains('act-in')) return;
+  const ins = [...document.querySelectorAll('.act-in')], i = +el.dataset.act;
+  let v = actClean(el.value);
+  if (v.length === 2 && e.inputType !== 'insertFromPaste'){ const prev = el.dataset.v || ''; v = v[0] === prev ? v[1] : v[1] === prev ? v[0] : v[1]; }
+  if (v.length > 1){ v.split('').slice(0, 6 - i).forEach((ch, k) => { ins[i+k].value = ch; }); ins[Math.min(5, i + v.length)].focus(); }
+  else { el.value = v; if (v && i < 5) ins[i+1].focus(); }
+  ins.forEach(x => { x.dataset.v = x.value; });
+  actCode().code = actRead(); actCode().msg = '';
+  document.querySelector('.act-err')?.remove();
+});
+app.addEventListener('keydown', e => {
+  const el = e.target; if (!el.classList?.contains('act-in')) return;
+  const ins = [...document.querySelectorAll('.act-in')], i = +el.dataset.act;
+  if (e.key === 'Backspace' && !el.value && i > 0){ ins[i-1].focus(); ins[i-1].value = ''; e.preventDefault(); }
+  else if (e.key === 'ArrowLeft' && i > 0) ins[i-1].focus();
+  else if (e.key === 'ArrowRight' && i < 5) ins[i+1].focus();
+  else if (e.key === 'Enter') document.querySelector('[data-act-go]')?.click();
+});
+app.addEventListener('focusin', e => { const el = e.target; if (el.classList?.contains('act-in')) setTimeout(() => el.select(), 0); });
+app.addEventListener('click', async e => {
+  if (!e.target.closest('[data-act-go]')) return;
+  const a = actCode(); a.code = actRead();
+  if (a.code.length !== 6){ a.msg = 'Completá los 6 caracteres del código.'; render(); document.querySelector('.act-in')?.focus(); return; }
+  a.state = 'busy'; a.msg = ''; render();
+  try {
+    const { data, error } = await S.sb.rpc('tv_code_claim', { p_code: a.code });
+    if (error) throw error;
+    if (data === 'ok'){ a.state = 'done'; }
+    else if (data === 'sin-sesion'){ a.state = 'idle'; a.msg = 'Entrá con tu cuenta para activar la tele.'; }
+    else { a.state = 'idle'; a.msg = 'Ese código no es válido o ya venció. Fijate el que aparece ahora en la tele.'; }
+  } catch(err){ a.state = 'idle'; a.msg = 'No se pudo activar. Probá de nuevo en un momento.'; }
+  render();
+  if (a.state === 'idle') document.querySelector('.act-in')?.focus();
+});
+
 /* ---------- clean URLs: /serie/nombre, /pelicula/nombre, /series, /peliculas, /admin ---------- */
 function slugify(str){
   return String(str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
@@ -1805,13 +1874,13 @@ function routeFromPath(){
   const h = location.hash.replace('#','');
   if (h){
     if (h.startsWith('t-')){ const t = byId(h.slice(2)); if (t){ history.replaceState(null,'',titlePath(t)); } else { S.pendingId = h.slice(2); } }
-    else if (['series','peliculas','admin','mi-lista'].includes(h)) history.replaceState(null,'','/'+h);
+    else if (['series','peliculas','admin','mi-lista','activar'].includes(h)) history.replaceState(null,'','/'+h);
   }
   const parts = decodeURIComponent(location.pathname).replace(/\/+$/,'').split('/').filter(Boolean);
   if (S.pendingId){ S.titleSlug = null; S.titleKind = null; return 'title'; }
   if (parts.length === 2 && parts[0] === 'persona'){ S.personSlug = parts[1]; return 'persona'; }
   if (parts.length === 2 && (parts[0] === 'serie' || parts[0] === 'pelicula')){ S.titleKind = parts[0]; S.titleSlug = parts[1]; return 'title'; }
-  if (parts.length === 1 && ['series','peliculas','admin','mi-lista'].includes(parts[0])) return parts[0];
+  if (parts.length === 1 && ['series','peliculas','admin','mi-lista','activar'].includes(parts[0])) return parts[0];
   return 'home';
 }
 function currentTitleId(){
@@ -1861,6 +1930,7 @@ function render(){
   else if (S.q.trim()) html = renderSearch();
   else if (S.route==='title'){ const tid = currentTitleId(); html = renderTitlePage(tid); trackView(tid); }
   else if (S.route==='mi-lista') html = renderMyList();
+  else if (S.route==='activar') html = renderActivate();
   else if (S.route==='persona') html = renderPerson(S.personSlug);
   else if (S.route==='series' || S.route==='peliculas') html = renderBrowse(S.route);
   else html = renderHome();

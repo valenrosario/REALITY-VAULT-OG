@@ -750,6 +750,22 @@ a.cast-card:hover strong{color:var(--accent-2)}
 .dmca-body p{margin:0 0 12px}
 .dmca-body p:last-child{margin-bottom:0}
 .dmca-body a{color:var(--accent)}
+.act{min-height:calc(100vh - 220px);display:grid;place-items:center;padding:56px var(--gutter)}
+.act-card{width:min(440px,100%);text-align:center}
+.act-card h1{font-family:var(--display);font-size:clamp(26px,4vw,32px);color:#fff;margin:0 0 10px}
+.act-card p{color:var(--fg-2);font-weight:300;line-height:1.5;margin:0 0 4px}
+.act-ic{width:74px;height:74px;margin:0 auto 22px;border-radius:50%;background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.25);display:grid;place-items:center;color:#fff}
+.act-ok{width:86px;height:86px;margin:0 auto 24px;border-radius:50%;background:var(--accent);display:grid;place-items:center}
+.act-code{display:flex;justify-content:center;gap:7px;margin:30px 0 14px}
+.act-in{width:46px;height:60px;border-radius:10px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.25);color:#fff;text-align:center;font-family:var(--display);font-weight:700;font-size:28px;text-transform:uppercase;padding:0;caret-color:var(--accent)}
+.act-in:focus{outline:none;border-color:#fff;background:rgba(255,255,255,.12)}
+.act-sep{width:8px}
+.act-who{font-size:13px;color:var(--faint);margin-bottom:18px;word-break:break-all}
+.act-err{color:var(--accent);font-weight:700;font-size:14px;margin:-4px 0 14px}
+.act-btn{width:100%;height:52px;justify-content:center;font-size:17px;margin-top:6px}
+.act-actions{display:flex;flex-direction:column;gap:10px;margin-top:26px}
+.act-ghost{width:100%;height:52px;justify-content:center;border-radius:99px;background:rgba(255,255,255,.12);color:#fff;border:1.5px solid rgba(255,255,255,.3)}
+@media (max-width:380px){.act-in{width:40px;height:54px;font-size:24px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
 </head>
