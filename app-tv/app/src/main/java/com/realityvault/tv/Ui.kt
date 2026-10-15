@@ -136,7 +136,7 @@ fun Focusable(
             .drawWithContent {
                 drawContent()
                 if (focused && ring) {
-                    val g = 5.dp.toPx(); val w = 3.dp.toPx()
+                    val g = 3.5.dp.toPx(); val w = 2.dp.toPx()
                     val r = (radius.toPx() + g).coerceAtMost(size.minDimension / 2 + g)
                     drawRoundRect(
                         Color.White, topLeft = Offset(-g, -g), size = Size(size.width + 2 * g, size.height + 2 * g),
@@ -166,36 +166,36 @@ fun AutoFocus(requester: FocusRequester, key: Any? = Unit) {
 
 @Composable
 fun PillButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = Ic.play, requester: FocusRequester? = null, onFocus: (() -> Unit)? = null) {
-    Focusable(onClick, modifier.height(48.dp), shape = RoundedCornerShape(99.dp), scale = 1.06f, requester = requester, onFocus = onFocus) {
+    Focusable(onClick, modifier.height(38.dp), shape = RoundedCornerShape(99.dp), scale = 1.06f, requester = requester, onFocus = onFocus) {
         Row(
-            Modifier.background(Color.White).padding(horizontal = 26.dp).height(48.dp),
+            Modifier.background(Color.White).padding(horizontal = 20.dp).height(38.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
         ) {
-            if (icon != null) { Icon(icon, null, tint = Color.Black, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(10.dp)) }
-            Text(text, style = ts(17, FontWeight.Bold, Color.Black), maxLines = 1)
+            if (icon != null) { Icon(icon, null, tint = Color.Black, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(8.dp)) }
+            Text(text, style = ts(14, FontWeight.Bold, Color.Black), maxLines = 1)
         }
     }
 }
 
 @Composable
 fun RoundButton(icon: ImageVector, desc: String, onClick: () -> Unit, modifier: Modifier = Modifier, onFocus: (() -> Unit)? = null) {
-    Focusable(onClick, modifier.size(48.dp), shape = CircleShape, scale = 1.1f, ring = false, onFocus = onFocus) { f ->
+    Focusable(onClick, modifier.size(38.dp), shape = CircleShape, scale = 1.1f, ring = false, onFocus = onFocus) { f ->
         Box(
             Modifier.fillMaxSize()
                 .background(if (f) Color.White else Color.White.copy(alpha = .12f), CircleShape)
                 .border(1.5.dp, if (f) Color.White else Color.White.copy(alpha = .45f), CircleShape),
             contentAlignment = Alignment.Center
-        ) { Icon(icon, desc, tint = if (f) Color.Black else Color.White, modifier = Modifier.size(22.dp)) }
+        ) { Icon(icon, desc, tint = if (f) Color.Black else Color.White, modifier = Modifier.size(17.dp)) }
     }
 }
 
 @Composable
 fun TextButtonTv(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, requester: FocusRequester? = null) {
-    Focusable(onClick, modifier.height(44.dp), shape = RoundedCornerShape(99.dp), scale = 1.06f, ring = false, requester = requester) { f ->
+    Focusable(onClick, modifier.height(38.dp), shape = RoundedCornerShape(99.dp), scale = 1.06f, ring = false, requester = requester) { f ->
         Box(
-            Modifier.background(if (f) Color.White else Color.White.copy(alpha = .12f)).padding(horizontal = 22.dp).height(44.dp),
+            Modifier.background(if (f) Color.White else Color.White.copy(alpha = .12f)).padding(horizontal = 18.dp).height(38.dp),
             contentAlignment = Alignment.Center
-        ) { Text(text, style = ts(16, FontWeight.Bold, if (f) Color.Black else C.fg), maxLines = 1) }
+        ) { Text(text, style = ts(14, FontWeight.Bold, if (f) Color.Black else C.fg), maxLines = 1) }
     }
 }
 
@@ -217,7 +217,7 @@ fun Placeholder(t: Title?, modifier: Modifier = Modifier, big: Boolean = false) 
     val c1 = Color.hsl(h, .62f, .86f); val c2 = Color.hsl((h + 24) % 360, .55f, .78f)
     Box(modifier.background(Brush.linearGradient(listOf(c1, c2))), contentAlignment = Alignment.BottomStart) {
         Text(
-            t?.title ?: "", style = ts(if (big) 26 else 16, FontWeight.Bold, Color(0xFF4A2233)),
+            t?.title ?: "", style = ts(if (big) 22 else 12, FontWeight.Bold, Color(0xFF4A2233)),
             modifier = Modifier.padding(12.dp), maxLines = 3, overflow = TextOverflow.Ellipsis
         )
     }
@@ -237,12 +237,12 @@ fun TitleLogo(t: Title, maxW: Dp, maxH: Dp, textSize: Int = 40) {
 fun MetaLine(t: Title) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (t.rating.isNotBlank()) {
-            Box(Modifier.border(1.5.dp, C.fg2, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 1.dp)) {
-                Text(t.rating, style = ts(13, FontWeight.Bold, C.fg2))
+            Box(Modifier.border(1.dp, C.fg2, RoundedCornerShape(3.dp)).padding(horizontal = 5.dp, vertical = 1.dp)) {
+                Text(t.rating, style = ts(10, FontWeight.Bold, C.fg2))
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
         }
-        Text(t.meta(), style = ts(15, color = C.fg2), maxLines = 1)
+        Text(t.meta(), style = ts(12, color = C.fg2), maxLines = 1)
     }
 }
 

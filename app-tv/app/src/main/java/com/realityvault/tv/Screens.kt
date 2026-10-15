@@ -51,6 +51,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
@@ -144,19 +149,19 @@ fun App(nav: Nav, onExit: () -> Unit) {
 @Composable
 fun Rail(nav: Nav) {
     var open by remember { mutableStateOf(false) }
-    val w by animateDpAsState(if (open) 210.dp else 76.dp, tween(180), label = "rail")
+    val w by animateDpAsState(if (open) 190.dp else 64.dp, tween(180), label = "rail")
     val items = listOf(
         Triple(Screen.Search, Ic.search, "Buscar"), Triple(Screen.Home, Ic.home, "Inicio"),
         Triple(Screen.Series, Ic.tv, "Series"), Triple(Screen.Movies, Ic.film, "Películas"),
         Triple(Screen.MyList, Ic.plus, "Mi lista"),
         Triple(Screen.Account, Ic.user, if (Store.session != null) "Mi cuenta" else "Entrar")
     )
-    Box(Modifier.width(76.dp).fillMaxHeight()) {
+    Box(Modifier.width(64.dp).fillMaxHeight()) {
         Column(
             Modifier.width(w).fillMaxHeight()
                 .background(if (open) Brush.horizontalGradient(listOf(Color.Black, Color.Black.copy(alpha = .9f), Color.Transparent)) else Brush.horizontalGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent)))
                 .onFocusChanged { open = it.hasFocus }
-                .padding(start = 14.dp, top = 40.dp, bottom = 30.dp),
+                .padding(start = 12.dp, top = 30.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items.forEachIndexed { i, (screen, icon, label) ->
@@ -164,18 +169,18 @@ fun Rail(nav: Nav) {
                 val selected = nav.top == screen
                 Focusable(
                     onClick = { if (nav.top != screen) nav.section(screen) },
-                    modifier = Modifier.height(46.dp).width(if (open) 180.dp else 48.dp),
+                    modifier = Modifier.height(38.dp).width(if (open) 160.dp else 40.dp),
                     shape = RoundedCornerShape(99.dp), scale = 1.04f, ring = false
                 ) { f ->
                     Row(
                         Modifier.fillMaxSize().background(if (f) Color.White else if (selected) Color.White.copy(alpha = .14f) else Color.Transparent)
-                            .padding(horizontal = 13.dp),
+                            .padding(horizontal = 11.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(icon, label, tint = if (f) Color.Black else if (selected) Color.White else C.muted, modifier = Modifier.size(22.dp))
+                        Icon(icon, label, tint = if (f) Color.Black else if (selected) Color.White else C.muted, modifier = Modifier.size(18.dp))
                         if (open) {
-                            Spacer(Modifier.width(14.dp))
-                            Text(label, style = ts(16, FontWeight.Bold, if (f) Color.Black else C.fg), maxLines = 1)
+                            Spacer(Modifier.width(12.dp))
+                            Text(label, style = ts(13, FontWeight.Bold, if (f) Color.Black else C.fg), maxLines = 1)
                         }
                     }
                 }
@@ -225,6 +230,14 @@ fun homeRows(): List<RowSpec> {
     return rows
 }
 
+/** Fila enfocada siempre arriba (como Google TV): la de antes se va y se ve la que sigue. */
+@OptIn(ExperimentalFoundationApi::class)
+class PivotSpec(private val pivotPx: Float, private val atTop: () -> Boolean) : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
+        if (atTop()) 0f else offset - pivotPx
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(nav: Nav) {
     val all = slides()
@@ -232,16 +245,20 @@ fun HomeScreen(nav: Nav) {
     val mem = nav.memory
     val listState = mem.list("home")
     var heroIdx by remember { mutableIntStateOf(0) }
-    var heroFocused by remember { mutableStateOf(false) }
+    var heroFocused by remember { mutableStateOf(mem.focus["home"] == null) }
     var bgTitle by remember { mutableStateOf<Title?>(null) }
     val slide = all.getOrNull(if (all.isEmpty()) 0 else heroIdx % all.size)
     val heroReq = remember { FocusRequester() }
     val restoreKey = mem.focus["home"]
+    val density = LocalDensity.current
+    val defaultSpec = LocalBringIntoViewSpec.current
+    val spec = remember { PivotSpec(with(density) { 52.dp.toPx() }) { heroFocused } }
 
     // el banner cambia solo cada 9 segundos mientras no lo estés mirando con el control
     LaunchedEffect(heroIdx, heroFocused, all.size) {
         if (all.size > 1 && !heroFocused) { delay(9000); heroIdx = (heroIdx + 1) % all.size }
     }
+    LaunchedEffect(heroFocused) { if (heroFocused && listState.firstVisibleItemIndex + listState.firstVisibleItemScrollOffset > 0) listState.animateScrollToItem(0) }
     if (restoreKey == null) AutoFocus(heroReq, slide?.t?.id)
 
     if (!Store.loaded) { Loading(); return }
@@ -257,19 +274,20 @@ fun HomeScreen(nav: Nav) {
         }
         Box(Modifier.fillMaxSize().background(leftScrim))
         Box(Modifier.fillMaxSize().background(bottomScrim))
-        if (!heroFocused) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .45f)))
+        if (!heroFocused) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .5f)))
 
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 60.dp)) {
-            item(key = "hero") {
-                if (slide != null) Hero(slide, all.size, heroIdx, nav, heroReq) { heroFocused = it }
-                else Spacer(Modifier.height(40.dp))
+        CompositionLocalProvider(LocalBringIntoViewSpec provides spec) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 200.dp)) {
+                item(key = "hero") {
+                    if (slide != null) Hero(slide, all.size, heroIdx, nav, heroReq) { heroFocused = it }
+                    else Spacer(Modifier.height(40.dp))
+                }
+                items(rows, key = { it.key }) { r ->
+                    CompositionLocalProvider(LocalBringIntoViewSpec provides defaultSpec) {
+                        TitleRow(r, nav, "home", mem.list("row-" + r.key)) { bgTitle = it }
+                    }
+                }
             }
-            items(rows, key = { it.key }) { r ->
-                TitleRow(r, nav, "home", mem.list("row-" + r.key)) { bgTitle = it }
-            }
-        }
-        Store.siteLogo.takeIf { it.isNotBlank() }?.let {
-            Img(it, Modifier.padding(start = 24.dp, top = 22.dp).height(26.dp).width(170.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
         }
     }
 }
@@ -279,26 +297,29 @@ fun Hero(slide: Slide, count: Int, idx: Int, nav: Nav, req: FocusRequester, onFo
     val t = slide.t
     val target = Store.playTarget(t)
     val scope = rememberCoroutineScope()
-    Box(Modifier.fillMaxWidth().height(380.dp).onFocusChanged { onFocus(it.hasFocus) }) {
-        Column(Modifier.align(Alignment.BottomStart).padding(start = 24.dp, bottom = 34.dp).width(470.dp)) {
-            if (slide.headline.isNotBlank()) Text(slide.headline, style = ts(40, FontWeight.Bold, Color.White), maxLines = 2)
-            else TitleLogo(t, 330.dp, 110.dp)
-            Spacer(Modifier.height(14.dp))
+    Box(Modifier.fillMaxWidth().height(330.dp).onFocusChanged { onFocus(it.hasFocus) }) {
+        Store.siteLogo.takeIf { it.isNotBlank() }?.let {
+            Img(it, Modifier.padding(start = 28.dp, top = 22.dp).height(22.dp).width(150.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
+        }
+        Column(Modifier.align(Alignment.BottomStart).padding(start = 28.dp, bottom = 26.dp).width(400.dp)) {
+            if (slide.headline.isNotBlank()) Text(slide.headline, style = ts(30, FontWeight.Bold, Color.White), maxLines = 2)
+            else TitleLogo(t, 260.dp, 80.dp, 30)
+            Spacer(Modifier.height(12.dp))
             MetaLine(t)
             if (slide.text.isNotBlank()) {
-                Spacer(Modifier.height(10.dp))
-                Text(slide.text, style = ts(16, FontWeight.Light, C.fg2), maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(8.dp))
+                Text(slide.text, style = ts(13, FontWeight.Light, C.fg2), maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
-            Spacer(Modifier.height(20.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 when {
                     t.isSoon -> PillButton(if (t.releaseDate.isNotBlank()) "Próximamente · ${t.releaseDate}" else "Próximamente", { nav.go(Screen.Detail(t.id)) }, icon = null, requester = req)
                     target != null -> PillButton(target.label, { nav.play(t, target.url, target.season, target.episode) }, requester = req)
                     else -> PillButton("Más información", { nav.go(Screen.Detail(t.id)) }, icon = null, requester = req)
                 }
-                TextButtonTv("Más información", { nav.go(Screen.Detail(t.id)) })
+                if (t.isSoon || target != null) TextButtonTv("Más información", { nav.go(Screen.Detail(t.id)) })
                 ListButton(t, nav, scope)
-                if (count > 1) Text("${idx % count + 1} · $count", style = ts(14, FontWeight.Bold, C.muted), modifier = Modifier.padding(start = 6.dp))
+                if (count > 1) Text("${idx % count + 1} · $count", style = ts(12, FontWeight.Bold, C.muted), modifier = Modifier.padding(start = 4.dp))
             }
         }
     }
@@ -314,21 +335,24 @@ fun ListButton(t: Title, nav: Nav, scope: kotlinx.coroutines.CoroutineScope) {
 
 /* ---------------- filas ---------------- */
 
+const val POSTER_W = 92
+const val WIDE_W = 184
+const val FEAT_W = 118
+
 @Composable
 fun TitleRow(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState, onFocusTitle: (Title) -> Unit) {
-    val mem = nav.memory
-    val restore = mem.focus[screenKey]
-    Column(Modifier.padding(top = 6.dp)) {
-        Text(r.title, style = ts(19, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 24.dp, bottom = 2.dp))
+    val restore = nav.memory.focus[screenKey]
+    Column(Modifier.padding(top = 2.dp)) {
+        Text(r.title, style = ts(15, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 28.dp))
         LazyRow(
             state = state,
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(if (r.kind == "top") 6.dp else 16.dp)
+            contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (r.kind == "top") 4.dp else 12.dp)
         ) {
             if (r.kind == "feat") {
                 itemsIndexed(r.feat, key = { i, _ -> "f$i" }) { i, (t, item) ->
                     val k = "${r.key}/$i"
-                    CardBox(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, { onFocusTitle(t) }, Modifier.width(150.dp).aspectRatio(3f / 4.45f)) {
+                    CardBox(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, { onFocusTitle(t) }, Modifier.width(FEAT_W.dp).aspectRatio(3f / 4.45f)) {
                         FeatCard(t, item)
                     }
                 }
@@ -340,20 +364,20 @@ fun TitleRow(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState, onFo
                         CardBox(k, restore, nav, screenKey, {
                             val tg = Store.playTarget(t)
                             if (r.key == "cont" && tg != null) nav.play(t, tg.url, tg.season, tg.episode) else nav.go(Screen.Detail(t.id))
-                        }, { onFocusTitle(t) }, Modifier.width(240.dp).aspectRatio(16f / 9f)) {
+                        }, { onFocusTitle(t) }, Modifier.width(WIDE_W.dp).aspectRatio(16f / 9f)) {
                             WideCard(t, if (p?.season != null) "T${p.season}:E${p.episode}" else null)
                         }
                     }
                     "top" -> Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            "${i + 1}", modifier = Modifier.offset(x = 10.dp, y = 10.dp),
-                            style = ts(118, FontWeight.Bold, C.accent).copy(drawStyle = Stroke(width = 5f))
+                            "${i + 1}", modifier = Modifier.offset(x = 8.dp, y = 8.dp),
+                            style = ts(90, FontWeight.Bold, C.accent).copy(drawStyle = Stroke(width = 4f))
                         )
-                        CardBox(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, { onFocusTitle(t) }, Modifier.width(118.dp).aspectRatio(2f / 3f)) {
+                        CardBox(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, { onFocusTitle(t) }, Modifier.width(POSTER_W.dp).aspectRatio(2f / 3f)) {
                             PosterCard(t)
                         }
                     }
-                    else -> CardBox(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, { onFocusTitle(t) }, Modifier.width(118.dp).aspectRatio(2f / 3f)) {
+                    else -> CardBox(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, { onFocusTitle(t) }, Modifier.width(POSTER_W.dp).aspectRatio(2f / 3f)) {
                         PosterCard(t)
                     }
                 }
@@ -369,7 +393,7 @@ fun CardBox(
 ) {
     val req = remember { FocusRequester() }
     if (key == restore) AutoFocus(req, key)
-    Focusable(onClick, modifier, requester = req, onFocus = { nav.memory.focus[screenKey] = key; onFocus() }) { content() }
+    Focusable(onClick, modifier, shape = RoundedCornerShape(8.dp), requester = req, onFocus = { nav.memory.focus[screenKey] = key; onFocus() }) { content() }
 }
 
 @Composable
@@ -377,8 +401,8 @@ fun PosterCard(t: Title) {
     Box(Modifier.fillMaxSize().background(C.surface)) {
         if (t.poster.isNotBlank()) Img(t.poster, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
         if (t.isSoon) Text(
-            "Próximamente", style = ts(11, FontWeight.Bold, Color.Black),
-            modifier = Modifier.align(Alignment.TopStart).padding(8.dp).background(C.accent, RoundedCornerShape(99.dp)).padding(horizontal = 8.dp, vertical = 3.dp)
+            "Próximamente", style = ts(8, FontWeight.Bold, Color.Black),
+            modifier = Modifier.align(Alignment.TopStart).padding(6.dp).background(C.accent, RoundedCornerShape(99.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
         )
     }
 }
@@ -389,7 +413,7 @@ fun WideCard(t: Title, label: String?) {
         if (t.wide.isNotBlank()) Img(t.wide, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
         if (label != null) {
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .55f), Color.Transparent, Color.Transparent))))
-            Text(label, style = ts(13, FontWeight.Bold, Color.White), modifier = Modifier.padding(10.dp))
+            Text(label, style = ts(11, FontWeight.Bold, Color.White), modifier = Modifier.padding(8.dp))
         }
     }
 }
@@ -400,12 +424,12 @@ fun FeatCard(t: Title, item: FeatItem) {
     Box(Modifier.fillMaxSize().background(C.surface)) {
         if (img.isNotBlank()) Img(img, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .45f to Color.Transparent, 1f to Color.Black)))
-        Column(Modifier.align(Alignment.BottomCenter).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            if (t.logo.isNotBlank()) Img(t.logo, Modifier.fillMaxWidth(.8f).height(44.dp), scale = ContentScale.Fit, alignment = Alignment.BottomCenter)
-            else Text(t.title, style = ts(15, FontWeight.Bold, Color.White), maxLines = 2)
+        Column(Modifier.align(Alignment.BottomCenter).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (t.logo.isNotBlank()) Img(t.logo, Modifier.fillMaxWidth(.8f).height(34.dp), scale = ContentScale.Fit, alignment = Alignment.BottomCenter)
+            else Text(t.title, style = ts(12, FontWeight.Bold, Color.White), maxLines = 2)
             if (item.label.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
-                Text(item.label, style = ts(11, FontWeight.Bold, C.fg2), maxLines = 1)
+                Spacer(Modifier.height(4.dp))
+                Text(item.label, style = ts(9, FontWeight.Bold, C.fg2), maxLines = 1)
             }
         }
     }
@@ -429,28 +453,28 @@ fun GridScreen(nav: Nav, kind: String) {
     val firstReq = remember { FocusRequester() }
     val restore = nav.memory.focus[kind]
 
-    Column(Modifier.fillMaxSize().padding(start = 24.dp, top = 34.dp)) {
-        Text(title, style = ts(34, FontWeight.Bold, Color.White))
-        Text("${list.size} título${if (list.size == 1) "" else "s"}", style = ts(15, color = C.muted))
+    Column(Modifier.fillMaxSize().padding(start = 28.dp, top = 26.dp)) {
+        Text(title, style = ts(24, FontWeight.Bold, Color.White))
+        Text("${list.size} título${if (list.size == 1) "" else "s"}", style = ts(12, color = C.muted))
         if (kind == "milista" && Store.session == null) {
             Spacer(Modifier.height(24.dp))
-            Text("Entrá con tu cuenta para guardar series en tu lista.", style = ts(18, color = C.fg2))
+            Text("Entrá con tu cuenta para guardar series en tu lista.", style = ts(15, color = C.fg2))
             Spacer(Modifier.height(16.dp))
             TextButtonTv("Entrar", { nav.go(Screen.Login()) }, requester = firstReq)
             AutoFocus(firstReq, kind)
             return@Column
         }
         if (genres.isNotEmpty()) {
-            LazyRow(contentPadding = PaddingValues(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyRow(contentPadding = PaddingValues(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item { Chip("Todo", genre.isBlank()) { genre = "" } }
                 items(genres) { g -> Chip(g, genre == g) { genre = g } }
             }
         } else Spacer(Modifier.height(16.dp))
-        if (list.isEmpty()) { Text(if (kind == "milista") "Todavía no agregaste nada." else "No hay títulos.", style = ts(18, color = C.fg2)); return@Column }
+        if (list.isEmpty()) { Text(if (kind == "milista") "Todavía no agregaste nada." else "No hay títulos.", style = ts(15, color = C.fg2)); return@Column }
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(126.dp), state = nav.memory.grid(kind + genre),
+            columns = GridCells.Adaptive(100.dp), state = nav.memory.grid(kind + genre),
             contentPadding = PaddingValues(top = 10.dp, end = 24.dp, bottom = 40.dp),
-            horizontalArrangement = Arrangement.spacedBy(18.dp), verticalArrangement = Arrangement.spacedBy(22.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(list, key = { it.id }) { t ->
                 val k = "$kind/${t.id}"
@@ -466,11 +490,11 @@ fun GridScreen(nav: Nav, kind: String) {
 
 @Composable
 fun Chip(text: String, on: Boolean, onClick: () -> Unit) {
-    Focusable(onClick, Modifier.height(36.dp), shape = RoundedCornerShape(99.dp), scale = 1.06f, ring = false) { f ->
+    Focusable(onClick, Modifier.height(30.dp), shape = RoundedCornerShape(99.dp), scale = 1.06f, ring = false) { f ->
         Box(
-            Modifier.background(if (f) Color.White else if (on) C.accent else Color.White.copy(alpha = .1f)).padding(horizontal = 16.dp).height(36.dp),
+            Modifier.background(if (f) Color.White else if (on) C.accent else Color.White.copy(alpha = .1f)).padding(horizontal = 13.dp).height(30.dp),
             contentAlignment = Alignment.Center
-        ) { Text(text, style = ts(14, FontWeight.Bold, if (f || on) Color.Black else C.fg)) }
+        ) { Text(text, style = ts(12, FontWeight.Bold, if (f || on) Color.Black else C.fg)) }
     }
 }
 
@@ -491,53 +515,48 @@ fun DetailScreen(id: String, nav: Nav) {
     AutoFocus(playReq, id)
     val prog = Store.progress.firstOrNull { it.titleId == id }
 
+    // todo entra en una sola pantalla: nada se corta ni se mueve hacia arriba
     Box(Modifier.fillMaxSize()) {
         if (t.bg.isNotBlank()) Img(t.bg, Modifier.fillMaxSize(), alignment = Alignment.TopEnd)
         Box(Modifier.fillMaxSize().background(leftScrim))
         Box(Modifier.fillMaxSize().background(bottomScrim))
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 50.dp)) {
-            item {
-                Column(Modifier.padding(start = 56.dp, top = 70.dp).width(520.dp)) {
-                    TitleLogo(t, 360.dp, 120.dp, 44)
-                    Spacer(Modifier.height(16.dp))
-                    MetaLine(t)
-                    if (t.tagline.isNotBlank()) { Spacer(Modifier.height(8.dp)); Text(t.tagline, style = ts(16, FontWeight.Bold, Color.White)) }
-                    if (t.description.isNotBlank()) {
-                        Spacer(Modifier.height(10.dp))
-                        Text(t.description, style = ts(16, FontWeight.Light, C.fg2), maxLines = 5, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.fillMaxSize().padding(top = 34.dp)) {
+            Column(Modifier.padding(start = 44.dp).width(400.dp)) {
+                TitleLogo(t, 260.dp, 80.dp, 30)
+                Spacer(Modifier.height(12.dp))
+                MetaLine(t)
+                if (t.description.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(t.description, style = ts(13, FontWeight.Light, C.fg2), maxLines = 3, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    when {
+                        t.isSoon -> PillButton(if (t.releaseDate.isNotBlank()) "Próximamente · ${t.releaseDate}" else "Próximamente", {}, icon = null, requester = playReq)
+                        target != null -> PillButton(target.label, { nav.play(t, target.url, target.season, target.episode) }, requester = playReq)
+                        else -> PillButton("Sin video por ahora", {}, icon = null, requester = playReq)
                     }
-                    Spacer(Modifier.height(22.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        when {
-                            t.isSoon -> PillButton(if (t.releaseDate.isNotBlank()) "Próximamente · ${t.releaseDate}" else "Próximamente", {}, icon = null, requester = playReq)
-                            target != null -> PillButton(target.label, { nav.play(t, target.url, target.season, target.episode) }, requester = playReq)
-                            else -> PillButton("Sin video por ahora", {}, icon = null, requester = playReq)
-                        }
-                        ListButton(t, nav, scope)
-                        if (mediaFor(t.trailer) != null) RoundButton(Ic.clapper, "Tráiler", { nav.go(Screen.Player(t.id, t.trailer, null, null, trailer = true)) })
-                    }
-                    if (t.genres.isNotEmpty()) {
-                        Spacer(Modifier.height(16.dp))
-                        Text(t.genres.joinToString("  ·  "), style = ts(14, color = C.muted))
-                    }
+                    ListButton(t, nav, scope)
+                    if (mediaFor(t.trailer) != null) RoundButton(Ic.clapper, "Tráiler", { nav.go(Screen.Player(t.id, t.trailer, null, null, trailer = true)) })
                 }
             }
             if (t.isSerie && t.seasons.isNotEmpty()) {
-                if (t.seasons.size > 1) item {
-                    LazyRow(contentPadding = PaddingValues(start = 56.dp, end = 24.dp, top = 30.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        itemsIndexed(t.seasons) { i, s -> Chip(s.name.ifBlank { "Temporada ${s.number}" }, i == season) { season = i } }
+                Spacer(Modifier.weight(1f))
+                val s = t.seasons.getOrNull(season) ?: t.seasons.first()
+                if (t.seasons.size > 1) {
+                    LazyRow(contentPadding = PaddingValues(horizontal = 44.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(t.seasons) { i, ss -> Chip(ss.name.ifBlank { "Temporada ${ss.number}" }, i == season) { season = i } }
                     }
+                } else {
+                    Text(s.name.ifBlank { "Temporada ${s.number}" }, style = ts(15, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 44.dp, bottom = 2.dp))
                 }
-                item {
-                    val s = t.seasons.getOrNull(season) ?: t.seasons.first()
-                    Column {
-                        if (t.seasons.size == 1) Text(s.name.ifBlank { "Temporada ${s.number}" }, style = ts(19, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 56.dp, top = 30.dp))
-                        LazyRow(contentPadding = PaddingValues(horizontal = 56.dp, vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                            items(s.episodes, key = { "${s.number}-${it.number}" }) { e ->
-                                EpisodeCard(t, s, e, prog) {
-                                    if (!t.isSoon && isHttp(e.url)) nav.play(t, e.url, s.number, e.number)
-                                }
-                            }
+                LazyRow(
+                    contentPadding = PaddingValues(start = 44.dp, end = 44.dp, top = 12.dp, bottom = 26.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(s.episodes, key = { "${s.number}-${it.number}" }) { e ->
+                        EpisodeCard(t, s, e, prog) {
+                            if (!t.isSoon && isHttp(e.url)) nav.play(t, e.url, s.number, e.number)
                         }
                     }
                 }
@@ -550,21 +569,20 @@ fun DetailScreen(id: String, nav: Nav) {
 fun EpisodeCard(t: Title, s: Season, e: Episode, prog: Progress?, onClick: () -> Unit) {
     val seen = prog?.watched?.contains("${s.number}:${e.number}") == true
     val current = prog?.season == s.number && prog?.episode == e.number
-    Column(Modifier.width(236.dp)) {
-        Focusable(onClick, Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+    val hasVideo = isHttp(e.url)
+    Column(Modifier.width(176.dp)) {
+        Focusable(onClick, Modifier.fillMaxWidth().aspectRatio(16f / 9f), shape = RoundedCornerShape(8.dp)) {
             Box(Modifier.fillMaxSize().background(C.surface)) {
                 val img = e.thumb.ifBlank { t.wide }
                 if (img.isNotBlank()) Img(img, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
-                if (!isHttp(e.url)) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .55f)), contentAlignment = Alignment.Center) {
-                    Text("Sin video", style = ts(13, FontWeight.Bold, C.fg2))
-                }
-                if (seen || current) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(if (current) C.accent else C.accent.copy(alpha = .7f)))
+                if (!hasVideo) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .35f)))
+                if (seen || current) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(C.accent))
             }
         }
-        Spacer(Modifier.height(10.dp))
-        Text("E${e.number}${if (e.title.isNotBlank()) " · " + e.title else ""}", style = ts(15, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        val sub = listOfNotNull(e.duration.ifBlank { null }, if (seen) "Visto" else null).joinToString(" · ")
-        if (sub.isNotBlank()) Text(sub, style = ts(13, color = C.muted), maxLines = 1)
+        Spacer(Modifier.height(7.dp))
+        Text("${e.number}. ${e.title.ifBlank { "Episodio ${e.number}" }}", style = ts(12, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val sub = listOfNotNull(e.duration.ifBlank { null }, if (!hasVideo) "Sin video" else if (seen) "Visto" else null).joinToString(" · ")
+        if (sub.isNotBlank()) Text(sub, style = ts(11, color = C.muted), maxLines = 1)
     }
 }
 
@@ -580,21 +598,21 @@ fun SearchScreen(nav: Nav) {
     val res = if (n.isBlank()) emptyList() else pub.filter { t ->
         t.title.lowercase().contains(n) || t.genres.any { it.lowercase().contains(n) } || t.description.lowercase().contains(n)
     }
-    Column(Modifier.fillMaxSize().padding(start = 24.dp, top = 34.dp, end = 24.dp)) {
-        Text("Buscar", style = ts(34, FontWeight.Bold, Color.White))
+    Column(Modifier.fillMaxSize().padding(start = 28.dp, top = 26.dp, end = 28.dp)) {
+        Text("Buscar", style = ts(24, FontWeight.Bold, Color.White))
         Spacer(Modifier.height(14.dp))
         OutlinedTextField(
             value = q, onValueChange = { q = it; nav.memory.focus["searchQ"] = it },
-            modifier = Modifier.width(520.dp).focusRequester(req),
-            placeholder = { Text("Títulos, géneros…", style = ts(17, color = C.faint)) },
-            textStyle = ts(18), singleLine = true, colors = fieldColors(),
+            modifier = Modifier.width(420.dp).focusRequester(req),
+            placeholder = { Text("Títulos, géneros…", style = ts(14, color = C.faint)) },
+            textStyle = ts(15), singleLine = true, colors = fieldColors(),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
         )
         Spacer(Modifier.height(18.dp))
-        if (n.isNotBlank() && res.isEmpty()) Text("No encontramos nada con “$q”.", style = ts(17, color = C.fg2))
+        if (n.isNotBlank() && res.isEmpty()) Text("No encontramos nada con “$q”.", style = ts(14, color = C.fg2))
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(126.dp), contentPadding = PaddingValues(top = 10.dp, bottom = 40.dp),
-            horizontalArrangement = Arrangement.spacedBy(18.dp), verticalArrangement = Arrangement.spacedBy(22.dp)
+            columns = GridCells.Adaptive(100.dp), contentPadding = PaddingValues(top = 10.dp, bottom = 40.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(res, key = { it.id }) { t ->
                 Focusable({ nav.go(Screen.Detail(t.id)) }, Modifier.aspectRatio(2f / 3f)) { PosterCard(t) }
@@ -645,17 +663,17 @@ fun LoginScreen(s: Screen.Login, nav: Nav) {
             if (Store.siteLogo.isNotBlank()) Img(Store.siteLogo, Modifier.width(260.dp).height(48.dp), scale = ContentScale.Fit)
             else LocalLogo(Modifier.width(260.dp).height(48.dp))
             Spacer(Modifier.height(18.dp))
-            Text("Entrá con tu cuenta para ver series y películas", style = ts(17, color = C.fg2))
+            Text("Entrá con tu cuenta para ver series y películas", style = ts(14, color = C.fg2))
             Spacer(Modifier.height(24.dp))
             OutlinedTextField(
                 email, { email = it }, Modifier.fillMaxWidth().focusRequester(req),
-                label = { Text("Email", style = ts(14)) }, textStyle = ts(18), singleLine = true, colors = fieldColors(),
+                label = { Text("Email", style = ts(12)) }, textStyle = ts(15), singleLine = true, colors = fieldColors(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next)
             )
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
                 pass, { pass = it }, Modifier.fillMaxWidth(),
-                label = { Text("Contraseña", style = ts(14)) }, textStyle = ts(18), singleLine = true, colors = fieldColors(),
+                label = { Text("Contraseña", style = ts(12)) }, textStyle = ts(15), singleLine = true, colors = fieldColors(),
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { run(false) })
@@ -676,8 +694,8 @@ fun AccountScreen(nav: Nav) {
     val s = Store.session
     val req = remember { FocusRequester() }
     AutoFocus(req)
-    Column(Modifier.fillMaxSize().padding(start = 24.dp, top = 34.dp)) {
-        Text(if (s != null) "Mi cuenta" else "Entrar", style = ts(34, FontWeight.Bold, Color.White))
+    Column(Modifier.fillMaxSize().padding(start = 28.dp, top = 26.dp)) {
+        Text(if (s != null) "Mi cuenta" else "Entrar", style = ts(24, FontWeight.Bold, Color.White))
         Spacer(Modifier.height(18.dp))
         if (s != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -685,12 +703,12 @@ fun AccountScreen(nav: Nav) {
                     Text("★", style = ts(26, color = Color.White))
                 }
                 Spacer(Modifier.width(16.dp))
-                Text(s.email, style = ts(20, FontWeight.Bold))
+                Text(s.email, style = ts(16, FontWeight.Bold))
             }
             Spacer(Modifier.height(26.dp))
             TextButtonTv("Cerrar sesión", { Store.logout(); nav.section(Screen.Home) }, requester = req)
         } else {
-            Text("Con tu cuenta podés ver capítulos, guardar series en Mi lista y seguir donde dejaste.", style = ts(18, color = C.fg2), modifier = Modifier.width(560.dp))
+            Text("Con tu cuenta podés ver capítulos, guardar series en Mi lista y seguir donde dejaste.", style = ts(15, color = C.fg2), modifier = Modifier.width(560.dp))
             Spacer(Modifier.height(22.dp))
             TextButtonTv("Entrar o crear cuenta", { nav.go(Screen.Login()) }, requester = req)
         }
