@@ -1763,59 +1763,191 @@ document.addEventListener('click', e => {
   if (m && !m.hidden && !e.target.closest('.acc-menu')) m.hidden = true;
   if (m && e.target.closest('.acc-menu a, .acc-menu button')) m.hidden = true;
 });
+const LANDING_LOGO = 'https://kfyxwoezrzboikbvpdtv.supabase.co/storage/v1/object/public/media/sitelogo/mmv6hs7ss2u4hxm.webp';
+
+/* ---------- landing para visitantes ---------- */
+const isLanding = () => S.route==='home' && !S.session && !S.q.trim() && !S.noDb && !!S.sb && S.authReady && S.loaded.t && published().length > 0;
+function renderLanding(){
+  const pubs = published();
+  const withPoster = pubs.filter(t => t.poster);
+  const cards = pubs.filter(t => t.backdrop || t.bannerImage);
+  const fill = (arr, n) => { if (!arr.length) return []; const out = []; while (out.length < n) out.push(...arr); return out; };
+  const pool = fill(shuffled(withPoster,'land-wall'), 63);
+  const col = c => { const ps = pool.slice(c*7, c*7+7).map(t => `<span class="lw-p" data-src="${esc(t.poster)}"></span>`).join(''); return `<div class="lw-col${c%2?' up':''}" style="--off:${(c*41)%80}px">${ps}${ps}</div>`; };
+  const wall = withPoster.length ? `<div class="lw-wall" aria-hidden="true">${[0,1,2,3,4,5,6,7,8].map(col).join('')}</div>` : '';
+  const card = t => `<button class="lw-card" data-land-open="${esc(t.id)}" aria-label="${esc(t.title)}"><span class="lw-bg" data-src="${esc(t.backdrop||t.bannerImage)}"></span><span class="lw-sh"></span>${t.logo ? `<img class="lw-logo" alt="${esc(t.title)}" data-img="${esc(t.logo)}" hidden><strong class="lw-name logo-fallback" hidden>${esc(t.title)}</strong>` : `<strong class="lw-name">${esc(t.title)}</strong>`}</button>`;
+  const sh = shuffled(cards,'land-rows'); const half = Math.ceil(sh.length/2);
+  const mk = (arr, cls) => { const f = fill(arr, 8); return arr.length ? `<div class="lw-mq ${cls}"><div class="lw-trk">${f.map(card).join('')}${f.map(card).join('')}</div></div>` : ''; };
+  const rows = mk(sh.slice(0, half), '') + mk(sh.slice(half).length ? sh.slice(half) : sh, 'r');
+  const nS = pubs.filter(t=>t.type==='serie').length, nP = pubs.length - nS, nE = pubs.reduce((n,t)=>n+epCount(t),0);
+  const faq = [
+    ['¿Qué es REALITY VAULT?','Un sitio para ver realities, series, películas, documentales y especiales, todo reunido en un solo lugar y en español.'],
+    ['¿Tiene costo?','No. Crear la cuenta es gratis y tarda un minuto.'],
+    ['¿Dónde puedo mirar?','Desde el celular, la compu o la tele. Entrás con tu cuenta y listo.'],
+    ['¿Retomo donde lo dejé?','Sí. Guardamos tu avance y tu lista, así seguís exactamente donde quedaste.'],
+    ['¿Se suman títulos nuevos?','Todo el tiempo. Lo que se agrega al catálogo aparece enseguida.']
+  ];
+  const bgs = shuffled(cards,'land-end').slice(0,6);
+  return `<div class="landing">
+    <section class="ld-hero">${wall}<div class="ld-veil"></div>
+      <img class="ld-logo" src="${LANDING_LOGO}" alt="REALITY VAULT">
+      <div class="ld-c"><h1>Todo el universo de la reality TV, en un solo lugar.</h1><p>Series, películas y especiales. Mirá cuando quieras, donde quieras.</p>
+        <div class="ld-cta"><button class="btn btn-primary ld-btn" data-auth="signup">Crear cuenta</button><button class="btn btn-line ld-btn" data-auth="login">Iniciar sesión</button></div></div>
+      <div class="ld-hint">DESLIZÁ ↓</div></section>
+    <section class="ld-about ld-rv"><div class="ld-k">¿QUÉ ES REALITY VAULT?</div><h2>El archivo de la reality TV, ahora para mirar.</h2>
+      <p>Un lugar propio para ver los realities que marcaron una época y los que están por venir: series completas, películas, documentales y especiales, todo junto y en español.</p>
+      <div class="ld-stats"><div><b>${nS}</b><span>serie${nS===1?'':'s'}</span></div><div><b>${nP}</b><span>película${nP===1?'':'s'}</span></div>${nE?`<div><b>${nE}</b><span>episodio${nE===1?'':'s'}</span></div>`:''}</div></section>
+    ${rows ? `<section class="ld-rows ld-rv">${rows}</section>` : ''}
+    <section class="ld-faq ld-rv"><h2>Preguntas frecuentes</h2>${faq.map(([q,a])=>`<details><summary>${q}</summary><p>${a}</p></details>`).join('')}</section>
+    <section class="ld-end ld-rv">${bgs.map((t,i)=>`<div class="ld-endbg${i===0?' on':''}" data-src="${esc(t.backdrop||t.bannerImage)}"></div>`).join('')}<div class="ld-endv"></div>
+      <div class="ld-endc"><h2>Empezá en un minuto.</h2><p>Gratis. Entrás y ya está.</p><button class="btn btn-primary ld-btn" data-auth="signup">Crear cuenta</button></div></section>
+    <footer class="ld-foot"><img src="${LANDING_LOGO}" alt="REALITY VAULT"><span>© REALITY VAULT</span></footer>
+  </div>`;
+}
+function startLanding(){
+  clearInterval(S.landTimer); S.landTimer = null;
+  const root = document.querySelector('.landing'); if (!root) return;
+  const bgs = [...root.querySelectorAll('.ld-endbg')];
+  if (bgs.length > 1){ let i = 0; S.landTimer = setInterval(() => { if (!document.body.contains(bgs[0])){ clearInterval(S.landTimer); return; } bgs[i].classList.remove('on'); i = (i+1) % bgs.length; bgs[i].classList.add('on'); }, 4500); }
+  if ('IntersectionObserver' in window){
+    const io = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); } }), { threshold:.12 });
+    root.querySelectorAll('.ld-rv').forEach(el => io.observe(el));
+  } else root.querySelectorAll('.ld-rv').forEach(el => el.classList.add('in'));
+}
+function openLandingTitle(id, seasonIdx){
+  const t = byId(id); if (!t) return;
+  const seasons = (t.seasons||[]).slice().sort((a,b)=>(a.number||0)-(b.number||0));
+  const si = Math.min(seasonIdx||0, Math.max(0, seasons.length-1)); const sn = seasons[si];
+  const eps = sn ? (sn.episodes||[]).slice().sort((a,b)=>(a.number||0)-(b.number||0)) : [];
+  const first = !!overlayRoot.querySelector('.lp');
+  const art = t.backdrop || t.bannerImage || t.poster;
+  overlayRoot.innerHTML = `<div class="lp-ov${first?' still':''}" data-close-bg><article class="lp" role="dialog" aria-modal="true" aria-label="${esc(t.title)}">
+    <div class="lp-hero" ${art?`data-src="${esc(art)}"`:''}><div class="lp-hv"></div><button class="lp-x" data-close aria-label="Cerrar">✕</button>
+      <div class="lp-ht">${t.logo ? `<img class="lp-hlogo" alt="${esc(t.title)}" data-img="${esc(t.logo)}" hidden><h2 class="logo-fallback" hidden>${esc(t.title)}</h2>` : `<h2>${esc(t.title)}</h2>`}
+        <div class="lp-meta">${[t.type==='serie'?'Serie':'Película', t.year, t.rating, t.type==='serie' ? ((t.seasons||[]).length ? (t.seasons.length+' temporada'+(t.seasons.length>1?'s':'')) : '') : t.duration].filter(Boolean).map(x=>`<span>${esc(x)}</span>`).join('')}</div></div></div>
+    <div class="lp-body">
+      ${(t.genres||[]).length ? `<div class="lp-gen">${t.genres.slice(0,4).map(g=>`<span>${esc(g)}</span>`).join('')}</div>` : ''}
+      <p class="lp-desc">${esc(t.description || '')}</p>
+      ${t.type==='serie' && seasons.length ? `<div class="lp-eph"><h3>Episodios</h3>${seasons.length>1 ? `<div class="lp-ss">${seasons.map((x,i)=>`<button data-lp-season="${i}" data-lp-id="${esc(t.id)}" aria-pressed="${i===si}">T${esc(x.number||i+1)}</button>`).join('')}</div>` : ''}</div>
+        <div class="lp-eps">${eps.slice(0,30).map((ep,i)=>`<div class="lp-ep" style="--i:${Math.min(i,12)}"><span class="lp-et" ${ep.thumb?`data-src="${esc(ep.thumb)}"`:''}><b>${esc(ep.number||i+1)}</b></span><div><strong>${esc(ep.title||('Episodio '+(ep.number||i+1)))}</strong>${ep.description?`<small>${esc(ep.description)}</small>`:''}</div>${ep.duration?`<em>${esc(ep.duration)}</em>`:''}</div>`).join('') || '<p class="lp-none">Los episodios llegan pronto.</p>'}</div>` : ''}
+      <div class="lp-cta"><button class="btn btn-primary" data-auth="signup">Crear cuenta para ver</button><button class="btn btn-line" data-auth="login">Ya tengo cuenta</button></div>
+    </div></article></div>`;
+  document.body.style.overflow = 'hidden';
+  hydrate(overlayRoot); logoFallbacks(overlayRoot);
+}
+document.addEventListener('click', e => {
+  const o = e.target.closest('[data-land-open]'); if (o){ e.preventDefault(); openLandingTitle(o.dataset.landOpen); return; }
+  const ss = e.target.closest('[data-lp-season]'); if (ss){ const box = overlayRoot.querySelector('.lp'); const y = box?.scrollTop||0; openLandingTitle(ss.dataset.lpId, +ss.dataset.lpSeason); const b2 = overlayRoot.querySelector('.lp'); if (b2) b2.scrollTop = y; }
+});
 function openAuth(opts = {}){
-  S.authCtx = { mode: opts.mode || 'signup', reason: opts.reason || '', href: opts.href || '', titleId: opts.titleId || '', tid: opts.tid || '', s: opts.s ?? '', e: opts.e ?? '', msg:'' };
+  S.authCtx = { mode: opts.mode || 'signup', step: 1, email:'', name:'', favs:[], reason: opts.reason || '', href: opts.href || '', titleId: opts.titleId || '', tid: opts.tid || '', s: opts.s ?? '', e: opts.e ?? '', msg:'' };
   renderAuth();
+}
+function authSideTitle(){
+  const pool = published().filter(t => t.backdrop || t.bannerImage);
+  return pool.length ? shuffled(pool, 'auth-side')[0] : null;
 }
 function renderAuth(){
   const c = S.authCtx; const signup = c.mode === 'signup';
-  const lead = c.reason === 'watch' ? 'Para ver necesitás una cuenta. Es gratis y tarda un minuto.' : c.reason === 'list' ? 'Creá una cuenta gratis para guardar tus series y películas en Mi lista.' : signup ? 'Creá tu cuenta gratis.' : 'Entrá con tu cuenta.';
-  overlayRoot.innerHTML = `<div class="overlay" data-close-bg><div class="auth-card" role="dialog" aria-modal="true" aria-label="${signup?'Crear cuenta':'Ingresar'}">
-    <button class="sheet-close" data-close aria-label="Cerrar">✕</button>
-    ${c.done ? `<h2>¡Listo${c.doneName ? ', ' + esc(c.doneName) : ''}!</h2><p>${esc(c.doneMsg)}</p>
-      ${c.href ? `<a class="btn btn-primary" data-watch ${c.tid ? `data-tid="${esc(c.tid)}"` : ''} ${c.s !== '' ? `data-s="${esc(c.s)}" data-e="${esc(c.e)}"` : ''} href="${esc(c.href)}" target="_blank" rel="noopener">▶ Ver ahora</a>` : `<button class="btn btn-primary" data-close>Seguir</button>`}`
-    : `<div class="auth-tabs"><button data-auth-mode="signup" aria-selected="${signup}">Crear cuenta</button><button data-auth-mode="login" aria-selected="${!signup}">Ingresar</button></div>
-    <p class="auth-lead">${lead}</p>
-    <form id="authForm" class="auth-form">
-      ${signup ? `<label class="field"><span>Nombre</span><input class="input" id="au-name" autocomplete="name" required maxlength="40"></label>` : ''}
-      <label class="field"><span>Email</span><input class="input" id="au-email" type="email" autocomplete="email" required></label>
-      <label class="field"><span>Contraseña</span><input class="input" id="au-pass" type="password" autocomplete="${signup?'new-password':'current-password'}" minlength="6" required>${signup?'<span class="hint">Mínimo 6 caracteres.</span>':''}</label>
-      <button class="btn btn-primary" type="submit">${signup ? 'Crear cuenta' : 'Ingresar'}</button>
-      <p class="auth-msg" id="authMsg">${esc(c.msg||'')}</p>
-    </form>`}
-  </div></div>`;
+  const side = c._side || (c._side = authSideTitle());
+  const lead = c.reason === 'watch' ? 'Para ver necesitás una cuenta. Es gratis y tarda un minuto.' : c.reason === 'list' ? 'Creá una cuenta gratis para guardar tus series y películas en Mi lista.' : '';
+  let body;
+  if (c.done){
+    body = `<h2>¡Listo${c.doneName ? ', ' + esc(c.doneName) : ''}!</h2><p class="au-sub">${esc(c.doneMsg)}</p>
+      ${c.href ? `<a class="btn btn-primary au-btn" data-watch ${c.tid ? `data-tid="${esc(c.tid)}"` : ''} ${c.s !== '' ? `data-s="${esc(c.s)}" data-e="${esc(c.e)}"` : ''} href="${esc(c.href)}" target="_blank" rel="noopener">▶ Ver ahora</a>` : `<button class="btn btn-primary au-btn" data-close>Seguir</button>`}`;
+  } else if (signup && c.step === 3){
+    const pool = shuffled(published().filter(t => t.poster), 'au-fav').slice(0, 12);
+    body = `<div class="au-step">PASO 3 DE 3</div><div class="au-prog"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+      <h2>Armemos tu inicio</h2><p class="au-sub">Elegí lo que te gusta y lo guardamos en Mi lista.</p>
+      <div class="au-pk">${pool.map(t => `<button type="button" class="au-pp${c.favs.includes(t.id)?' s':''}" data-au-fav="${esc(t.id)}" aria-pressed="${c.favs.includes(t.id)}" aria-label="${esc(t.title)}"><span data-src="${esc(t.poster)}"></span><b>✓</b></button>`).join('')}</div>
+      <button class="btn btn-primary au-btn" data-au-finish>${c.favs.length ? 'Guardar y entrar' : 'Entrar a REALITY VAULT'}</button>
+      <div class="au-foot">${c.favs.length ? `${c.favs.length} elegido${c.favs.length>1?'s':''}` : 'Elegí los que quieras'} · <button class="au-link" data-au-finish data-skip>Saltar</button></div>`;
+  } else if (signup && c.step === 2){
+    body = `<div class="au-step">PASO 2 DE 3</div><div class="au-prog"><i class="on"></i><i class="on"></i><i></i></div>
+      <h2>Casi listo</h2><p class="au-sub">Un último paso para tener tu cuenta.</p>
+      <form id="authForm" class="au-form" novalidate>
+        <label class="au-field"><span>¿Cómo te llamamos?</span><input class="au-in" id="au-name" autocomplete="name" required maxlength="40" value="${esc(c.name)}"></label>
+        <label class="au-field"><span>Contraseña</span><input class="au-in" id="au-pass" type="password" autocomplete="new-password" minlength="6" required><em>Mínimo 6 caracteres</em></label>
+        <button class="btn btn-primary au-btn" type="submit">Crear mi cuenta</button>
+        <p class="auth-msg" id="authMsg">${esc(c.msg||'')}</p>
+      </form><div class="au-foot"><button class="au-link" data-au-back>← Volver</button></div>`;
+  } else if (signup){
+    body = `<div class="au-step">PASO 1 DE 3</div><div class="au-prog"><i class="on"></i><i></i><i></i></div>
+      <h2>Creá tu cuenta gratis</h2><p class="au-sub">${esc(lead || 'Es gratis y tarda un minuto.')}</p>
+      <form id="authForm" class="au-form" novalidate>
+        <label class="au-field"><span>Email</span><input class="au-in" id="au-email" type="email" autocomplete="email" required value="${esc(c.email)}" placeholder="vos@email.com"></label>
+        <button class="btn btn-primary au-btn" type="submit">Continuar</button>
+        <p class="auth-msg" id="authMsg">${esc(c.msg||'')}</p>
+      </form><div class="au-foot">¿Ya tenés cuenta? <button class="au-link" data-auth-mode="login">Ingresá</button></div>`;
+  } else {
+    body = `<h2>Qué bueno verte de nuevo</h2><p class="au-sub">${esc(lead || 'Entrá con tu cuenta.')}</p>
+      <form id="authForm" class="au-form" novalidate>
+        <label class="au-field"><span>Email</span><input class="au-in" id="au-email" type="email" autocomplete="email" required value="${esc(c.email)}"></label>
+        <label class="au-field"><span>Contraseña</span><input class="au-in" id="au-pass" type="password" autocomplete="current-password" required></label>
+        <button class="btn btn-primary au-btn" type="submit">Ingresar</button>
+        <p class="auth-msg" id="authMsg">${esc(c.msg||'')}</p>
+      </form><div class="au-foot">¿No tenés cuenta? <button class="au-link" data-auth-mode="signup">Creá una gratis</button></div>`;
+  }
+  const wide = signup && c.step === 3 && !c.done;
+  overlayRoot.innerHTML = `<div class="au-full" role="dialog" aria-modal="true" aria-label="${signup?'Crear cuenta':'Ingresar'}">
+    <div class="au-side" ${side ? `data-src="${esc(side.backdrop||side.bannerImage)}"` : ''}><div class="au-side-t">${side ? (side.logo ? `<img alt="${esc(side.title)}" data-img="${esc(side.logo)}" hidden><h3 class="logo-fallback" hidden>${esc(side.title)}</h3>` : `<h3>${esc(side.title)}</h3>`) : ''}<p>${esc(side && side.tagline ? side.tagline : 'Series, películas y especiales, todo en un solo lugar.')}</p></div></div>
+    <img class="au-logo" src="${LANDING_LOGO}" alt="REALITY VAULT">
+    <button class="au-x" data-close aria-label="Cerrar">✕</button>
+    <div class="au-form-wrap"><div class="au-box${wide?' wide':''}" key="${c.mode}${c.step}${c.done?'d':''}">${body}</div></div>
+  </div>`;
   document.body.style.overflow = 'hidden';
-  (overlayRoot.querySelector('#au-name') || overlayRoot.querySelector('#au-email') || overlayRoot.querySelector('.btn-primary'))?.focus();
+  hydrate(overlayRoot); logoFallbacks(overlayRoot);
+  (overlayRoot.querySelector('#au-name') || overlayRoot.querySelector('#au-email') || overlayRoot.querySelector('.au-btn'))?.focus();
 }
-overlayRoot.addEventListener('click', e => {
-  const m = e.target.closest('[data-auth-mode]'); if (m){ S.authCtx.mode = m.dataset.authMode; S.authCtx.msg=''; renderAuth(); }
+overlayRoot.addEventListener('click', async e => {
+  const c = S.authCtx; if (!c || !overlayRoot.querySelector('.au-full')) return;
+  const m = e.target.closest('[data-auth-mode]'); if (m){ c.mode = m.dataset.authMode; c.step = 1; c.msg=''; renderAuth(); return; }
+  if (e.target.closest('[data-au-back]')){ c.step = 1; c.msg=''; renderAuth(); return; }
+  const f = e.target.closest('[data-au-fav]'); if (f){ const id = f.dataset.auFav; c.favs = c.favs.includes(id) ? c.favs.filter(x=>x!==id) : [...c.favs, id]; f.classList.toggle('s'); f.setAttribute('aria-pressed', c.favs.includes(id));
+    const fin = overlayRoot.querySelector('.au-btn[data-au-finish]'); if (fin) fin.textContent = c.favs.length ? 'Guardar y entrar' : 'Entrar a REALITY VAULT';
+    const ft = overlayRoot.querySelector('.au-foot'); if (ft) ft.firstChild.textContent = (c.favs.length ? `${c.favs.length} elegido${c.favs.length>1?'s':''}` : 'Elegí los que quieras') + ' · '; return; }
+  const fin = e.target.closest('[data-au-finish]'); if (fin){
+    if (!fin.hasAttribute('data-skip') && c.favs.length && S.session){
+      const rows = c.favs.filter(id => !S.myList.has(id)).map(id => ({ user_id: S.session.user.id, title_id: id }));
+      if (rows.length){ const { error } = await S.sb.from('user_lists').insert(rows); if (!error){ S.myList = new Set([...rows.map(r=>r.title_id), ...S.myList]); toast('Guardamos tus favoritas en Mi lista'); } }
+    }
+    if (c.href){ c.done = true; c.doneMsg = 'Tu cuenta está creada.'; renderAuth(); } else closeDetail();
+    return; }
 });
 overlayRoot.addEventListener('submit', async e => {
   if (e.target.id !== 'authForm') return;
   e.preventDefault();
   const c = S.authCtx; const btn = e.target.querySelector('button[type="submit"]'); const msg = document.getElementById('authMsg');
-  const email = document.getElementById('au-email').value.trim(), password = document.getElementById('au-pass').value;
-  btn.disabled = true; msg.textContent = '';
   try {
+    if (c.mode === 'signup' && c.step === 1){
+      const email = document.getElementById('au-email').value.trim();
+      if (!/^\S+@\S+\.\S+$/.test(email)){ msg.textContent = 'Revisá el email, no parece válido.'; return; }
+      c.email = email; c.step = 2; c.msg = ''; renderAuth(); return;
+    }
+    btn.disabled = true; msg.textContent = '';
     if (c.mode === 'signup'){
-      const name = document.getElementById('au-name').value.trim();
-      const { data, error } = await S.sb.auth.signUp({ email, password, options:{ data:{ name } } });
+      const name = document.getElementById('au-name').value.trim(); const password = document.getElementById('au-pass').value; c.name = name;
+      if (!name){ msg.textContent = 'Decinos cómo te llamamos.'; btn.disabled = false; return; }
+      if (password.length < 6){ msg.textContent = 'La contraseña necesita al menos 6 caracteres.'; btn.disabled = false; return; }
+      const { data, error } = await S.sb.auth.signUp({ email:c.email, password, options:{ data:{ name } } });
       if (error) throw error;
       if (!data.session){ c.done = true; c.doneName = name; c.doneMsg = 'Te mandamos un email para confirmar tu cuenta. Abrilo, tocá el enlace y después ingresá.'; c.href=''; renderAuth(); return; }
-      c.done = true; c.doneName = name; c.doneMsg = c.href ? 'Tu cuenta está creada.' : 'Tu cuenta está creada. Ya podés guardar títulos en Mi lista.';
-    } else {
-      const { error } = await S.sb.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      c.done = true; c.doneName = ''; c.doneMsg = c.href ? 'Ya ingresaste.' : 'Ya ingresaste.';
+      c.doneName = name; await afterLogin();
+      if (c.titleId && c.reason === 'list' && !S.myList.has(c.titleId)) await toggleList(c.titleId);
+      c.step = 3; renderAuth(); return;
     }
+    const email = document.getElementById('au-email').value.trim(), password = document.getElementById('au-pass').value; c.email = email;
+    const { error } = await S.sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    c.done = true; c.doneName = ''; c.doneMsg = 'Ya ingresaste.';
     await afterLogin();
     if (c.titleId && c.reason === 'list' && !S.myList.has(c.titleId)) await toggleList(c.titleId);
     if (!c.href){ closeDetail(); return; }
     renderAuth();
   } catch(err){
     const m = String(err.message||'');
-    msg.textContent = /Invalid login/i.test(m) ? 'Email o contraseña incorrectos.' : /already registered|already been registered/i.test(m) ? 'Ese email ya tiene una cuenta. Tocá “Ingresar”.' : /Email not confirmed/i.test(m) ? 'Tenés que confirmar tu email antes de ingresar. Revisá tu correo.' : /signups not allowed|Signups not allowed/i.test(m) ? 'El registro está desactivado por ahora.' : /rate limit/i.test(m) ? 'Demasiados intentos. Probá en unos minutos.' : (m || 'No se pudo completar.');
-    btn.disabled = false;
+    if (msg) msg.textContent = /Invalid login/i.test(m) ? 'Email o contraseña incorrectos.' : /already registered|already been registered/i.test(m) ? 'Ese email ya tiene una cuenta. Tocá “Ingresá”.' : /Email not confirmed/i.test(m) ? 'Tenés que confirmar tu email antes de ingresar. Revisá tu correo.' : /signups not allowed|Signups not allowed/i.test(m) ? 'El registro está desactivado por ahora.' : /rate limit/i.test(m) ? 'Demasiados intentos. Probá en unos minutos.' : (m || 'No se pudo completar.');
+    if (btn) btn.disabled = false;
   }
 });
 async function afterLogin(){
@@ -2125,13 +2257,15 @@ function render(){
   clearInterval(S.heroTimer); renderBrand();
   document.body.classList.toggle('home', S.route==='home' && !S.q.trim() && !S.noDb);
   document.body.classList.toggle('in-admin', S.route==='admin');
+  document.body.classList.toggle('in-landing', isLanding());
   renderAccount();
   if (S.route==='admin' && S.loaded.t && !S._descRun){ S._descRun = true; setTimeout(()=>fillMissingDescriptions(false), 800); }
   document.querySelectorAll('.nav a').forEach(a => { if (a.dataset.r===S.route && !S.q) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current'); });
   let html;
   if (S.noDb) html = `<div class="lock"><div class="dial" style="width:64px;height:64px" aria-hidden="true"></div><h1>Falta conectar la base de datos</h1><p>Completá <code>config.js</code> con los datos de tu proyecto de Supabase. Los pasos están en el archivo README.</p></div>`;
-  else if (!S.loaded.t && S.route!=='admin') html = `<div class="skel" aria-hidden="true"><div class="skel-hero"></div><div class="skel-row"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>`;
+  else if ((!S.loaded.t || (S.sb && !S.authReady && S.route==='home')) && S.route!=='admin') html = `<div class="skel" aria-hidden="true"><div class="skel-hero"></div><div class="skel-row"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>`;
   else if (S.route==='admin') html = renderAdmin();
+  else if (isLanding()) html = renderLanding();
   else if (S.q.trim()) html = renderSearch();
   else if (S.route==='title'){ const tid = currentTitleId(); html = renderTitlePage(tid); trackView(tid); }
   else if (S.route==='mi-lista') html = renderMyList();
@@ -2139,8 +2273,8 @@ function render(){
   else if (S.route==='persona') html = renderPerson(S.personSlug);
   else if (S.route==='series' || S.route==='peliculas') html = renderBrowse(S.route);
   else html = renderHome();
-  app.innerHTML = html + (S.route==='admin' ? '' : renderFooter());
-  hydrate(app); logoFallbacks(app); applyTints(app); startHero();
+  app.innerHTML = html + (S.route==='admin' || isLanding() ? '' : renderFooter());
+  hydrate(app); logoFallbacks(app); applyTints(app); startHero(); startLanding();
 }
 
 document.getElementById('q').addEventListener('input', e => { S.q = e.target.value; if (S.route==='admin'){ history.pushState(null,'','/'); S.route='home'; } render(); });
@@ -2244,7 +2378,7 @@ async function checkOwner(){
   S.sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
   const db = makeDb(S.sb);
   loadTop10(); setInterval(loadTop10, 60000);
-  const authReady = (async () => { await checkOwner(); await loadMyList(); await loadProgress(); render(); })();
+  const authReady = (async () => { await checkOwner(); await loadMyList(); await loadProgress(); S.authReady = true; render(); })();
   // Supabase pide no llamar a otras funciones suyas dentro de este aviso: se difiere con setTimeout.
   S.sb.auth.onAuthStateChange((evt) => {
     if (evt === 'TOKEN_REFRESHED' || evt === 'INITIAL_SESSION') return;
