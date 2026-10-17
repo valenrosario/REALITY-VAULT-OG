@@ -1874,22 +1874,69 @@ document.addEventListener('click', e => {
 });
 function showWelcome(name, long){
   return new Promise(resolve => {
-    const pubs = published().filter(t => t.poster);
-    const pool = []; while (pubs.length && pool.length < 40) pool.push(...shuffled(pubs, 'welcome' + pool.length));
-    const col = c => { const ps = pool.slice(c*5, c*5+5).map(t => `<span class="wl-p" data-src="${esc(t.poster)}"></span>`).join(''); return `<div class="wl-col${c%2?' up':''}">${ps}${ps}</div>`; };
-    const ph = userAvatar();
-    const dur = long ? 4200 : 2200;
-    const lines = long ? ['Creando tu cuenta…','Cargando tus realities favoritos…','Armando tu inicio…','¡Todo listo' + (name ? ', ' + esc(name) : '') + '!'] : ['Entrando…','Cargando tus realities…','¡Bienvenid@' + (name ? ', ' + esc(name) : '') + '!'];
-    overlayRoot.innerHTML = `<div class="wl" style="--dur:${dur}ms">
-      <div class="wl-wall" aria-hidden="true">${[0,1,2,3,4,5,6].map(col).join('')}</div><div class="wl-veil"></div>
-      <div class="wl-c">
-        <div class="wl-av">${ph ? `<span class="wl-img" style="background-image:url('${ph}')"></span>` : `<span class="wl-img wl-def">${esc((name||'R')[0].toUpperCase())}</span>`}<i class="wl-ring"></i><i class="wl-ring r2"></i></div>
-        <div class="wl-t" style="--n:${lines.length}">${lines.map((l,i)=>`<span style="--i:${i}">${l}</span>`).join('')}</div>
-        <div class="wl-bar"><i></i></div>
+    const c = S.authCtx || {};
+    const favs = (c.favs||[]).map(byId).filter(t => t && t.poster);
+    const rest = shuffled(published().filter(t => t.poster && !favs.includes(t)), 'welcome');
+    const picks = [...favs, ...rest].slice(0, 7);
+    while (picks.length && picks.length < 7) picks.push(picks[picks.length % Math.max(1, favs.length || picks.length)]);
+    const n = picks.length, mid = (n - 1) / 2;
+    const first = (name || '').trim().split(/\s+/)[0];
+    const hello = first ? `Hola, ${first}` : 'Hola';
+    const split = str => [...str].map((ch,i) => `<span style="--i:${i}">${ch === ' ' ? '&nbsp;' : esc(ch)}</span>`).join('');
+    overlayRoot.innerHTML = `<div class="wl">
+      ${picks[0] ? `<div class="wl-amb" data-src="${esc(picks[0].poster)}"></div>` : ''}<div class="wl-grain"></div>
+      <div class="wl-stage">
+        <div class="wl-deck">${picks.map((t,i) => `<div class="wl-card" data-i="${i}"><span data-src="${esc(t.poster)}"></span></div>`).join('')}</div>
+        <img class="wl-logo" src="${LANDING_LOGO}" alt="REALITY VAULT"><i class="wl-shine"></i>
+        <div class="wl-hello">${split(hello)}</div>
+        <div class="wl-sub">${long ? 'Tus realities ya te están esperando' : 'Qué bueno tenerte de vuelta'}</div>
       </div></div>`;
     document.body.style.overflow = 'hidden';
     hydrate(overlayRoot);
-    setTimeout(() => { const w = overlayRoot.querySelector('.wl'); if (!w){ resolve(); return; } w.classList.add('out'); setTimeout(resolve, 520); }, dur);
+    const W = overlayRoot.querySelector('.wl'), stage = W.querySelector('.wl-stage'), cards = [...W.querySelectorAll('.wl-card')];
+    const logo = W.querySelector('.wl-logo'), shine = W.querySelector('.wl-shine'), hi = W.querySelector('.wl-hello'), sub = W.querySelector('.wl-sub');
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const k = long ? 1 : 0.62;            // velocidad: más corta al iniciar sesión
+    const T = ms => ms * k;
+    const ease = 'cubic-bezier(.2,.8,.2,1)', easeIn = 'cubic-bezier(.6,0,.8,.2)';
+    const vw = innerWidth, vh = innerHeight, cw = Math.min(170, vw * .24);
+    cards.forEach(el => { el.style.width = cw + 'px'; });
+    const fan = i => { const d = i - mid; return { x: d * cw * .52, y: Math.abs(d) * Math.abs(d) * 9 - 20, r: d * 9 }; };
+    if (reduce){ setTimeout(() => { W.classList.add('out'); setTimeout(resolve, 400); }, 1200); return; }
+    // 1. los pósters vuelan desde afuera y forman un abanico
+    cards.forEach((el, i) => {
+      const f = fan(i), ang = Math.random() * Math.PI * 2, dist = Math.max(vw, vh) * .8;
+      el.animate([
+        { transform: `translate(${Math.cos(ang)*dist}px,${Math.sin(ang)*dist}px) rotate(${(Math.random()-.5)*120}deg) scale(.7)`, opacity: 0 },
+        { opacity: 1, offset: .35 },
+        { transform: `translate(${f.x}px,${f.y}px) rotate(${f.r}deg) scale(1)`, opacity: 1 }
+      ], { duration: T(950), delay: T(80 * Math.abs(i - mid) + 60 * i * .3), easing: ease, fill: 'forwards' });
+    });
+    // 2. el abanico respira y se abre un poco más
+    const t2 = T(1250);
+    cards.forEach((el, i) => { const f = fan(i); el.animate([
+      { transform: `translate(${f.x}px,${f.y}px) rotate(${f.r}deg) scale(1)` },
+      { transform: `translate(${f.x*1.18}px,${f.y*1.1 - 8}px) rotate(${f.r*1.2}deg) scale(1.03)` }
+    ], { duration: T(700), delay: t2, easing: 'ease-in-out', fill: 'forwards' }); });
+    // 3. se juntan en una pila, giran y desaparecen dentro del logo
+    const t3 = t2 + T(700);
+    cards.forEach((el, i) => { const f = fan(i); el.animate([
+      { transform: `translate(${f.x*1.18}px,${f.y*1.1 - 8}px) rotate(${f.r*1.2}deg) scale(1.03)`, opacity: 1, filter: 'blur(0px)' },
+      { transform: `translate(0px,-10px) rotate(${(i-mid)*2}deg) scale(.9)`, opacity: 1, offset: .55 },
+      { transform: `translate(0px,-10px) rotate(${(i-mid)*2 + 180}deg) scale(.15)`, opacity: 0, filter: 'blur(6px)' }
+    ], { duration: T(800), delay: t3 + i * T(25), easing: easeIn, fill: 'forwards' }); });
+    // 4. aparece el logo con un destello
+    const t4 = t3 + T(620);
+    logo.animate([{ opacity: 0, transform: 'scale(.55)', filter: 'blur(14px)' }, { opacity: 1, transform: 'scale(1.06)', filter: 'blur(0)', offset: .7 }, { opacity: 1, transform: 'scale(1)', filter: 'blur(0)' }], { duration: T(800), delay: t4, easing: ease, fill: 'forwards' });
+    shine.animate([{ transform: 'translateX(-120%) skewX(-20deg)', opacity: 0 }, { opacity: .9, offset: .3 }, { transform: 'translateX(220%) skewX(-20deg)', opacity: 0 }], { duration: T(900), delay: t4 + T(350), easing: 'ease-in-out', fill: 'forwards' });
+    // 5. el saludo letra por letra
+    const t5 = t4 + T(520);
+    [...hi.children].forEach((sp, i) => sp.animate([{ opacity: 0, transform: 'translateY(.7em) rotate(8deg)', filter: 'blur(6px)' }, { opacity: 1, transform: 'none', filter: 'blur(0)' }], { duration: T(560), delay: t5 + i * T(38), easing: ease, fill: 'forwards' }));
+    sub.animate([{ opacity: 0, transform: 'translateY(10px)', letterSpacing: '.3em' }, { opacity: 1, transform: 'none', letterSpacing: '.14em' }], { duration: T(800), delay: t5 + T(420), easing: ease, fill: 'forwards' });
+    // 6. zoom hacia adentro y se revela el sitio
+    const t6 = t5 + T(1500);
+    stage.animate([{ transform: 'scale(1)', opacity: 1, filter: 'blur(0)' }, { transform: 'scale(1.35)', opacity: 0, filter: 'blur(8px)' }], { duration: 650, delay: t6, easing: easeIn, fill: 'forwards' });
+    W.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: t6 + 250, easing: 'ease', fill: 'forwards' }).onfinish = () => resolve();
   });
 }
 function openAuth(opts = {}){
