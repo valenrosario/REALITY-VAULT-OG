@@ -595,7 +595,7 @@ function catalogList(){
 }
 function catalogGridHtml(){
   const list = catalogList();
-  return list.length ? `<div class="admin-grid">${list.map(t=>`<div class="admin-tile">
+  return list.length ? `<div class="admin-grid">${list.map((t,i)=>`<div class="admin-tile" style="--i:${Math.min(i,14)}">
         <button class="admin-poster" data-edit="${esc(t.id)}" aria-label="Editar ${esc(t.title||'Sin título')}"><div class="poster" ${t.poster?`data-src="${esc(t.poster)}"`:''}>${genBlock(t)}</div>
           <span class="admin-badges">${t.status==='borrador'?'<span class="pill draft">Borrador</span>':''}${t.featured?'<span class="pill feat">Destacado</span>':''}${isSoon(t)?'<span class="pill draft">Próximamente</span>':''}</span></button>
         <strong class="admin-name">${esc(t.title||'Sin título')}</strong>
@@ -1135,11 +1135,16 @@ async function applyImage(path, ref){
 }
 function setPath(obj, path, val){ const p = path.split('.'); let o=obj; for (let i=0;i<p.length-1;i++) o = o[p[i]]; o[p[p.length-1]] = val; }
 function markDirty(){ S.dirty = true; const s = document.getElementById('saveStatus'); if (s) s.textContent = 'Cambios sin guardar'; }
-function rerenderPanel(){
+function animatePanel(panel){
+  panel = panel || document.getElementById('panel'); if (!panel) return;
+  panel.classList.remove('enter'); void panel.offsetWidth; panel.classList.add('enter');
+}
+function rerenderPanel(anim){
   const panel = document.getElementById('panel'); if (!panel) return render();
   const y = window.scrollY;
   panel.innerHTML = S.adminTab==='catalogo' ? (S.editing ? renderEditor() : renderCatalog()) : S.adminTab==='banners' ? renderBanners() : S.adminTab==='sitio' ? renderSite() : S.adminTab==='filas' ? renderFrowsAdmin() : renderTaxonomy();
   hydrate(panel); window.scrollTo(0,y);
+  if (anim === true) animatePanel(panel);
 }
 function inlineConfirm(holder, label, onYes){
   if (!holder) return;
@@ -1243,15 +1248,15 @@ app.addEventListener('click', async e => {
   if (!S.owner) return;
   if (d.backupDl !== undefined){ downloadBackup(); return; }
   if (d.backupUp !== undefined){ importBackup(); return; }
-  if (d.tab){ if (S.dirty && S.editing){ toast('Guardá o cancelá los cambios primero', true); return; } S.adminTab = d.tab; S.editing=null; render(); return; }
-  if (d.catfilter){ S.catalogFilter = d.catfilter; document.querySelectorAll('[data-catfilter]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.catfilter===d.catfilter))); syncPillSegs(); const g=document.getElementById('catGrid'); if (g){ g.innerHTML = catalogGridHtml(); hydrate(g); } return; }
-  if (d.etab){ S.editorTab = d.etab; rerenderPanel(); return; }
+  if (d.tab){ if (S.dirty && S.editing){ toast('Guardá o cancelá los cambios primero', true); return; } S.adminTab = d.tab; S.editing=null; render(); animatePanel(); return; }
+  if (d.catfilter){ S.catalogFilter = d.catfilter; document.querySelectorAll('[data-catfilter]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.catfilter===d.catfilter))); syncPillSegs(); const g=document.getElementById('catGrid'); if (g){ g.innerHTML = catalogGridHtml(); hydrate(g); g.classList.remove('grid-in'); void g.offsetWidth; g.classList.add('grid-in'); } return; }
+  if (d.etab){ S.editorTab = d.etab; rerenderPanel(true); return; }
   if (d.nuevoOpen !== undefined){ S.catalogPicker = true; rerenderPanel(); return; }
   if (d.pickerClose !== undefined){ S.catalogPicker = false; rerenderPanel(); return; }
-  if (d.new){ S.tmdb = { open:true }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.dirty=false; S.editorTab='info'; rerenderPanel(); window.scrollTo(0,0); return; }
-  if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.dirty=false; S.editorTab='info'; rerenderPanel(); window.scrollTo(0,0); return; }
+  if (d.new){ S.tmdb = { open:true }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.dirty=false; S.editorTab='info'; rerenderPanel(true); window.scrollTo(0,0); return; }
+  if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.dirty=false; S.editorTab='info'; rerenderPanel(true); window.scrollTo(0,0); return; }
   if (d.del !== undefined && d.del){ inlineConfirm(t.closest('[data-row]'), '¿Eliminar?', () => deleteTitle(d.del)); return; }
-  if (d.back !== undefined){ S.editing=null; S.dirty=false; rerenderPanel(); return; }
+  if (d.back !== undefined){ S.editing=null; S.dirty=false; rerenderPanel(true); return; }
   if (d.save !== undefined){ saveTitle(); return; }
   const E = S.editing;
   if (d.tmdbOpen !== undefined){ S.tmdb = { ...(S.tmdb||{}), open:true, editKey:false }; rerenderPanel(); document.getElementById(tmdbKey()?'tmdb-q':'tmdb-key')?.focus(); return; }

@@ -829,6 +829,34 @@ body.in-admin .top{display:none}
 .cat-choice .cc-sub{position:relative;z-index:2;font-size:12px;color:#eee;display:block;margin-top:2px}
 .cat-picker-close{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;border:0;background:#f0f0f0;color:#17161a;cursor:pointer;font-size:16px;z-index:2}
 @media (max-width:860px){.cat-search{display:none}}
+
+/* animaciones del panel */
+@keyframes admUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes admFade{from{opacity:0}to{opacity:1}}
+@keyframes admPop{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes admSlide{from{transform:translateY(100%)}to{transform:none}}
+.admin-light .adm-top{animation:admFade .4s ease both}
+.panel.enter .panel-head,.panel.enter .cat-tools,.panel.enter .cat-stats,.panel.enter .editor-tabs{animation:admUp .45s cubic-bezier(.2,.7,.2,1) both}
+.panel.enter .cat-stats{animation-delay:.06s}
+.panel.enter .editor-tabs{animation-delay:.05s}
+.panel.enter .editor [data-epanel]:not([hidden]) .fs{animation:admUp .5s cubic-bezier(.2,.7,.2,1) both}
+.panel.enter .editor [data-epanel]:not([hidden]) .fs:nth-child(1){animation-delay:.08s}
+.panel.enter .editor [data-epanel]:not([hidden]) .fs:nth-child(2){animation-delay:.16s}
+.panel.enter .editor [data-epanel]:not([hidden]) .fs:nth-child(3){animation-delay:.24s}
+.panel.enter .editor [data-epanel]:not([hidden]) .fs:nth-child(n+4){animation-delay:.32s}
+.panel.enter .savebar{animation:admSlide .5s cubic-bezier(.2,.7,.2,1) .2s both}
+.panel.enter .admin-tile{animation:admUp .5s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--i,0)*40ms + .1s)}
+.grid-in .admin-tile{animation:admUp .45s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--i,0)*30ms)}
+.admin-tile .admin-poster{transition:transform .25s cubic-bezier(.2,.7,.2,1),box-shadow .25s}
+.admin-tile:hover .admin-poster{transform:translateY(-4px)}
+.admin-tile:hover .admin-poster .poster{box-shadow:0 14px 30px rgba(0,0,0,.2)}
+.cat-picker-scrim{animation:admFade .25s ease both}
+.cat-picker-box{animation:admPop .4s cubic-bezier(.2,.8,.2,1) both}
+.cat-choice{animation:admPop .45s cubic-bezier(.2,.8,.2,1) both}
+.cat-choice:nth-child(1){animation-delay:.1s}.cat-choice:nth-child(2){animation-delay:.18s}
+.cat-choice:hover{transform:translateY(-4px) scale(1.02)}
+.btn-new,.adm-nav button,.adm-ghost{transition:transform .15s,background .2s,color .2s,border-color .2s}
+.btn-new:active,.adm-ghost:active{transform:scale(.97)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
 </head>
