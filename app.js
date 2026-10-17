@@ -1800,6 +1800,7 @@ const LANDING_LOGO = 'https://kfyxwoezrzboikbvpdtv.supabase.co/storage/v1/object
 
 /* ---------- landing para visitantes ---------- */
 const isLanding = () => S.route==='home' && !S.session && !S.q.trim() && !S.noDb && !!S.sb && S.authReady && S.loaded.t && published().length > 0;
+const landIn = k => (S.landSeen && S.landSeen.has(k)) ? ' in' : '';
 function renderLanding(){
   const pubs = published();
   const withPoster = pubs.filter(t => t.poster);
@@ -1827,24 +1828,41 @@ function renderLanding(){
       <div class="ld-c"><img class="ld-logo" src="${LANDING_LOGO}" alt="REALITY VAULT"><h1>Todo el universo de la reality TV, en un solo lugar.</h1><p>Series, películas y especiales. Mirá cuando quieras, donde quieras.</p>
         <div class="ld-cta"><button class="btn btn-primary ld-btn" data-auth="signup">Crear cuenta</button><button class="btn btn-line ld-btn" data-auth="login">Iniciar sesión</button></div></div>
       <div class="ld-hint">DESLIZÁ ↓</div></section>
-    <section class="ld-about ld-rv"><div class="ld-k">¿QUÉ ES REALITY VAULT?</div><h2>El archivo de la reality TV, ahora para mirar.</h2>
+    <section class="ld-about ld-rv${landIn('about')}" data-rv="about"><div class="ld-k">¿QUÉ ES REALITY VAULT?</div><h2>El archivo de la reality TV, ahora para mirar.</h2>
       <p>Un lugar propio para ver los realities que marcaron una época y los que están por venir: series completas, películas, documentales y especiales, todo junto y en español.</p>
-      <div class="ld-stats"><div><b>${round(nS)}</b><span>series</span></div><div><b>${round(nP)}</b><span>películas</span></div>${nE?`<div><b>${round(nE)}</b><span>episodios</span></div>`:''}</div></section>
-    ${rows ? `<section class="ld-rows ld-rv">${rows}</section>` : ''}
-    <section class="ld-faq ld-rv"><h2>Preguntas frecuentes</h2>${faq.map(([q,a])=>`<details><summary>${q}</summary><p>${a}</p></details>`).join('')}</section>
-    <section class="ld-end ld-rv">${bgs.map((t,i)=>`<div class="ld-endbg${i===0?' on':''}" data-src="${esc(t.backdrop||t.bannerImage)}"></div>`).join('')}<div class="ld-endv"></div>
+      <div class="ld-stats"><div><b data-to="${round(nS)}">${round(nS)}</b><span>series</span></div><div><b data-to="${round(nP)}">${round(nP)}</b><span>películas</span></div>${nE?`<div><b data-to="${round(nE)}">${round(nE)}</b><span>episodios</span></div>`:''}</div></section>
+    ${rows ? `<section class="ld-rows ld-rv${landIn('rows')}" data-rv="rows">${rows}</section>` : ''}
+    <section class="ld-faq ld-rv${landIn('faq')}" data-rv="faq"><h2>Preguntas frecuentes</h2>${faq.map(([q,a])=>`<details><summary>${q}</summary><p>${a}</p></details>`).join('')}</section>
+    <section class="ld-end ld-rv${landIn('end')}" data-rv="end">${bgs.map((t,i)=>`<div class="ld-endbg${i===0?' on':''}" data-src="${esc(t.backdrop||t.bannerImage)}"></div>`).join('')}<div class="ld-endv"></div>
       <div class="ld-endc"><h2>Empezá en un minuto.</h2><p>Gratis. Entrás y ya está.</p><button class="btn btn-primary ld-btn" data-auth="signup">Crear cuenta</button></div></section>
     <footer class="ld-foot"><img src="${LANDING_LOGO}" alt="REALITY VAULT"><span>© REALITY VAULT</span></footer>
   </div>`;
 }
+function countUp(root){
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  root.querySelectorAll('b[data-to]').forEach((b, k) => {
+    const to = b.dataset.to, num = parseInt(to, 10), plus = to.endsWith('+') ? '+' : ''; if (!num) return;
+    const t0 = performance.now() + k * 120, D = 1300;
+    const step = now => { const p = Math.min(1, Math.max(0, (now - t0) / D)); const e = 1 - Math.pow(1 - p, 4); b.textContent = Math.round(num * e) + (p === 1 ? plus : ''); if (p < 1) requestAnimationFrame(step); };
+    b.textContent = '0'; requestAnimationFrame(step);
+  });
+}
+function landParallax(e){
+  const w = document.querySelector('.lw-wall'); if (!w || window.scrollY > innerHeight) return;
+  const x = (e.clientX / innerWidth - .5), y = (e.clientY / innerHeight - .5);
+  w.style.translate = `${x * -26}px ${y * -18}px`;
+  const c = document.querySelector('.ld-c'); if (c) c.style.translate = `${x * 8}px ${y * 6}px`;
+}
+if (matchMedia('(hover:hover) and (pointer:fine)').matches) document.addEventListener('pointermove', e => { if (document.body.classList.contains('in-landing')) requestAnimationFrame(() => landParallax(e)); }, { passive:true });
 function startLanding(){
   clearInterval(S.landTimer); S.landTimer = null;
   const root = document.querySelector('.landing'); if (!root) return;
   const bgs = [...root.querySelectorAll('.ld-endbg')];
   if (bgs.length > 1){ let i = 0; S.landTimer = setInterval(() => { if (!document.body.contains(bgs[0])){ clearInterval(S.landTimer); return; } bgs[i].classList.remove('on'); i = (i+1) % bgs.length; bgs[i].classList.add('on'); }, 4500); }
   if ('IntersectionObserver' in window){
-    const io = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); } }), { threshold:.12 });
-    root.querySelectorAll('.ld-rv').forEach(el => io.observe(el));
+    S.landSeen ||= new Set();
+    const io = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting){ en.target.classList.add('in'); S.landSeen.add(en.target.dataset.rv); io.unobserve(en.target); if (en.target.dataset.rv === 'about') countUp(en.target); } }), { threshold:.12 });
+    root.querySelectorAll('.ld-rv:not(.in)').forEach(el => io.observe(el));
   } else root.querySelectorAll('.ld-rv').forEach(el => el.classList.add('in'));
 }
 function openLandingTitle(id, seasonIdx){
@@ -1887,14 +1905,14 @@ function showWelcome(name, long){
       ${picks[0] ? `<div class="wl-amb" data-src="${esc(picks[0].poster)}"></div>` : ''}<div class="wl-grain"></div>
       <div class="wl-stage">
         <div class="wl-deck">${picks.map((t,i) => `<div class="wl-card" data-i="${i}"><span data-src="${esc(t.poster)}"></span></div>`).join('')}</div>
-        <img class="wl-logo" src="${LANDING_LOGO}" alt="REALITY VAULT"><i class="wl-shine"></i>
+        <div class="wl-lw"><img class="wl-logo" src="${LANDING_LOGO}" alt="REALITY VAULT"><i class="wl-shine" style="-webkit-mask-image:url('${LANDING_LOGO}');mask-image:url('${LANDING_LOGO}')"></i></div>
         <div class="wl-hello">${split(hello)}</div>
         <div class="wl-sub">${long ? 'Tus realities ya te están esperando' : 'Qué bueno tenerte de vuelta'}</div>
       </div></div>`;
     document.body.style.overflow = 'hidden';
     hydrate(overlayRoot);
     const W = overlayRoot.querySelector('.wl'), stage = W.querySelector('.wl-stage'), cards = [...W.querySelectorAll('.wl-card')];
-    const logo = W.querySelector('.wl-logo'), shine = W.querySelector('.wl-shine'), hi = W.querySelector('.wl-hello'), sub = W.querySelector('.wl-sub');
+    const logo = W.querySelector('.wl-lw'), shine = W.querySelector('.wl-shine'), hi = W.querySelector('.wl-hello'), sub = W.querySelector('.wl-sub');
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const k = long ? 1 : 0.62;            // velocidad: más corta al iniciar sesión
     const T = ms => ms * k;
@@ -1928,7 +1946,7 @@ function showWelcome(name, long){
     // 4. aparece el logo con un destello
     const t4 = t3 + T(620);
     logo.animate([{ opacity: 0, transform: 'scale(.55)', filter: 'blur(14px)' }, { opacity: 1, transform: 'scale(1.06)', filter: 'blur(0)', offset: .7 }, { opacity: 1, transform: 'scale(1)', filter: 'blur(0)' }], { duration: T(800), delay: t4, easing: ease, fill: 'forwards' });
-    shine.animate([{ transform: 'translateX(-120%) skewX(-20deg)', opacity: 0 }, { opacity: .9, offset: .3 }, { transform: 'translateX(220%) skewX(-20deg)', opacity: 0 }], { duration: T(900), delay: t4 + T(350), easing: 'ease-in-out', fill: 'forwards' });
+    shine.animate([{ backgroundPosition: '-150% 0', opacity: 1 }, { backgroundPosition: '250% 0', opacity: 1 }], { duration: T(900), delay: t4 + T(350), easing: 'ease-in-out', fill: 'forwards' });
     // 5. el saludo letra por letra
     const t5 = t4 + T(520);
     [...hi.children].forEach((sp, i) => sp.animate([{ opacity: 0, transform: 'translateY(.7em) rotate(8deg)', filter: 'blur(6px)' }, { opacity: 1, transform: 'none', filter: 'blur(0)' }], { duration: T(560), delay: t5 + i * T(38), easing: ease, fill: 'forwards' }));
@@ -2038,6 +2056,7 @@ overlayRoot.addEventListener('click', async e => {
     if (c.href){ c.done = true; c.doneMsg = 'Tu cuenta está creada.'; renderAuth(); } else { await showWelcome(c.doneName || userName(), true); closeDetail(); }
     return; }
 });
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && S.authCtx?.mode === 'signup' && S.authCtx.step === 2 && S.authCtx.avatar && overlayRoot.querySelector('[data-au-next]') && !e.target.closest('button')){ e.preventDefault(); overlayRoot.querySelector('[data-au-next]').click(); } });
 overlayRoot.addEventListener('submit', async e => {
   if (e.target.id !== 'authForm') return;
   e.preventDefault();
@@ -2397,7 +2416,9 @@ function render(){
   else if (S.route==='persona') html = renderPerson(S.personSlug);
   else if (S.route==='series' || S.route==='peliculas') html = renderBrowse(S.route);
   else html = renderHome();
-  app.innerHTML = html + (S.route==='admin' || isLanding() ? '' : renderFooter());
+  const landNow = isLanding();
+  if (landNow && app.firstElementChild && app.firstElementChild.classList.contains('landing')){ const tpl = document.createElement('div'); tpl.innerHTML = html; try { morph(app, tpl); } catch { app.innerHTML = html; } }
+  else app.innerHTML = html + (S.route==='admin' || landNow ? '' : renderFooter());
   hydrate(app); logoFallbacks(app); applyTints(app); startHero(); startLanding();
 }
 
