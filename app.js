@@ -1,7 +1,7 @@
 (() => {
 const S = { site:{}, db:null, user:null, owner:false, titles:[], banners:[], loaded:{t:false,b:false}, noDb:false,
   route:'home', q:'', genre:'', heroIdx:0, heroTimer:null,
-  adminTab:'catalogo', adminFilter:'', editing:null, dirty:false };
+  adminTab:'catalogo', adminFilter:'', catalogFilter:'todo', catalogPicker:false, editing:null, dirty:false };
 const app = document.getElementById('app');
 const overlayRoot = document.getElementById('overlayRoot');
 
@@ -38,6 +38,17 @@ function hydrate(root){
     el.onerror = showFb;
     mediaUrl(ref).then(u => { if (u) { el.src = u; el.hidden = false; } else showFb(); });
   });
+  if (root.querySelector('#catSeg')) syncCatSeg(true);
+}
+function syncCatSeg(first){
+  const seg = document.getElementById('catSeg'); if (!seg) return;
+  const pill = document.getElementById('catSegPill');
+  const btn = seg.querySelector(`[data-catfilter="${S.catalogFilter}"]`) || seg.querySelector('[data-catfilter]');
+  if (!btn) return;
+  if (first) pill.style.transition = 'none';
+  const sr = seg.getBoundingClientRect(), r = btn.getBoundingClientRect();
+  pill.style.width = r.width + 'px'; pill.style.transform = `translateX(${r.left - sr.left - 4}px)`;
+  if (first) requestAnimationFrame(() => requestAnimationFrame(() => { pill.style.transition = ''; }));
 }
 const webpOK = (() => { try { const c=document.createElement('canvas'); c.width=c.height=1; return c.toDataURL('image/webp').startsWith('data:image/webp'); } catch { return false; } })();
 async function processImage(file, maxW, maxH, alpha){
@@ -568,23 +579,48 @@ function renderAdmin(){
     <button data-tab="filas" aria-current="${tab==='filas'}">Filas destacadas <span>${(S.frows||[]).length}</span></button>
     <button data-tab="sitio" aria-current="${tab==='sitio'}">Sitio</button>
     <button data-logout style="margin-top:auto">Cerrar sesión</button>
-    </aside><section class="panel" id="panel">${tab==='catalogo' ? (S.editing ? renderEditor() : renderCatalog()) : tab==='banners' ? renderBanners() : tab==='sitio' ? renderSite() : tab==='filas' ? renderFrowsAdmin() : renderTaxonomy()}</section></div>`;
+    </aside><section class="panel${tab==='catalogo' && !S.editing?' panel-light':''}" id="panel">${tab==='catalogo' ? (S.editing ? renderEditor() : renderCatalog()) : tab==='banners' ? renderBanners() : tab==='sitio' ? renderSite() : tab==='filas' ? renderFrowsAdmin() : renderTaxonomy()}</section></div>`;
 }
-function renderCatalog(){
+function catalogList(){
   const f = S.adminFilter.toLowerCase();
-  const list = S.titles.filter(t => !f || (t.title||'').toLowerCase().includes(f) ).sort((a,b)=>(b.code||0)-(a.code||0));
-  const ser = S.titles.filter(t=>t.type==='serie'), mov = S.titles.filter(t=>t.type!=='serie');
-  return `<div class="panel-head"><h1>Catálogo</h1>
-      <button class="btn btn-line" data-new="pelicula">+ Película</button><button class="btn btn-primary" data-new="serie">+ Serie</button></div>
-    <div class="stats"><div><b>${ser.length}</b>series</div><div><b>${mov.length}</b>películas</div><div><b>${ser.reduce((n,t)=>n+epCount(t),0)}</b>episodios</div><div><b>${S.titles.filter(t=>t.status==='borrador').length}</b>borradores</div></div>
-    <div class="toolbar"><input class="input" id="adminFilter" style="max-width:320px" placeholder="Filtrar por título" value="${esc(S.adminFilter)}"></div>
-    ${list.length ? `<div class="admin-grid">${list.map(t=>`<div class="admin-tile">
+  return S.titles.filter(t => (!f || (t.title||'').toLowerCase().includes(f)) && (S.catalogFilter==='todo' || t.type===S.catalogFilter)).sort((a,b)=>(b.code||0)-(a.code||0));
+}
+function catalogGridHtml(){
+  const list = catalogList();
+  return list.length ? `<div class="admin-grid">${list.map(t=>`<div class="admin-tile">
         <button class="admin-poster" data-edit="${esc(t.id)}" aria-label="Editar ${esc(t.title||'Sin título')}"><div class="poster" ${t.poster?`data-src="${esc(t.poster)}"`:''}>${genBlock(t)}</div>
           <span class="admin-badges">${t.status==='borrador'?'<span class="pill draft">Borrador</span>':''}${t.featured?'<span class="pill feat">Destacado</span>':''}${isSoon(t)?'<span class="pill draft">Próximamente</span>':''}</span></button>
         <strong class="admin-name">${esc(t.title||'Sin título')}</strong>
         <span class="admin-sub">${esc([t.type==='serie'?'Serie':'Película', t.year, t.type==='serie' ? `${(t.seasons||[]).length} temp. · ${epCount(t)} ep.` : t.duration].filter(Boolean).join(' · '))}</span>
         <div class="actions admin-actions" data-row="${esc(t.id)}"><button class="btn btn-line btn-sm" data-edit="${esc(t.id)}">Editar</button><button class="btn btn-danger btn-sm" data-del="${esc(t.id)}">Eliminar</button></div>
-      </div>`).join('')}</div>` : `<p class="empty-note" style="padding:20px 0">${S.titles.length ? 'Ningún título coincide con el filtro.' : 'El catálogo está vacío. Empezá con “+ Serie” o “+ Película”.'}</p>`}`;
+      </div>`).join('')}</div>` : `<p class="empty-note" style="padding:20px 0">${S.titles.length ? 'Ningún título coincide con el filtro.' : 'El catálogo está vacío. Empezá con “Nuevo”.'}</p>`;
+}
+function catPicker(){
+  if (!S.catalogPicker) return '';
+  return `<div class="cat-picker"><div class="cat-picker-scrim" data-picker-close></div>
+    <div class="cat-picker-box"><button class="cat-picker-close" data-picker-close aria-label="Cerrar">✕</button>
+      <h2>¿Qué querés crear?</h2><p>Elegí el tipo de título para empezar a cargarlo</p>
+      <div class="cat-choices">
+        <button class="cat-choice" data-new="serie"><span class="cc-bg" style="background:radial-gradient(circle at 78% 16%,hsla(345,90%,94%,.95),transparent 46%),linear-gradient(160deg,hsl(315,82%,86%),hsl(353,70%,78%))"></span><span class="cc-scrim"></span><span><span class="cc-lbl">Serie</span><span class="cc-sub">Temporadas y episodios</span></span></button>
+        <button class="cat-choice" data-new="pelicula"><span class="cc-bg" style="background:radial-gradient(circle at 78% 16%,hsla(228,90%,94%,.95),transparent 46%),linear-gradient(160deg,hsl(198,82%,86%),hsl(236,70%,78%))"></span><span class="cc-scrim"></span><span><span class="cc-lbl">Película</span><span class="cc-sub">Título único</span></span></button>
+      </div></div></div>`;
+}
+function renderCatalog(){
+  const ser = S.titles.filter(t=>t.type==='serie'), mov = S.titles.filter(t=>t.type!=='serie');
+  return `<div class="cat-top">
+      <div class="cat-logo"><span class="cat-logo-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M4 10h16v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8Z"/><path d="M4 10l3-6h10l3 6"/></svg></span>REALITY <span>VAULT</span></div>
+      <div class="spacer"></div>
+      <div class="cat-seg" id="catSeg"><span class="cat-seg-pill" id="catSegPill"></span>
+        <button data-catfilter="todo" aria-pressed="${S.catalogFilter==='todo'}">Todo</button>
+        <button data-catfilter="serie" aria-pressed="${S.catalogFilter==='serie'}">Series</button>
+        <button data-catfilter="pelicula" aria-pressed="${S.catalogFilter==='pelicula'}">Películas</button>
+      </div>
+      <label class="cat-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="adminFilter" placeholder="Filtrar por título" value="${esc(S.adminFilter)}"></label>
+      <button class="btn-new" data-nuevo-open><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>
+    </div>
+    <div class="cat-stats"><div><b>${ser.length}</b>series</div><div><b>${mov.length}</b>películas</div><div><b>${ser.reduce((n,t)=>n+epCount(t),0)}</b>episodios</div><div><b>${S.titles.filter(t=>t.status==='borrador').length}</b>borradores</div></div>
+    <div id="catGrid">${catalogGridHtml()}</div>
+    ${catPicker()}`;
 }
 function slot(kind, path, value, cls, label){
   return `<div class="slot ${cls} ${value?'filled':''}" role="button" tabindex="0" data-slot="${kind}" data-path="${esc(path)}" ${value?`data-src="${esc(value)}"`:''} aria-label="${esc(label)}">
@@ -1084,6 +1120,7 @@ function markDirty(){ S.dirty = true; const s = document.getElementById('saveSta
 function rerenderPanel(){
   const panel = document.getElementById('panel'); if (!panel) return render();
   const y = window.scrollY;
+  panel.classList.toggle('panel-light', S.adminTab==='catalogo' && !S.editing);
   panel.innerHTML = S.adminTab==='catalogo' ? (S.editing ? renderEditor() : renderCatalog()) : S.adminTab==='banners' ? renderBanners() : S.adminTab==='sitio' ? renderSite() : S.adminTab==='filas' ? renderFrowsAdmin() : renderTaxonomy();
   hydrate(panel); window.scrollTo(0,y);
 }
@@ -1190,7 +1227,10 @@ app.addEventListener('click', async e => {
   if (d.backupDl !== undefined){ downloadBackup(); return; }
   if (d.backupUp !== undefined){ importBackup(); return; }
   if (d.tab){ if (S.dirty && S.editing){ toast('Guardá o cancelá los cambios primero', true); return; } S.adminTab = d.tab; S.editing=null; render(); return; }
-  if (d.new){ S.tmdb = { open:true }; S.editing = blankTitle(d.new); S.dirty=false; rerenderPanel(); window.scrollTo(0,0); return; }
+  if (d.catfilter){ S.catalogFilter = d.catfilter; document.querySelectorAll('[data-catfilter]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.catfilter===d.catfilter))); syncCatSeg(); const g=document.getElementById('catGrid'); if (g) g.innerHTML = catalogGridHtml(); return; }
+  if (d.nuevoOpen !== undefined){ S.catalogPicker = true; rerenderPanel(); return; }
+  if (d.pickerClose !== undefined){ S.catalogPicker = false; rerenderPanel(); return; }
+  if (d.new){ S.tmdb = { open:true }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.dirty=false; rerenderPanel(); window.scrollTo(0,0); return; }
   if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.dirty=false; rerenderPanel(); window.scrollTo(0,0); return; }
   if (d.del !== undefined && d.del){ inlineConfirm(t.closest('[data-row]'), '¿Eliminar?', () => deleteTitle(d.del)); return; }
   if (d.back !== undefined){ S.editing=null; S.dirty=false; rerenderPanel(); return; }

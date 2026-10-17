@@ -766,6 +766,46 @@ a.cast-card:hover strong{color:var(--accent-2)}
 .act-actions{display:flex;flex-direction:column;gap:10px;margin-top:26px}
 .act-ghost{width:100%;height:52px;justify-content:center;border-radius:99px;background:rgba(255,255,255,.12);color:#fff;border:1.5px solid rgba(255,255,255,.3)}
 @media (max-width:380px){.act-in{width:40px;height:54px;font-size:24px}}
+
+/* ---------- Catálogo: panel claro ---------- */
+.panel-light{--bg:#ececec;--surface:#ececec;--surface-2:#f4f4f4;--surface-3:#e4e4e4;--line:rgba(0,0,0,.08);--line-2:rgba(0,0,0,.1);
+  --fg:#17161a;--fg-2:#17161a;--muted:#8a8a8a;--faint:#9a9a9a;background:var(--bg);border-radius:20px;margin:0 clamp(14px,2vw,22px) 20px 0}
+@media (max-width:860px){.panel-light{margin:0 0 20px}}
+.cat-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.cat-logo{display:flex;align-items:center;gap:10px;flex-shrink:0;font-family:var(--display);font-weight:700;font-size:17px;color:#17161a}
+.cat-logo-ic{width:32px;height:32px;border-radius:9px;background:#ff5a1f;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cat-logo span{color:#ff5a1f}
+.cat-top .spacer{flex:1}
+.cat-seg{position:relative;display:flex;align-items:center;gap:2px;flex-shrink:0;background:#f0f0f0;border-radius:99px;padding:4px}
+.cat-seg-pill{position:absolute;top:4px;left:4px;height:calc(100% - 8px);background:#fff;border-radius:99px;box-shadow:0 2px 10px rgba(0,0,0,.09),0 0 0 1px rgba(0,0,0,.02);transition:transform .45s cubic-bezier(.65,0,.35,1),width .45s cubic-bezier(.65,0,.35,1)}
+.cat-seg button{position:relative;z-index:2;border:0;background:none;font-family:var(--display);font-weight:600;font-size:14px;color:#9a9a9a;padding:9px 18px;border-radius:99px;cursor:pointer;white-space:nowrap;transition:color .3s ease .05s}
+.cat-seg button[aria-pressed="true"]{color:#17161a}
+.cat-search{display:flex;align-items:center;gap:9px;background:#f4f4f4;border-radius:99px;padding:10px 18px;width:min(260px,100%);flex-shrink:0}
+.cat-search svg{flex-shrink:0;color:#9a9a9a}
+.cat-search input{all:unset;flex:1;min-width:0;color:#17161a;font-family:var(--display);font-size:14px}
+.cat-search input::placeholder{color:#a3a3a3}
+.btn-new{background:#ff5a1f;color:#fff;font-family:var(--display);font-weight:700;font-size:14px;border:0;border-radius:99px;padding:12px 20px;display:inline-flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:transform .15s,background .15s}
+.btn-new:hover{background:#ff6a35;transform:translateY(-1px)}
+.cat-stats{display:flex;gap:28px;flex-wrap:wrap;color:#8a8a8a;font-size:13px;margin-top:30px}
+.cat-stats b{display:block;font-family:var(--display);font-weight:700;font-size:28px;color:#17161a;line-height:1;font-variant-numeric:tabular-nums}
+.panel-light .admin-name{color:#17161a}
+.panel-light .admin-badges .pill{background:rgba(0,0,0,.72)}
+.panel-light .empty-note{color:#8a8a8a}
+
+.cat-picker{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:20px}
+.cat-picker-scrim{position:absolute;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px)}
+.cat-picker-box{position:relative;background:#fff;border-radius:22px;padding:40px;display:flex;flex-direction:column;gap:20px;align-items:center;max-width:94vw}
+.cat-picker-box h2{font-family:var(--display);font-weight:700;font-size:24px;margin:0;color:#17161a}
+.cat-picker-box p{color:#8a8a8a;font-size:14px;margin:-10px 0 2px}
+.cat-choices{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
+.cat-choice{width:240px;height:170px;border-radius:16px;position:relative;overflow:hidden;cursor:pointer;display:flex;align-items:flex-end;padding:16px;border:0;box-shadow:0 1px 3px rgba(0,0,0,.12);transition:transform .15s}
+.cat-choice:hover{transform:translateY(-2px)}
+.cat-choice .cc-bg{position:absolute;inset:0;opacity:.6}
+.cat-choice .cc-scrim{position:absolute;inset:0;background:linear-gradient(180deg,transparent 30%,rgba(0,0,0,.72))}
+.cat-choice .cc-lbl{position:relative;z-index:2;font-family:var(--display);font-weight:700;font-size:20px;color:#fff;text-align:left}
+.cat-choice .cc-sub{position:relative;z-index:2;font-size:12px;color:#eee;display:block;margin-top:2px}
+.cat-picker-close{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;border:0;background:#f0f0f0;color:#17161a;cursor:pointer;font-size:16px;z-index:2}
+@media (max-width:860px){.cat-search{display:none}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
 </head>
