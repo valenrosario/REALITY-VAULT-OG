@@ -1625,26 +1625,53 @@ function listBtn(id, cls){
 }
 const userName = () => (S.session?.user?.user_metadata?.name || S.session?.user?.email || '').trim();
 /* --- Seguir viendo --- */
-S.progress = new Map(); // title_id -> { last_season, last_episode, watched:[], updated_at }
+S.progress = new Map(); // title_id -> { last_season, last_episode, watched:[], positions:{}, updated_at }
 const epKey = (s, e) => `${s}-${e}`;
+let noPos = false; // true si todavía no se corrió supabase/07-posicion-de-reproduccion.sql
 async function loadProgress(){
   S.progress = new Map();
   if (!S.session || !S.sb) return;
-  const { data, error } = await S.sb.from('watch_progress').select('title_id,last_season,last_episode,watched,updated_at').order('updated_at', { ascending:false });
-  if (!error) (data||[]).forEach(r => S.progress.set(r.title_id, { ...r, watched: r.watched || [] }));
+  const q = cols => S.sb.from('watch_progress').select(cols).order('updated_at', { ascending:false });
+  let { data, error } = await q('title_id,last_season,last_episode,watched,positions,updated_at');
+  noPos = false;
+  if (error){ noPos = true; ({ data, error } = await q('title_id,last_season,last_episode,watched,updated_at')); }
+  if (!error) (data||[]).forEach(r => S.progress.set(r.title_id, { ...r, watched: r.watched || [], positions: r.positions || {} }));
+}
+/* --- minuto por el que vas --- */
+const posKey = (s, e) => (s == null || s === '') ? 'm' : epKey(s, e);
+const lsPos = (tid, k) => `rv.pos.${tid}.${k}`;
+const posDone = (t, d) => d > 0 && (d - t <= 45 || t / d >= 0.95);
+const posResumable = p => !!p && p.d > 0 && p.t >= 10 && !posDone(p.t, p.d);
+function getPos(tid, s, e){
+  const k = posKey(s, e);
+  const p = S.progress.get(tid)?.positions?.[k];
+  if (p) return p;
+  try { return JSON.parse(localStorage.getItem(lsPos(tid, k)) || 'null'); } catch { return null; }
+}
+async function savePos(tid, s, e, t, d){
+  if (!tid || !(d > 0) || !isFinite(d)) return;
+  const k = posKey(s, e), done = posDone(t, d), val = { t: Math.floor(t), d: Math.floor(d) };
+  try { done ? localStorage.removeItem(lsPos(tid, k)) : localStorage.setItem(lsPos(tid, k), JSON.stringify(val)); } catch {}
+  const row = S.progress.get(tid);
+  if (!S.session || !S.sb || noPos || !row) return;
+  const positions = { ...(row.positions || {}) };
+  done ? delete positions[k] : (positions[k] = val);
+  row.positions = positions;
+  const { error } = await S.sb.from('watch_progress').update({ positions }).eq('user_id', S.session.user.id).eq('title_id', tid);
+  if (error){ noPos = true; console.warn('No se pudo guardar el minuto (falta correr 07-posicion-de-reproduccion.sql)', error.message); }
 }
 function flatEpisodes(t){ const out = []; sortedSeasons(t).forEach(s => s.episodes.forEach(e => out.push({ s, e }))); return out; }
 // What "Ver" should play: next episode after the last one opened, else the first one with a link.
 function playTarget(t){
   if (isSoon(t)) return null;
-  if (t.type !== 'serie') return safeUrl(t.url) ? { url: t.url, label: S.progress.has(t.id) ? 'Volver a ver' : 'Ver', movie:true } : null;
+  if (t.type !== 'serie') return safeUrl(t.url) ? { url: t.url, label: posResumable(getPos(t.id, null, null)) ? 'Continuar' : S.progress.has(t.id) ? 'Volver a ver' : 'Ver', movie:true } : null;
   const eps = flatEpisodes(t).filter(x => safeUrl(x.e.url));
   if (!eps.length) return null;
   const p = S.progress.get(t.id);
   let i = 0, cont = false;
   if (p){
     const j = eps.findIndex(x => +x.s.number === +p.last_season && +x.e.number === +p.last_episode);
-    if (j >= 0){ i = j + 1 < eps.length ? j + 1 : j; cont = true; }
+    if (j >= 0){ i = posResumable(getPos(t.id, p.last_season, p.last_episode)) || j + 1 >= eps.length ? j : j + 1; cont = true; }
   }
   const { s, e } = eps[i];
   return { url: e.url, season: s.number, episode: e.number, ep: e, label: `${cont ? 'Continuar' : 'Ver'} T${s.number}:E${e.number}`, cont };
@@ -1658,8 +1685,10 @@ async function recordWatch(tid, season, episode){
   const watched = new Set(prev?.watched || []);
   if (season != null && season !== '') watched.add(epKey(season, episode));
   const row = { user_id: S.session.user.id, title_id: tid, last_season: season === '' || season == null ? null : +season, last_episode: episode === '' || episode == null ? null : +episode, watched: [...watched], updated_at: new Date().toISOString() };
-  S.progress.delete(tid); S.progress = new Map([[tid, row], ...S.progress]);
-  const { error } = await S.sb.from('watch_progress').upsert(row);
+  if (!noPos) row.positions = prev?.positions || {};
+  S.progress.delete(tid); S.progress = new Map([[tid, { positions: {}, ...row }], ...S.progress]);
+  let { error } = await S.sb.from('watch_progress').upsert(row);
+  if (error && !noPos){ noPos = true; delete row.positions; ({ error } = await S.sb.from('watch_progress').upsert(row)); }
   setTimeout(loadTop10, 800);
   if (error) console.warn('No se pudo guardar el progreso', error.message);
   setTimeout(() => { const y = window.scrollY; render(); window.scrollTo(0, y); }, 400);
@@ -1732,7 +1761,8 @@ function continueRow(){
       const target = playTarget(t);
       const total = t.type === 'serie' ? flatEpisodes(t).length : 1;
       const seen = t.type === 'serie' ? Math.min((p.watched||[]).length, total) : 1;
-      const pct = total ? Math.max(6, Math.round(seen / total * 100)) : 0;
+      const lp = getPos(t.id, t.type === 'serie' ? p.last_season : null, t.type === 'serie' ? p.last_episode : null);
+      const pct = posResumable(lp) ? Math.max(4, Math.round(lp.t / lp.d * 100)) : total ? Math.max(6, Math.round(seen / total * 100)) : 0;
 
       const sub = t.type === 'serie' ? (target ? (target.cont ? 'Sigue ' : '') + `T${target.season}:E${target.episode}${target.ep?.title ? ' · ' + target.ep.title : ''}` : `${seen} de ${total} episodios`) : 'Película';
       const inner = wideArt(t, `<span class="cw-play">${ICONS.play}</span><span class="cw-bar"><i style="width:${pct}%"></i></span>`);
@@ -2148,10 +2178,219 @@ function nextAfter(t, season, episode){
   const i = eps.findIndex(x => +x.s.number === +season && +x.e.number === +episode);
   return i >= 0 && i + 1 < eps.length ? eps[i + 1] : null;
 }
+/* ============ Reproductor propio de Reality Vault ============ */
+function rvPlayer(video){
+  const rvp = video.parentElement, root = video.closest('.player') || rvp;
+  video.controls = false; video.removeAttribute('controls');
+  const I = {
+    play:'<svg viewBox="0 0 24 24"><path d="M7 4.8v14.4a.7.7 0 0 0 1 .6l12-7.2a.7.7 0 0 0 0-1.2L8 4.2a.7.7 0 0 0-1 .6z" fill="currentColor" stroke="none"/></svg>',
+    pause:'<svg viewBox="0 0 24 24"><rect x="6" y="4.5" width="4.2" height="15" rx="1.3" fill="currentColor" stroke="none"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.3" fill="currentColor" stroke="none"/></svg>',
+    back:'<svg viewBox="0 0 24 24"><path d="M3.6 12a8.4 8.4 0 1 0 2.6-6.1"/><path d="M3.6 4.2v4.5h4.5"/><text x="12" y="15.4" text-anchor="middle" font-size="8.6" font-weight="700" fill="currentColor" stroke="none" font-family="system-ui,sans-serif">10</text></svg>',
+    fwd:'<svg viewBox="0 0 24 24"><path d="M20.4 12a8.4 8.4 0 1 1-2.6-6.1"/><path d="M20.4 4.2v4.5h-4.5"/><text x="12" y="15.4" text-anchor="middle" font-size="8.6" font-weight="700" fill="currentColor" stroke="none" font-family="system-ui,sans-serif">10</text></svg>',
+    vhigh:'<svg viewBox="0 0 24 24"><path d="M4 9.6h3.4L12 5.6v12.8l-4.6-4H4z"/><path d="M15.6 9.2a4.4 4.4 0 0 1 0 5.6M18.4 6.6a8.2 8.2 0 0 1 0 10.8"/></svg>',
+    vlow:'<svg viewBox="0 0 24 24"><path d="M4 9.6h3.4L12 5.6v12.8l-4.6-4H4z"/><path d="M15.6 9.2a4.4 4.4 0 0 1 0 5.6"/></svg>',
+    mute:'<svg viewBox="0 0 24 24"><path d="M4 9.6h3.4L12 5.6v12.8l-4.6-4H4z"/><path d="M16 9.6l5 4.8M21 9.6l-5 4.8"/></svg>',
+    cc:'<svg viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="3.2"/><path d="M10.3 10.3a2.3 2.3 0 1 0 0 3.4M17 10.3a2.3 2.3 0 1 0 0 3.4"/></svg>',
+    speed:'<svg viewBox="0 0 24 24"><path d="M4.6 17.6a8.4 8.4 0 1 1 14.8 0"/><path d="M12 13.4l3.9-4.4"/><circle cx="12" cy="13.6" r="1.1" fill="currentColor" stroke="none"/></svg>',
+    fs:'<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+    fsx:'<svg viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>',
+    big:'<svg viewBox="0 0 24 24"><path d="M7 4.8v14.4a.7.7 0 0 0 1 .6l12-7.2a.7.7 0 0 0 0-1.2L8 4.2a.7.7 0 0 0-1 .6z"/></svg>'
+  };
+  rvp.insertAdjacentHTML('beforeend', `
+    <div class="rvp-hit"></div>
+    <div class="rvp-subs" aria-hidden="true"></div>
+    <div class="rvp-spin"></div>
+    <button class="rvp-big" aria-label="Reproducir">${I.big}</button>
+    <div class="rvp-err" hidden>No se pudo cargar el video.</div>
+    <div class="rvp-menu" data-menu="cc" role="menu" hidden></div>
+    <div class="rvp-menu" data-menu="speed" role="menu" hidden></div>
+    <div class="rvp-ui">
+      <div class="rvp-prog" role="slider" aria-label="Progreso del video" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="rvp-track"><i class="buf"></i><i class="played"></i></div><b class="rvp-thumb"></b><span class="rvp-tip">0:00</span>
+      </div>
+      <div class="rvp-row">
+        <button class="rvp-b" data-a="play" aria-label="Reproducir"></button>
+        <button class="rvp-b" data-a="back" aria-label="Retroceder 10 segundos">${I.back}</button>
+        <button class="rvp-b" data-a="fwd" aria-label="Adelantar 10 segundos">${I.fwd}</button>
+        <div class="rvp-vol"><button class="rvp-b" data-a="mute" aria-label="Silenciar"></button><input type="range" min="0" max="1" step="0.02" value="1" aria-label="Volumen"></div>
+        <span class="rvp-time">0:00 / 0:00</span>
+        <span class="rvp-sp"></span>
+        <button class="rvp-b" data-a="cc" aria-label="Subtítulos" hidden>${I.cc}</button>
+        <button class="rvp-b" data-a="speed" aria-label="Velocidad">${I.speed}</button>
+        <button class="rvp-b" data-a="full" aria-label="Pantalla completa"></button>
+      </div>
+    </div>`);
+
+  const $ = s => rvp.querySelector(s);
+  const hit=$('.rvp-hit'), subs=$('.rvp-subs'), big=$('.rvp-big'), err=$('.rvp-err');
+  const prog=$('.rvp-prog'), played=$('.played'), buf=$('.buf'), thumb=$('.rvp-thumb'), tip=$('.rvp-tip'), time=$('.rvp-time');
+  const vol=$('.rvp-vol input'), bPlay=$('[data-a=play]'), bMute=$('[data-a=mute]'), bCC=$('[data-a=cc]'), bSpeed=$('[data-a=speed]'), bFull=$('[data-a=full]');
+  const mCC=$('[data-menu=cc]'), mSp=$('[data-menu=speed]');
+
+  const L=[]; const on=(t,e,f,o)=>{t.addEventListener(e,f,o);L.push([t,e,f,o])};
+  let dragging=false, dragRatio=0, raf=0, idleT=0, clickT=0, busyT=0, lastType='mouse', wasIdle=false;
+  const fmt=t=>{if(!isFinite(t)||t<0)t=0;t=Math.floor(t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')};
+  const dur=()=>isFinite(video.duration)?video.duration:0;
+
+  /* --- progreso --- */
+  const paint=r=>{const p=(Math.min(1,Math.max(0,r))*100).toFixed(3)+'%';played.style.width=p;thumb.style.left=p;prog.setAttribute('aria-valuenow',Math.round(r*100))};
+  const tick=()=>{const d=dur();const r=d?(dragging?dragRatio:video.currentTime/d):0;paint(r);time.textContent=fmt(dragging?dragRatio*d:video.currentTime)+' / '+fmt(d)};
+  const loop=()=>{tick();raf=requestAnimationFrame(loop)};
+  const buffered=()=>{const b=video.buffered,t=video.currentTime,d=dur();let end=0;for(let i=0;i<b.length;i++){if(b.start(i)<=t+.5&&b.end(i)>=t)end=Math.max(end,b.end(i))}buf.style.width=(d?Math.min(100,end/d*100):0)+'%'};
+  const rOf=e=>{const r=prog.getBoundingClientRect();return Math.min(1,Math.max(0,(e.clientX-r.left)/r.width))};
+  const moveTip=e=>{const r=rOf(e),w=prog.clientWidth;tip.textContent=fmt(r*dur());tip.style.left=Math.min(w-30,Math.max(30,r*w))+'px'};
+  on(prog,'pointerdown',e=>{if(e.button>0)return;dragging=true;prog.classList.add('drag');try{prog.setPointerCapture(e.pointerId)}catch(_){}dragRatio=rOf(e);tick();moveTip(e)});
+  on(prog,'pointermove',e=>{moveTip(e);if(dragging){dragRatio=rOf(e);tick()}});
+  on(prog,'pointerup',e=>{if(!dragging)return;dragging=false;prog.classList.remove('drag');if(dur())video.currentTime=rOf(e)*dur();tick()});
+  on(prog,'pointercancel',()=>{dragging=false;prog.classList.remove('drag')});
+  on(video,'progress',buffered); on(video,'timeupdate',buffered);
+  on(video,'loadedmetadata',()=>{tick();buffered()}); on(video,'durationchange',tick);
+
+  /* --- reproducir / pausar --- */
+  const toggle=()=>{if(video.ended)video.currentTime=0;video.paused?video.play().catch(()=>{}):video.pause()};
+  const seek=d=>{if(!dur())return;video.currentTime=Math.min(dur(),Math.max(0,video.currentTime+d));tick()};
+  const sync=()=>{const p=video.paused;rvp.classList.toggle('paused',p);bPlay.innerHTML=p?I.play:I.pause;bPlay.setAttribute('aria-label',p?'Reproducir':'Pausar');big.setAttribute('aria-label',p?'Reproducir':'Pausar');cancelAnimationFrame(raf);if(!p)loop();else tick()};
+  on(video,'play',sync);on(video,'pause',sync);on(video,'ended',sync);on(video,'playing',sync);
+
+  /* --- volumen --- */
+  const saveVol=()=>{try{localStorage.setItem('rv.vol',JSON.stringify({v:video.volume,m:video.muted}))}catch(_){}};
+  try{const d=JSON.parse(localStorage.getItem('rv.vol')||'null');if(d){video.volume=d.v;video.muted=!!d.m}}catch(_){}
+  const syncVol=()=>{const v=video.muted?0:video.volume;vol.value=v;vol.style.setProperty('--v',(v*100)+'%');bMute.innerHTML=v===0?I.mute:v<.5?I.vlow:I.vhigh;bMute.setAttribute('aria-label',v===0?'Activar sonido':'Silenciar')};
+  const setVol=d=>{video.muted=false;video.volume=Math.min(1,Math.max(0,(video.muted?0:video.volume)+d))};
+  const mute=()=>{video.muted=!video.muted;if(!video.muted&&video.volume===0)video.volume=.5};
+  on(video,'volumechange',()=>{syncVol();saveVol()});
+  on(vol,'input',()=>{video.volume=+vol.value;video.muted=+vol.value===0});
+
+  /* --- subtítulos (se dibujan acá, no con los del navegador) --- */
+  let tracks=[],cur=null,ccOn=true;
+  try{ccOn=localStorage.getItem('rv.cc')!=='0'}catch(_){}
+  const saveCC=()=>{try{localStorage.setItem('rv.cc',ccOn?'1':'0')}catch(_){}};
+  const renderCue=()=>{
+    subs.textContent='';
+    if(!cur||!ccOn||!cur.activeCues)return;
+    [...cur.activeCues].forEach(c=>{
+      const box=document.createElement('div');box.appendChild(c.getCueAsHTML());
+      box.innerHTML.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).forEach(l=>{const s=document.createElement('div');s.className='ln';s.innerHTML=l;subs.appendChild(s)});
+    });
+  };
+  const applyCC=()=>{
+    tracks.forEach(t=>{t.oncuechange=null;t.mode=(t===cur)?'hidden':'disabled'});
+    if(cur)cur.oncuechange=renderCue;
+    bCC.classList.toggle('on',ccOn&&!!cur);renderCue();
+  };
+  const loadTracks=()=>{
+    tracks=[...video.textTracks].filter(t=>t.kind==='subtitles'||t.kind==='captions');
+    bCC.hidden=tracks.length===0;
+    if(!cur||!tracks.includes(cur))cur=tracks[0]||null;
+    applyCC();
+  };
+  const toggleCC=()=>{ccOn=!ccOn;saveCC();applyCC()};
+  on(video.textTracks,'addtrack',loadTracks);
+  on(video.textTracks,'change',()=>{[...video.textTracks].forEach(t=>{if(t.mode==='showing')t.mode='hidden'})});
+  on(video,'loadedmetadata',loadTracks);
+
+  /* --- menús --- */
+  const menus=[mCC,mSp];
+  const menuOpen=()=>menus.some(m=>!m.hidden);
+  const closeMenus=()=>menus.forEach(m=>m.hidden=true);
+  const item=(m,label,checked,fn)=>{const b=document.createElement('button');b.type='button';b.setAttribute('role','menuitemradio');b.setAttribute('aria-checked',checked);b.textContent=label;b.addEventListener('click',()=>{fn();closeMenus()});m.appendChild(b)};
+  const openMenu=m=>{const was=!m.hidden;closeMenus();if(was)return;
+    m.textContent='';
+    if(m===mCC){const h=document.createElement('h4');h.textContent='Subtítulos';m.appendChild(h);
+      item(m,'Desactivados',!ccOn||!cur,()=>{ccOn=false;saveCC();applyCC()});
+      tracks.forEach(t=>item(m,t.label||t.language||'Subtítulos',ccOn&&t===cur,()=>{cur=t;ccOn=true;saveCC();applyCC()}));
+    }else{const h=document.createElement('h4');h.textContent='Velocidad';m.appendChild(h);
+      [.5,.75,1,1.25,1.5,2].forEach(r=>item(m,r===1?'Normal':r+'x',video.playbackRate===r,()=>{video.playbackRate=r;bSpeed.classList.toggle('on',r!==1)}));
+    }
+    m.hidden=false;
+  };
+  on(document,'pointerdown',e=>{if(menuOpen()&&!e.target.closest('.rvp-menu,[data-a=cc],[data-a=speed]'))closeMenus()});
+
+  /* --- pantalla completa --- */
+  const isFS=()=>document.fullscreenElement||document.webkitFullscreenElement;
+  const toggleFS=()=>{
+    if(isFS()){(document.exitFullscreen||document.webkitExitFullscreen).call(document)}
+    else if(root.requestFullscreen)root.requestFullscreen().catch(()=>{});
+    else if(root.webkitRequestFullscreen)root.webkitRequestFullscreen();
+    else if(video.webkitEnterFullscreen)video.webkitEnterFullscreen();
+  };
+  on(document,'fullscreenchange',()=>{bFull.innerHTML=isFS()?I.fsx:I.fs});
+  on(document,'webkitfullscreenchange',()=>{bFull.innerHTML=isFS()?I.fsx:I.fs});
+
+  /* --- controles se esconden solos --- */
+  const wake=()=>{root.classList.remove('idle');clearTimeout(idleT);idleT=setTimeout(maybeIdle,2800)};
+  const maybeIdle=()=>{if(video.paused||dragging||menuOpen()||rvp.querySelector('.rvp-ui:hover')){idleT=setTimeout(maybeIdle,1500);return}root.classList.add('idle')};
+  on(root,'pointermove',wake);on(root,'pointerdown',wake);on(root,'keydown',wake);
+
+  /* --- botones --- */
+  on(rvp,'click',e=>{
+    const b=e.target.closest('[data-a]');if(!b)return;
+    const a=b.dataset.a;
+    if(a==='play')toggle();else if(a==='back')seek(-10);else if(a==='fwd')seek(10);else if(a==='mute')mute();
+    else if(a==='full')toggleFS();else if(a==='speed')openMenu(mSp);
+    else if(a==='cc'){if(tracks.length===1)toggleCC();else openMenu(mCC)}
+    if(e.detail)b.blur();
+  });
+  on(big,'click',()=>{toggle();if(big.blur)big.blur()});
+
+  /* --- clic sobre el video --- */
+  on(hit,'pointerdown',e=>{lastType=e.pointerType;wasIdle=root.classList.contains('idle')});
+  on(hit,'click',()=>{
+    if(menuOpen()){closeMenus();return}
+    if(lastType==='touch'){
+      if(wasIdle)wake();
+      else if(!video.paused){root.classList.add('idle');clearTimeout(idleT)}
+      return;
+    }
+    clearTimeout(clickT);clickT=setTimeout(toggle,220);
+  });
+  on(hit,'dblclick',()=>{clearTimeout(clickT);toggleFS()});
+
+  /* --- teclado --- */
+  on(document,'keydown',e=>{
+    if(e.defaultPrevented||e.ctrlKey||e.metaKey||e.altKey)return;
+    if(e.target.closest&&e.target.closest('input[type=text],textarea,select'))return;
+    const k=e.key;
+    if(e.target===vol&&k.indexOf('Arrow')===0)return;
+    let used=true;
+    switch(k){
+      case ' ':case 'k':case 'K':toggle();break;
+      case 'ArrowLeft':case 'j':case 'J':seek(-10);break;
+      case 'ArrowRight':case 'l':case 'L':seek(10);break;
+      case 'ArrowUp':setVol(.05);break;
+      case 'ArrowDown':setVol(-.05);break;
+      case 'm':case 'M':mute();break;
+      case 'f':case 'F':toggleFS();break;
+      case 'c':case 'C':if(tracks.length)toggleCC();break;
+      default:used=false;
+    }
+    if(used){e.preventDefault();wake()}
+  });
+
+  /* --- cargando / error --- */
+  const busy=v=>{clearTimeout(busyT);if(v)busyT=setTimeout(()=>rvp.classList.add('busy'),350);else rvp.classList.remove('busy')};
+  on(video,'waiting',()=>busy(true));on(video,'seeking',()=>busy(true));
+  ['playing','canplay','seeked','pause','loadeddata'].forEach(ev=>on(video,ev,()=>busy(false)));
+  on(video,'error',()=>{busy(false);err.hidden=false});
+  on(video,'loadeddata',()=>{err.hidden=true});
+
+  syncVol();sync();bFull.innerHTML=I.fs;loadTracks();wake();
+  return {destroy(){L.forEach(([t,e,f,o])=>t.removeEventListener(e,f,o));cancelAnimationFrame(raf);clearTimeout(idleT);clearTimeout(clickT);clearTimeout(busyT);tracks.forEach(t=>{t.oncuechange=null});root.classList.remove('idle')}};
+}
 let playerRoot = null;
+let plSess = null;
+function endPlayerSession(){
+  if (!plSess) return;
+  const { v, tid, s, e, rv, timer, off, ready } = plSess; plSess = null;
+  clearInterval(timer); off();
+  if (ready() && tid && v.duration) savePos(tid, s, e, v.currentTime, v.duration);
+  rv?.destroy(); v._hls?.destroy();
+}
 function openPlayer({ url, tid, s: season, e: episode }){
   const t = tid ? byId(tid) : null;
   const emb = embedFor(url); if (!emb) return;
+  endPlayerSession();
+  const native = emb.type !== 'iframe';
   let sub = '', subsUrl = '';
   if (t && t.type === 'serie' && season !== '' && season != null){
     const ep = flatEpisodes(t).find(x => +x.s.number === +season && +x.e.number === +episode)?.e;
@@ -2162,8 +2401,8 @@ function openPlayer({ url, tid, s: season, e: episode }){
   if (!playerRoot){ playerRoot = document.createElement('div'); playerRoot.id = 'playerRoot'; document.body.appendChild(playerRoot); }
   const media = emb.type === 'iframe'
     ? `<iframe src="${esc(emb.src)}" title="${esc(t?.title || 'Video')}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
-    : `<video id="plVideo" controls autoplay playsinline ${subsUrl ? 'crossorigin="anonymous"' : ''} ${t?.backdrop ? `poster="${esc(t.backdrop)}"` : ''}>${subsUrl ? `<track kind="subtitles" src="${esc(subsUrl)}" srclang="es" label="Español" default>` : ''}</video>`;
-  playerRoot.innerHTML = `<div class="player" role="dialog" aria-modal="true" aria-label="Reproductor">
+    : `<div class="rvp"><video id="plVideo" autoplay playsinline preload="metadata" ${subsUrl ? 'crossorigin="anonymous"' : ''} ${t?.backdrop ? `poster="${esc(t.backdrop)}"` : ''}>${subsUrl ? `<track kind="subtitles" src="${esc(subsUrl)}" srclang="es" label="Español" default>` : ''}</video></div>`;
+  playerRoot.innerHTML = `<div class="player${native ? ' rv' : ''}" role="dialog" aria-modal="true" aria-label="Reproductor">
     <div class="pl-top">
       <button class="pl-btn" data-pl-close aria-label="Volver">←</button>
       <div class="pl-title"><strong>${esc(t?.title || '')}</strong>${sub ? `<span>${esc(sub)}</span>` : ''}</div>
@@ -2180,15 +2419,32 @@ function openPlayer({ url, tid, s: season, e: episode }){
   if (v){
     if (emb.type === 'video') v.src = emb.src;
     else if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = emb.src;
-    else loadHls().then(Hls => { const hls = new Hls(); hls.loadSource(emb.src); hls.attachMedia(v); v._hls = hls; }).catch(() => toast('No se pudo cargar el video', true));
+    else loadHls().then(Hls => { if (!v.isConnected) return; const hls = new Hls(); hls.loadSource(emb.src); hls.attachMedia(v); v._hls = hls; }).catch(() => toast('No se pudo cargar el video', true));
+    const rv = rvPlayer(v);
+    // volver al minuto donde lo dejaste, y guardar el minuto mientras mirás
+    const saved = tid ? getPos(tid, season, season === '' ? null : episode) : null;
+    let isReady = false;
+    v.addEventListener('loadedmetadata', () => {
+      if (posResumable(saved) && v.duration && saved.t < v.duration - 45) v.currentTime = saved.t;
+      isReady = true;
+    }, { once:true });
+    const save = () => { if (isReady && tid && v.duration) savePos(tid, season, episode, v.currentTime, v.duration); };
+    const hidden = () => { if (document.hidden) save(); };
+    v.addEventListener('pause', save); v.addEventListener('ended', save);
+    document.addEventListener('visibilitychange', hidden); window.addEventListener('pagehide', save);
+    plSess = { v, tid, s: season, e: episode, rv, ready: () => isReady,
+      timer: setInterval(() => { if (!v.paused) save(); }, 15000),
+      off: () => { v.removeEventListener('pause', save); v.removeEventListener('ended', save); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', save); } };
   }
 }
 function closePlayer(fromPop){
   if (!S.playerOpen) return;
   S.playerOpen = false;
-  const v = playerRoot?.querySelector('#plVideo'); if (v?._hls) v._hls.destroy();
+  const hadSess = !!plSess, tid = plSess?.tid;
+  endPlayerSession();
   if (playerRoot) playerRoot.innerHTML = '';
   document.body.style.overflow = '';
+  if (hadSess && tid && S.session){ const y = window.scrollY; render(); window.scrollTo(0, y); }
   if (!fromPop && history.state?.player){ S.ignorePop = true; history.back(); }
 }
 document.addEventListener('click', e => {
