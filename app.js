@@ -621,7 +621,8 @@ function catPicker(){
     const isS = E.type==='serie';
     if (Q.pick){ const p = Q.pick; return `<div class="cq-box cq-wide"><div class="cq-top"><span class="cq-chip">Importar de TMDB</span><button type="button" class="cq-x" data-picker-close aria-label="Cerrar">✕</button></div>
       <div class="cq-body cq-prev"><div class="cq-pimg">${p.poster?`<img src="${esc(p.poster)}" alt="">`:'<span>Sin póster</span>'}</div>
-      <div class="cq-pinfo"><h3>${esc(p.title)}</h3><div class="cq-meta">${esc([isS?'Serie':'Película', p.year, p.rating].filter(Boolean).join(' · '))}</div><p>${esc(p.overview||'Sin descripción en TMDB.')}</p></div></div>
+      <div class="cq-pinfo"><h3>${esc(p.title)}</h3><div class="cq-meta">${esc([isS?'Serie':'Película', p.year, p.rating].filter(Boolean).join(' · '))}</div><p>${esc(p.overview||'Sin descripción en TMDB.')}</p>
+        ${isS && (p.seasons||[]).length ? `<div class="cq-seas"><div class="cq-sh"><strong>Temporadas a importar</strong><span><button type="button" data-qt-seasall>Todas</button> · <button type="button" data-qt-seasnone>Ninguna</button></span></div><div class="cq-sc">${p.seasons.map(x=>`<button type="button" class="cq-s" data-qt-season="${x.season_number}" aria-pressed="${Q.sel.includes(x.season_number)}">${x.season_number===0?'Especiales':'T'+x.season_number}<small>${x.episode_count||0} ep.</small></button>`).join('')}</div></div>` : ''}</div></div>
       <div class="cq-foot"><button type="button" class="cq-link" data-qt-back>← Elegir otra</button><span class="spacer"></span><button type="button" class="btn btn-line" data-picker-close>Cancelar</button><button type="button" class="btn-new" data-qt-confirm="${p.id}">Importar y seguir</button></div></div>`; }
     return `<div class="cq-box cq-wide"><div class="cq-top"><span class="cq-chip">Importar de TMDB</span><button type="button" class="cq-x" data-picker-close aria-label="Cerrar">✕</button></div>
       <form class="cq-search" data-qt-form><input class="input" id="qt-q" value="${esc(Q.q||'')}" placeholder="Nombre de la ${isS?'serie':'película'}" autocomplete="off"><button class="btn-new" type="submit">Buscar</button></form>
@@ -1099,7 +1100,8 @@ async function tmdbQuickPick(id){
     let cert = '';
     if (isS){ const cr = det.content_ratings?.results||[]; cert = (cr.find(x=>x.iso_3166_1==='AR')||cr.find(x=>x.iso_3166_1==='MX')||cr.find(x=>x.iso_3166_1==='US'))?.rating; }
     else { const rd = det.release_dates?.results||[]; const pk = rd.find(x=>x.iso_3166_1==='AR')||rd.find(x=>x.iso_3166_1==='MX')||rd.find(x=>x.iso_3166_1==='US'); cert = pk?.release_dates?.find(x=>x.certification)?.certification; }
-    S.qt.pick = { id, title: det.name||det.title||'', year: (det.first_air_date||det.release_date||'').slice(0,4), rating: mapRating(cert), poster: tmdbImg(det.poster_path,'w500'), overview: await tmdbOverview(base, det) };
+    S.qt.pick = { id, title: det.name||det.title||'', year: (det.first_air_date||det.release_date||'').slice(0,4), rating: mapRating(cert), poster: tmdbImg(det.poster_path,'w500'), overview: await tmdbOverview(base, det), seasons: (det.seasons||[]).filter(x=>x.episode_count>0 || x.season_number>0) };
+    S.qt.sel = S.qt.pick.seasons.filter(x=>x.season_number>0).map(x=>x.season_number);
     S.qt.status = '';
   } catch(err){ S.qt.status = err.message; }
   rerenderPanel();
@@ -1145,7 +1147,7 @@ async function tmdbImport(id){
     const logo = pickLogo(imgs.logos); if (logo) E.logo = tmdbImg(logo, 'w500');
     // seasons
     if (isSerie){
-      const wanted = (det.seasons||[]).filter(x => S.tmdb.specials || x.season_number > 0);
+      const wanted = (det.seasons||[]).filter(x => S.tmdb.sel ? S.tmdb.sel.includes(x.season_number) : (S.tmdb.specials || x.season_number > 0));
       const old = E.seasons || [];
       const seasons = [];
       for (let i=0;i<wanted.length;i++){
@@ -1341,11 +1343,14 @@ app.addEventListener('click', async e => {
   if (d.etab){ S.editorTab = d.etab; rerenderPanel(true); return; }
   if (d.nuevoOpen !== undefined){ S.catalogPicker = true; rerenderPanel(); return; }
   if (d.pickerClose !== undefined){ S.qt = null; S.catalogPicker = false; if (S.quick){ S.quick = false; S.editing = null; S.dirty = false; } rerenderPanel(); return; }
-  if (d.quickTmdb !== undefined){ S.qt = { q: S.editing.title||'', results:[], status: tmdbKey()?'':'Falta la clave de TMDB (Cambiar clave en el editor).' }; rerenderPanel(); setTimeout(()=>{ const i=document.getElementById('qt-q'); i?.focus(); if (i && i.value.trim()) tmdbQuickSearch(i.value.trim()); },80); return; }
+  if (d.quickTmdb !== undefined){ S.qt = { q: S.editing.title||'', results:[], sel:[], status: tmdbKey()?'':'Falta la clave de TMDB (Cambiar clave en el editor).' }; rerenderPanel(); setTimeout(()=>{ const i=document.getElementById('qt-q'); i?.focus(); if (i && i.value.trim()) tmdbQuickSearch(i.value.trim()); },80); return; }
   if (d.fillDesc !== undefined){ fillMissingDescriptions(true); return; }
   if (d.qtBack !== undefined){ if (S.qt?.pick){ S.qt.pick = null; } else S.qt = null; rerenderPanel(); return; }
+  if (d.qtSeason !== undefined){ const n = +d.qtSeason, q = S.qt; q.sel = q.sel.includes(n) ? q.sel.filter(x=>x!==n) : [...q.sel, n]; rerenderPanel(); return; }
+  if (d.qtSeasall !== undefined){ S.qt.sel = S.qt.pick.seasons.map(x=>x.season_number); rerenderPanel(); return; }
+  if (d.qtSeasnone !== undefined){ S.qt.sel = []; rerenderPanel(); return; }
   if (d.qtPick !== undefined){ tmdbQuickPick(d.qtPick); return; }
-  if (d.qtConfirm !== undefined){ const id = d.qtConfirm; S.qt = null; S.quick = false; S.catalogPicker = false; S.tmdb = { open:true, specials:false }; S.editorTab = 'info'; rerenderPanel(true); tmdbImport(+id); return; }
+  if (d.qtConfirm !== undefined){ const id = d.qtConfirm; const sel = S.qt.sel.slice(); S.qt = null; S.quick = false; S.catalogPicker = false; S.tmdb = { open:true, specials:false, sel }; S.editorTab = 'info'; rerenderPanel(true); tmdbImport(+id); return; }
   if (d.new){ S.tmdb = { open:false }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.quick = true; S.dirty=false; S.editorTab='info'; rerenderPanel(); setTimeout(()=>document.getElementById('f-title')?.focus(), 120); return; }
   if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.dirty=false; S.editorTab='info'; rerenderPanel(true); window.scrollTo(0,0); return; }
   if (d.del !== undefined && d.del){ inlineConfirm(t.closest('[data-row]'), '¿Eliminar?', () => deleteTitle(d.del)); return; }
