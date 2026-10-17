@@ -1751,7 +1751,10 @@ function userHue(){
   return h % 360;
 }
 const STAR_SVG = '<svg class="ga-star" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.75 6.05 6.6.7-4.95 4.45 1.4 6.5L12 16.95 6.2 20.3l1.4-6.5L2.65 9.35l6.6-.7z"/></svg>';
-function glitterAvatar(size){ return `<span class="glitter-av ${size||''}" style="--h:${userHue()}" aria-hidden="true"><span class="ga-sparkle"></span>${STAR_SVG}</span>`; }
+const AVATARS = { a1:'/avatars/a1.jpg', a2:'/avatars/a2.jpg' };
+const userAvatar = () => AVATARS[S.session?.user?.user_metadata?.avatar] || '';
+function glitterAvatar(size){
+  const ph = userAvatar(); if (ph) return `<span class="glitter-av ${size||''} has-photo" style="background-image:url('${ph}')" aria-hidden="true"></span>`; return `<span class="glitter-av ${size||''}" style="--h:${userHue()}" aria-hidden="true"><span class="ga-sparkle"></span>${STAR_SVG}</span>`; }
 function renderAccount(){
   const box = document.getElementById('account'); if (!box) return;
   document.querySelectorAll('[data-r="mi-lista"]').forEach(a => a.hidden = !S.session);
@@ -1860,15 +1863,23 @@ function renderAuth(){
   if (c.done){
     body = `<h2>¡Listo${c.doneName ? ', ' + esc(c.doneName) : ''}!</h2><p class="au-sub">${esc(c.doneMsg)}</p>
       ${c.href ? `<a class="btn btn-primary au-btn" data-watch ${c.tid ? `data-tid="${esc(c.tid)}"` : ''} ${c.s !== '' ? `data-s="${esc(c.s)}" data-e="${esc(c.e)}"` : ''} href="${esc(c.href)}" target="_blank" rel="noopener">▶ Ver ahora</a>` : `<button class="btn btn-primary au-btn" data-close>Seguir</button>`}`;
-  } else if (signup && c.step === 3){
+  } else if (signup && c.step === 4){
     const pool = shuffled(published().filter(t => t.poster), 'au-fav').slice(0, 12);
-    body = `<div class="au-step">PASO 3 DE 3</div><div class="au-prog"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+    body = `<div class="au-step">PASO 4 DE 4</div><div class="au-prog"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
       <h2>Armemos tu inicio</h2><p class="au-sub">Elegí lo que te gusta y lo guardamos en Mi lista.</p>
       <div class="au-pk">${pool.map(t => `<button type="button" class="au-pp${c.favs.includes(t.id)?' s':''}" data-au-fav="${esc(t.id)}" aria-pressed="${c.favs.includes(t.id)}" aria-label="${esc(t.title)}"><span data-src="${esc(t.poster)}"></span><b>✓</b></button>`).join('')}</div>
       <button class="btn btn-primary au-btn" data-au-finish>${c.favs.length ? 'Guardar y entrar' : 'Entrar a REALITY VAULT'}</button>
       <div class="au-foot">${c.favs.length ? `${c.favs.length} elegido${c.favs.length>1?'s':''}` : 'Elegí los que quieras'} · <button class="au-link" data-au-finish data-skip>Saltar</button></div>`;
   } else if (signup && c.step === 2){
-    body = `<div class="au-step">PASO 2 DE 3</div><div class="au-prog"><i class="on"></i><i class="on"></i><i></i></div>
+    const opts = [['a1','Opción 1'],['a2','Opción 2']];
+    body = `<div class="au-step">PASO 2 DE 4</div><div class="au-prog"><i class="on"></i><i class="on"></i><i></i><i></i></div>
+      <h2>Elegí tu foto de perfil</h2><p class="au-sub">Así te vamos a ver en REALITY VAULT.</p>
+      <div class="au-avs${c.avatar?' has':''}">${opts.map(([k,l]) => `<button type="button" class="au-av${c.avatar===k?' s':''}" data-au-avatar="${k}" aria-pressed="${c.avatar===k}" aria-label="${l}"><span class="au-avimg" style="background-image:url('${AVATARS[k]}')"></span><span class="au-avring"></span><b>✓</b></button>`).join('')}</div>
+      <div class="au-avprev ${c.avatar?'on':''}"><span class="au-avmini" style="${c.avatar?`background-image:url('${AVATARS[c.avatar]}')`:''}"></span><span>${c.avatar ? 'Así te vas a ver' : 'Tocá una foto para elegirla'}</span></div>
+      <button class="btn btn-primary au-btn" data-au-next ${c.avatar?'':'disabled'}>Continuar</button>
+      <div class="au-foot"><button class="au-link" data-au-back>← Volver</button></div>`;
+  } else if (signup && c.step === 3){
+    body = `<div class="au-step">PASO 3 DE 4</div><div class="au-prog"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
       <h2>Casi listo</h2><p class="au-sub">Un último paso para tener tu cuenta.</p>
       <form id="authForm" class="au-form" novalidate>
         <label class="au-field"><span>¿Cómo te llamamos?</span><input class="au-in" id="au-name" autocomplete="name" required maxlength="40" value="${esc(c.name)}"></label>
@@ -1877,7 +1888,7 @@ function renderAuth(){
         <p class="auth-msg" id="authMsg">${esc(c.msg||'')}</p>
       </form><div class="au-foot"><button class="au-link" data-au-back>← Volver</button></div>`;
   } else if (signup){
-    body = `<div class="au-step">PASO 1 DE 3</div><div class="au-prog"><i class="on"></i><i></i><i></i></div>
+    body = `<div class="au-step">PASO 1 DE 4</div><div class="au-prog"><i class="on"></i><i></i><i></i><i></i></div>
       <h2>Creá tu cuenta gratis</h2><p class="au-sub">${esc(lead || 'Es gratis y tarda un minuto.')}</p>
       <form id="authForm" class="au-form" novalidate>
         <label class="au-field"><span>Email</span><input class="au-in" id="au-email" type="email" autocomplete="email" required value="${esc(c.email)}" placeholder="vos@email.com"></label>
@@ -1893,7 +1904,7 @@ function renderAuth(){
         <p class="auth-msg" id="authMsg">${esc(c.msg||'')}</p>
       </form><div class="au-foot">¿No tenés cuenta? <button class="au-link" data-auth-mode="signup">Creá una gratis</button></div>`;
   }
-  const wide = signup && c.step === 3 && !c.done;
+  const wide = signup && c.step === 4 && !c.done;
   const prev = overlayRoot.querySelector('.au-full');
   if (prev){
     const box = prev.querySelector('.au-box');
@@ -1916,7 +1927,13 @@ function renderAuth(){
 overlayRoot.addEventListener('click', async e => {
   const c = S.authCtx; if (!c || !overlayRoot.querySelector('.au-full')) return;
   const m = e.target.closest('[data-auth-mode]'); if (m){ c.mode = m.dataset.authMode; c.step = 1; c.msg=''; renderAuth(); return; }
-  if (e.target.closest('[data-au-back]')){ c.step = 1; c.msg=''; renderAuth(); return; }
+  if (e.target.closest('[data-au-back]')){ c.step = Math.max(1, c.step-1); c.msg=''; renderAuth(); return; }
+  if (e.target.closest('[data-au-next]')){ if (c.avatar){ c.step = 3; c.msg=''; renderAuth(); } return; }
+  const av = e.target.closest('[data-au-avatar]'); if (av){ c.avatar = av.dataset.auAvatar; const box = overlayRoot.querySelector('.au-avs'); box.classList.add('has'); box.querySelectorAll('.au-av').forEach(b => { const on = b===av; b.classList.toggle('s', on); b.setAttribute('aria-pressed', on); });
+    av.classList.remove('pop'); void av.offsetWidth; av.classList.add('pop');
+    for (let i=0;i<14;i++){ const p = document.createElement('i'); p.className='au-spark'; const a=(i/14)*Math.PI*2+Math.random()*.4, d=110+Math.random()*50; p.style.setProperty('--dx',Math.cos(a)*d+'px'); p.style.setProperty('--dy',Math.sin(a)*d+'px'); p.style.background=['#ff2e93','#ff9a5a','#fff','#ffd36b'][i%4]; av.appendChild(p); setTimeout(()=>p.remove(),700); }
+    const pv = overlayRoot.querySelector('.au-avprev'); pv.classList.add('on'); pv.querySelector('.au-avmini').style.backgroundImage = `url('${AVATARS[c.avatar]}')`; pv.querySelector('span:last-child').textContent = 'Así te vas a ver';
+    const nx = overlayRoot.querySelector('[data-au-next]'); if (nx) nx.disabled = false; return; }
   const f = e.target.closest('[data-au-fav]'); if (f){ const id = f.dataset.auFav; const adding = !c.favs.includes(id); c.favs = adding ? [...c.favs, id] : c.favs.filter(x=>x!==id); f.classList.toggle('s'); f.setAttribute('aria-pressed', adding);
     f.classList.remove('pop'); void f.offsetWidth; if (adding){ f.classList.add('pop'); for (let i=0;i<10;i++){ const p = document.createElement('i'); p.className='au-spark'; const a = (i/10)*Math.PI*2 + Math.random()*.5, d = 38 + Math.random()*34; p.style.setProperty('--dx', Math.cos(a)*d+'px'); p.style.setProperty('--dy', Math.sin(a)*d+'px'); p.style.background = ['#ff2e93','#ff9a5a','#fff','#ffd36b'][i%4]; f.appendChild(p); setTimeout(()=>p.remove(), 700); } }
     const fin = overlayRoot.querySelector('.au-btn[data-au-finish]'); if (fin) fin.textContent = c.favs.length ? 'Guardar y entrar' : 'Entrar a REALITY VAULT';
@@ -1944,12 +1961,12 @@ overlayRoot.addEventListener('submit', async e => {
       const name = document.getElementById('au-name').value.trim(); const password = document.getElementById('au-pass').value; c.name = name;
       if (!name){ msg.textContent = 'Decinos cómo te llamamos.'; btn.disabled = false; return; }
       if (password.length < 6){ msg.textContent = 'La contraseña necesita al menos 6 caracteres.'; btn.disabled = false; return; }
-      const { data, error } = await S.sb.auth.signUp({ email:c.email, password, options:{ data:{ name } } });
+      const { data, error } = await S.sb.auth.signUp({ email:c.email, password, options:{ data:{ name, avatar:c.avatar||'' } } });
       if (error) throw error;
       if (!data.session){ c.done = true; c.doneName = name; c.doneMsg = 'Te mandamos un email para confirmar tu cuenta. Abrilo, tocá el enlace y después ingresá.'; c.href=''; renderAuth(); return; }
       c.doneName = name; await afterLogin();
       if (c.titleId && c.reason === 'list' && !S.myList.has(c.titleId)) await toggleList(c.titleId);
-      c.step = 3; renderAuth(); return;
+      c.step = 4; renderAuth(); return;
     }
     const email = document.getElementById('au-email').value.trim(), password = document.getElementById('au-pass').value; c.email = email;
     const { error } = await S.sb.auth.signInWithPassword({ email, password });

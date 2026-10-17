@@ -1046,6 +1046,25 @@ body.in-landing .mchips,body.in-landing .mobile-chips{display:none}
 .cq-s{display:inline-flex;align-items:baseline;gap:6px;border:1.5px solid var(--line-2);background:var(--surface);color:var(--fg);border-radius:99px;padding:7px 13px;font:700 13px var(--display);cursor:pointer;transition:all .2s}
 .cq-s small{font-weight:400;color:var(--muted);font-size:11px}
 .cq-s[aria-pressed="true"]{background:#ff5a1f;border-color:#ff5a1f;color:#fff}.cq-s[aria-pressed="true"] small{color:#ffe1d4}
+
+.glitter-av.has-photo{background-size:cover;background-position:center 18%}
+.glitter-av.has-photo::before,.glitter-av.has-photo::after{display:none}
+.au-avs{display:flex;gap:22px;justify-content:center;margin:6px 0 22px}
+.au-av{position:relative;width:min(210px,40%);aspect-ratio:1;border-radius:50%;border:0;background:none;padding:0;cursor:pointer;transition:transform .45s cubic-bezier(.2,1.2,.3,1),opacity .35s,filter .35s}
+.au-avimg{position:absolute;inset:0;border-radius:50%;background:center 18%/cover no-repeat;box-shadow:0 14px 40px #000a}
+.au-avring{position:absolute;inset:-7px;border-radius:50%;border:3px solid #ff2e93;opacity:0;transform:scale(.9);transition:opacity .3s,transform .4s cubic-bezier(.2,1.4,.4,1)}
+.au-av:hover{transform:translateY(-6px) scale(1.03)}
+.au-avs.has .au-av:not(.s){opacity:.45;filter:saturate(.6);transform:scale(.9)}
+.au-avs.has .au-av:not(.s):hover{opacity:.85;transform:scale(.94)}
+.au-av.s{transform:scale(1.08)}
+.au-av.s .au-avring{opacity:1;transform:scale(1);box-shadow:0 0 34px #ff2e9399,inset 0 0 20px #ff2e9344}
+.au-av b{position:absolute;right:6%;bottom:6%;width:34px;height:34px;border-radius:50%;background:#ff2e93;font-size:18px;line-height:34px;text-align:center;transform:scale(0);transition:transform .35s cubic-bezier(.3,1.7,.5,1);z-index:2}.au-av.s b{transform:scale(1)}
+.au-av.pop{animation:auPop .55s cubic-bezier(.3,1.5,.5,1)}
+.au-avprev{display:flex;align-items:center;justify-content:center;gap:12px;color:#a7a2ad;font-size:15px;margin-bottom:18px;transition:color .3s}
+.au-avprev.on{color:#fff}
+.au-avmini{width:38px;height:38px;border-radius:50%;background:#1b181e center 18%/cover no-repeat;border:2px solid #ffffff22;transition:border-color .3s,transform .4s cubic-bezier(.3,1.6,.5,1)}
+.au-avprev.on .au-avmini{border-color:#ff2e93;transform:scale(1.1)}
+.au-btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
 </style>
 </head>
 <body>
