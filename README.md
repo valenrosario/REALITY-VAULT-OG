@@ -63,6 +63,8 @@ Para ver un capítulo o una película, el sitio pide crear una cuenta gratis. Co
 
 En Supabase → **SQL Editor → New query**, pegá el contenido de `supabase/03-seguir-viendo.sql` y tocá **Run**. Desde ahí, cada usuario ve en el inicio la fila **Seguir viendo** con lo último que abrió, y el botón de cada serie pasa a decir **Continuar T1:E3**.
 
+**Reproductor propio y minuto guardado:** los links directos (mp4, webm, m3u8) usan un reproductor propio. Para que "Seguir viendo" recuerde el minuto exacto, pegá también `supabase/07-posicion-de-reproduccion.sql` en el SQL Editor y tocá **Run**. Sin ese paso todo funciona igual, solo que el minuto queda guardado en cada dispositivo y no en tu cuenta.
+
 ## Paso 8 · "Top 10 hoy"
 
 En Supabase → **SQL Editor → New query**, pegá el contenido de `supabase/04-top-10.sql` y tocá **Run**. Después hacé lo mismo con `supabase/05-top-10-visitas.sql`. En el inicio aparece la fila **Top 10 hoy** con los títulos cuya página abrieron más personas en las últimas 24 horas (con o sin cuenta). Se actualiza sola cada minuto.
