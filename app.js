@@ -735,6 +735,7 @@ function renderEditor(){
     </div>
     ${isSerie ? renderSeasonsEd(E) : `<div class="fs"><h3>Reproducción</h3><div class="fgrid">
       <label class="field span2"><span>Enlace para ver la película</span><input class="input" id="f-url" data-k="url" value="${esc(E.url)}" placeholder="https://…"><span class="hint">Se reproduce dentro del sitio. Funciona con YouTube, Vimeo, Google Drive, Dailymotion, OK.ru, Internet Archive, archivos .mp4 o .m3u8 y servicios como StreamHG: ahí copiá el <b>Embed code</b> completo y pegalo acá (el sitio se queda solo con el enlace).</span></label>
+      <label class="field span2"><span>Subtítulos en español (.vtt)</span><input class="input" id="f-subs" data-k="subs" value="${esc(E.subs)}" placeholder="https://…/pelicula.es.vtt"><span class="hint">Opcional. Enlace a un archivo .vtt. Solo se muestran con enlaces de archivo .mp4, .webm o .m3u8.</span></label>
     </div></div>`}
     <div class="fs"><h3>Video del banner principal</h3>
       <p class="hint" style="margin:0 0 12px">Cuando esta serie aparece en el banner del inicio, se ve la imagen unos segundos y después arranca este video sin sonido (con un botón para activarlo). Al terminar, pasa al siguiente banner. Tiene que ser un archivo de video: los enlaces de YouTube no sirven acá.</p>
@@ -816,6 +817,7 @@ function renderSeasonsEd(E){
               <label class="field"><span>Duración</span><input class="input" id="e-d-${si}-${ei}" data-ep="${si}.${ei}" data-f="duration" value="${esc(e.duration)}" placeholder="45 min"></label>
             </div>
             <label class="field"><span>Sinopsis</span><textarea class="textarea" style="min-height:64px" id="e-s-${si}-${ei}" data-ep="${si}.${ei}" data-f="description">${esc(e.description)}</textarea></label>
+            <label class="field"><span>Subtítulos en español (.vtt)</span><input class="input" id="e-v-${si}-${ei}" data-ep="${si}.${ei}" data-f="subs" value="${esc(e.subs)}" placeholder="Enlace al archivo .vtt (opcional)"></label>
             <div class="ep-ed-foot"><input class="input" id="e-u-${si}-${ei}" data-ep="${si}.${ei}" data-f="url" value="${esc(e.url)}" placeholder="Enlace o código de inserción (embed) del video" aria-label="Enlace del capítulo">
               <button class="iconbtn" data-ep-x="${si}.${ei}" aria-label="Quitar capítulo">✕</button></div>
           </div></div>`).join('')}
@@ -2150,16 +2152,17 @@ let playerRoot = null;
 function openPlayer({ url, tid, s: season, e: episode }){
   const t = tid ? byId(tid) : null;
   const emb = embedFor(url); if (!emb) return;
-  let sub = '';
+  let sub = '', subsUrl = '';
   if (t && t.type === 'serie' && season !== '' && season != null){
     const ep = flatEpisodes(t).find(x => +x.s.number === +season && +x.e.number === +episode)?.e;
     sub = `T${season}:E${episode}${ep?.title ? ' · ' + ep.title : ''}`;
-  }
+    subsUrl = safeUrl(ep?.subs);
+  } else if (t && t.type !== 'serie') subsUrl = safeUrl(t.subs);
   const nx = nextAfter(t, season, episode);
   if (!playerRoot){ playerRoot = document.createElement('div'); playerRoot.id = 'playerRoot'; document.body.appendChild(playerRoot); }
   const media = emb.type === 'iframe'
     ? `<iframe src="${esc(emb.src)}" title="${esc(t?.title || 'Video')}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
-    : `<video id="plVideo" controls autoplay playsinline ${t?.backdrop ? `poster="${esc(t.backdrop)}"` : ''}></video>`;
+    : `<video id="plVideo" controls autoplay playsinline ${subsUrl ? 'crossorigin="anonymous"' : ''} ${t?.backdrop ? `poster="${esc(t.backdrop)}"` : ''}>${subsUrl ? `<track kind="subtitles" src="${esc(subsUrl)}" srclang="es" label="Español" default>` : ''}</video>`;
   playerRoot.innerHTML = `<div class="player" role="dialog" aria-modal="true" aria-label="Reproductor">
     <div class="pl-top">
       <button class="pl-btn" data-pl-close aria-label="Volver">←</button>
