@@ -2066,7 +2066,7 @@ overlayRoot.addEventListener('submit', async e => {
     c.done = true; c.doneName = ''; c.doneMsg = 'Ya ingresaste.';
     await afterLogin();
     if (c.titleId && c.reason === 'list' && !S.myList.has(c.titleId)) await toggleList(c.titleId);
-    if (!c.href){ await showWelcome(userName(), false); closeDetail(); return; }
+    if (!c.href){ closeDetail(); return; }
     renderAuth();
   } catch(err){
     const m = String(err.message||'');
