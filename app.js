@@ -1780,6 +1780,7 @@ function renderLanding(){
   const mk = (arr, cls) => { const f = fill(arr, 8); return arr.length ? `<div class="lw-mq ${cls}"><div class="lw-trk">${f.map(card).join('')}${f.map(card).join('')}</div></div>` : ''; };
   const rows = mk(sh.slice(0, half), '') + mk(sh.slice(half).length ? sh.slice(half) : sh, 'r');
   const nS = pubs.filter(t=>t.type==='serie').length, nP = pubs.length - nS, nE = pubs.reduce((n,t)=>n+epCount(t),0);
+  const round = n => { if (n < 5) return String(n); const step = n < 50 ? 5 : n < 200 ? 10 : n < 1000 ? 50 : 100; return (Math.floor(n/step)*step) + '+'; };
   const faq = [
     ['¿Qué es REALITY VAULT?','Un sitio para ver realities, series, películas, documentales y especiales, todo reunido en un solo lugar y en español.'],
     ['¿Tiene costo?','No. Crear la cuenta es gratis y tarda un minuto.'],
@@ -1790,13 +1791,12 @@ function renderLanding(){
   const bgs = shuffled(cards,'land-end').slice(0,6);
   return `<div class="landing">
     <section class="ld-hero">${wall}<div class="ld-veil"></div>
-      <img class="ld-logo" src="${LANDING_LOGO}" alt="REALITY VAULT">
-      <div class="ld-c"><h1>Todo el universo de la reality TV, en un solo lugar.</h1><p>Series, películas y especiales. Mirá cuando quieras, donde quieras.</p>
+      <div class="ld-c"><img class="ld-logo" src="${LANDING_LOGO}" alt="REALITY VAULT"><h1>Todo el universo de la reality TV, en un solo lugar.</h1><p>Series, películas y especiales. Mirá cuando quieras, donde quieras.</p>
         <div class="ld-cta"><button class="btn btn-primary ld-btn" data-auth="signup">Crear cuenta</button><button class="btn btn-line ld-btn" data-auth="login">Iniciar sesión</button></div></div>
       <div class="ld-hint">DESLIZÁ ↓</div></section>
     <section class="ld-about ld-rv"><div class="ld-k">¿QUÉ ES REALITY VAULT?</div><h2>El archivo de la reality TV, ahora para mirar.</h2>
       <p>Un lugar propio para ver los realities que marcaron una época y los que están por venir: series completas, películas, documentales y especiales, todo junto y en español.</p>
-      <div class="ld-stats"><div><b>${nS}</b><span>serie${nS===1?'':'s'}</span></div><div><b>${nP}</b><span>película${nP===1?'':'s'}</span></div>${nE?`<div><b>${nE}</b><span>episodio${nE===1?'':'s'}</span></div>`:''}</div></section>
+      <div class="ld-stats"><div><b>${round(nS)}</b><span>series</span></div><div><b>${round(nP)}</b><span>películas</span></div>${nE?`<div><b>${round(nE)}</b><span>episodios</span></div>`:''}</div></section>
     ${rows ? `<section class="ld-rows ld-rv">${rows}</section>` : ''}
     <section class="ld-faq ld-rv"><h2>Preguntas frecuentes</h2>${faq.map(([q,a])=>`<details><summary>${q}</summary><p>${a}</p></details>`).join('')}</section>
     <section class="ld-end ld-rv">${bgs.map((t,i)=>`<div class="ld-endbg${i===0?' on':''}" data-src="${esc(t.backdrop||t.bannerImage)}"></div>`).join('')}<div class="ld-endv"></div>
@@ -1889,6 +1889,15 @@ function renderAuth(){
       </form><div class="au-foot">¿No tenés cuenta? <button class="au-link" data-auth-mode="signup">Creá una gratis</button></div>`;
   }
   const wide = signup && c.step === 3 && !c.done;
+  const prev = overlayRoot.querySelector('.au-full');
+  if (prev){
+    const box = prev.querySelector('.au-box');
+    box.className = 'au-box' + (wide ? ' wide' : '');
+    box.innerHTML = body; box.style.animation = 'none'; void box.offsetWidth; box.style.animation = '';
+    hydrate(box);
+    (box.querySelector('#au-name') || box.querySelector('#au-email') || box.querySelector('.au-btn'))?.focus();
+    return;
+  }
   overlayRoot.innerHTML = `<div class="au-full" role="dialog" aria-modal="true" aria-label="${signup?'Crear cuenta':'Ingresar'}">
     <div class="au-side" ${side ? `data-src="${esc(side.backdrop||side.bannerImage)}"` : ''}><div class="au-side-t">${side ? (side.logo ? `<img alt="${esc(side.title)}" data-img="${esc(side.logo)}" hidden><h3 class="logo-fallback" hidden>${esc(side.title)}</h3>` : `<h3>${esc(side.title)}</h3>`) : ''}<p>${esc(side && side.tagline ? side.tagline : 'Series, películas y especiales, todo en un solo lugar.')}</p></div></div>
     <img class="au-logo" src="${LANDING_LOGO}" alt="REALITY VAULT">
