@@ -698,6 +698,19 @@ a.cast-card:hover strong{color:var(--accent-2)}
   .card:hover,.t10:hover{position:relative;z-index:2}
 }
 .card:focus-visible,.t10:focus-visible{outline:none}
+
+/* TMDB dentro de la ventanita */
+.cq-wide{width:min(760px,94vw)}
+.cq-search{display:flex;gap:10px;padding:4px 28px 0}.cq-search .input{flex:1}
+.cq-status{padding:10px 28px 0;font-size:13px;color:var(--muted);min-height:26px}
+.cq-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:14px;padding:6px 28px 8px;max-height:46vh;overflow:auto}
+.cq-res{display:flex;flex-direction:column;gap:5px;text-align:left;background:none;border:0;cursor:pointer;color:var(--fg);transition:transform .2s}
+.cq-res:hover{transform:translateY(-4px)}
+.cq-rp{display:block;aspect-ratio:2/3;border-radius:12px;background:var(--surface-3) center/cover no-repeat;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.cq-res strong{font-size:12.5px;line-height:1.2}.cq-res small{color:var(--muted);font-size:12px}
+.cq-prev{display:grid;grid-template-columns:200px 1fr;gap:24px;padding:4px 28px 6px}
+.cq-pimg{aspect-ratio:2/3;border-radius:14px;overflow:hidden;background:var(--surface-3);box-shadow:0 10px 28px rgba(0,0,0,.25)}.cq-pimg img{width:100%;height:100%;object-fit:cover}
+.cq-pinfo h3{font-size:24px;line-height:1.15}.cq-meta{color:var(--muted);margin:6px 0 12px;font-size:14px}.cq-pinfo p{font-size:14.5px;line-height:1.55;max-height:260px;overflow:auto}
 @media (prefers-reduced-motion:reduce){.card:hover .poster,.t10:hover .poster{transform:none}}
 
 /* ---------- Filas destacadas ---------- */

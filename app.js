@@ -1,7 +1,7 @@
 (() => {
 const S = { site:{}, db:null, user:null, owner:false, titles:[], banners:[], loaded:{t:false,b:false}, noDb:false,
   route:'home', q:'', genre:'', heroIdx:0, heroTimer:null,
-  adminTab:'catalogo', adminFilter:'', catalogFilter:'todo', catalogPicker:false, quick:false, editing:null, editorTab:'info', dirty:false };
+  adminTab:'catalogo', adminFilter:'', catalogFilter:'todo', catalogPicker:false, quick:false, qt:null, editing:null, editorTab:'info', dirty:false };
 const app = document.getElementById('app');
 const overlayRoot = document.getElementById('overlayRoot');
 
@@ -616,7 +616,20 @@ function catPicker(){
   const fall = { serie:'radial-gradient(circle at 78% 16%,hsla(345,90%,94%,.95),transparent 46%),linear-gradient(160deg,hsl(315,82%,86%),hsl(353,70%,78%))', pelicula:'radial-gradient(circle at 78% 16%,hsla(228,90%,94%,.95),transparent 46%),linear-gradient(160deg,hsl(198,82%,86%),hsl(236,70%,78%))' };
   const choice = (type, label, sub) => { const img = art(type); return `<button class="cat-choice" data-new="${type}"><span class="cc-bg" ${img?`data-src="${img}"`:`style="background:${fall[type]}"`}></span><span class="cc-scrim"></span><span><span class="cc-lbl">${label}</span><span class="cc-sub">${sub}</span></span></button>`; };
   const E = S.editing;
-  const inner = S.quick && E ? `<form class="cq-box" data-quick-form>
+  const Q = S.qt;
+  const qtPane = () => {
+    const isS = E.type==='serie';
+    if (Q.pick){ const p = Q.pick; return `<div class="cq-box cq-wide"><div class="cq-top"><span class="cq-chip">Importar de TMDB</span><button type="button" class="cq-x" data-picker-close aria-label="Cerrar">✕</button></div>
+      <div class="cq-body cq-prev"><div class="cq-pimg">${p.poster?`<img src="${esc(p.poster)}" alt="">`:'<span>Sin póster</span>'}</div>
+      <div class="cq-pinfo"><h3>${esc(p.title)}</h3><div class="cq-meta">${esc([isS?'Serie':'Película', p.year, p.rating].filter(Boolean).join(' · '))}</div><p>${esc(p.overview||'Sin descripción en TMDB.')}</p></div></div>
+      <div class="cq-foot"><button type="button" class="cq-link" data-qt-back>← Elegir otra</button><span class="spacer"></span><button type="button" class="btn btn-line" data-picker-close>Cancelar</button><button type="button" class="btn-new" data-qt-confirm="${p.id}">Importar y seguir</button></div></div>`; }
+    return `<div class="cq-box cq-wide"><div class="cq-top"><span class="cq-chip">Importar de TMDB</span><button type="button" class="cq-x" data-picker-close aria-label="Cerrar">✕</button></div>
+      <form class="cq-search" data-qt-form><input class="input" id="qt-q" value="${esc(Q.q||'')}" placeholder="Nombre de la ${isS?'serie':'película'}" autocomplete="off"><button class="btn-new" type="submit">Buscar</button></form>
+      <div class="cq-status">${esc(Q.status||'')}</div>
+      <div class="cq-results">${(Q.results||[]).map(r=>`<button type="button" class="cq-res" data-qt-pick="${r.id}"><span class="cq-rp" ${r.poster_path?`style="background-image:url('${tmdbImg(r.poster_path,'w185')}')"`:''}></span><strong>${esc(r.name||r.title)}</strong><small>${esc((r.first_air_date||r.release_date||'').slice(0,4))}</small></button>`).join('')}</div>
+      <div class="cq-foot"><button type="button" class="cq-link" data-qt-back>← Volver</button><span class="spacer"></span><button type="button" class="btn btn-line" data-picker-close>Cancelar</button></div></div>`;
+  };
+  const inner = S.quick && E && Q ? qtPane() : S.quick && E ? `<form class="cq-box" data-quick-form>
         <div class="cq-top"><span class="cq-chip">${E.type==='serie'?'Nueva serie':'Nueva película'}</span><button type="button" class="cq-x" data-picker-close aria-label="Cerrar">✕</button></div>
         <div class="cq-body">
           <div class="cq-poster"><span>Póster</span>${slot('poster','poster',E.poster,'r23','Subir póster')}</div>
@@ -645,7 +658,7 @@ function renderCatalog(){
       <div class="spacer"></div>
       <button class="btn-new" data-nuevo-open><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>
     </div>
-    <div class="cat-stats"><div><b>${ser.length}</b>series</div><div><b>${mov.length}</b>películas</div><div><b>${ser.reduce((n,t)=>n+epCount(t),0)}</b>episodios</div><div><b>${S.titles.filter(t=>t.status==='borrador').length}</b>borradores</div></div>
+    <div class="cat-stats"><div><b>${ser.length}</b>series</div><div><b>${mov.length}</b>películas</div><div><b>${ser.reduce((n,t)=>n+epCount(t),0)}</b>episodios</div><div><b>${S.titles.filter(t=>t.status==='borrador').length}</b>borradores</div>${S.titles.some(t=>!(t.description||'').trim())?`<button class="adm-ghost" data-fill-desc>Completar ${S.titles.filter(t=>!(t.description||'').trim()).length} descripciones</button>`:''}</div>
     <div id="catGrid">${catalogGridHtml()}</div>
     ${catPicker()}`;
 }
@@ -994,6 +1007,11 @@ async function tmdb(path, params = {}){
   if (!r.ok) throw new Error('TMDB respondió con un error (' + r.status + ').');
   return r.json();
 }
+async function tmdbOverview(base, det){
+  if (det && det.overview) return det.overview;
+  for (const language of ['es-ES','es-AR','en-US']){ const d = await tmdb(base, { language }).catch(()=>null); if (d && d.overview) return d.overview; }
+  return '';
+}
 const tmdbImg = (path, size) => path ? TMDB_IMG + size + path : '';
 const TMDB_GENRE_FIX = { 'Reality':'Reality', 'Sci-Fi & Fantasy':'Ciencia ficción', 'Action & Adventure':'Acción y aventura', 'War & Politics':'Bélica', 'Kids':'Infantil' };
 function mapRating(cert){
@@ -1036,6 +1054,56 @@ async function tmdbSearch(q){
   } catch(err){ S.tmdb.status = err.message; }
   rerenderPanel();
 }
+// Descripciones en español para títulos que TMDB solo tiene en inglés (clave: id de TMDB)
+const DESC_ES = {
+  7587: 'Spin-off de “I Love New York” de VH1, en ocho episodios de media hora. Tiffany “New York” Pollard se va a Hollywood para conseguir un papel de actriz y, para lograrlo, deja atrás su vida, a su madre y a su pareja.',
+  893: 'Serie de VH1 en la que Tiffany “New York” Pollard, finalista de dos temporadas de “Flavor of Love”, busca a su verdadero amor entre un grupo de pretendientes, con el apoyo de su familia y de otros personajes del programa.',
+  18088: 'Continuación de “New York Goes to Hollywood”. Tiffany “New York” Pollard intenta conseguir un trabajo común: los fans eligen su empleo en cada episodio y ella gana un bono de 10.000 dólares por semana si impresiona a su jefe.',
+  275651: 'Más de 20 años después de conquistar el mundo, las amigas de toda la vida Paris Hilton y Nicole Richie se reúnen en un nuevo especial: producir una presentación operística única en la vida, basada en su frase “Sanasa”.',
+  299091: 'Una niña de 12 años y sus cinco adorables perritos viven grandes aventuras desde su lujoso penthouse, llevando alegría y amabilidad a toda su comunidad.',
+  8004: 'Reality competitivo en el que Paris Hilton busca a su nueva mejor amiga. Tras el éxito de la versión original estadounidense llegaron otra temporada y dos versiones internacionales.',
+  19108: 'Reality de E! sobre la vida de la modelo Kendra Wilkinson después de dejar la Mansión Playboy: su compromiso y casamiento con el jugador Hank Baskett y su adaptación a ser mamá primeriza.',
+  2396: '¿Qué pasa cuando las estrellas más grandes se marean con la fama? El bromista Ashton Kutcher está ahí para bajarlas a tierra con sus bromas.',
+  4940: 'Un grupo de jóvenes cuyo comportamiento desbordado arruinó sus relaciones y sus carreras comparte una mansión. Dicen que quieren cambiar, pero ¿vivir juntas las ayudará a salir adelante o reinará el caos?',
+  1776: 'Veinte mujeres solteras se mudan a una mansión en Los Ángeles para competir por el corazón de Flavor Flav, quien elige a su verdadero amor.',
+  499: 'Reality estadounidense que muestra la vida cotidiana del cantante de heavy metal Ozzy Osbourne y su familia. Se estrenó en MTV en 2002 y en su primera temporada fue la serie más vista de la cadena.'
+};
+async function fillMissingDescriptions(manual){
+  const miss = S.titles.filter(t => !(t.description||'').trim());
+  if (!miss.length){ if (manual) toast('Todos los títulos ya tienen descripción.'); return; }
+  let n = 0;
+  for (const t of miss){
+    let d = DESC_ES[t.tmdbId] || '';
+    if (!d && t.tmdbId && tmdbKey()){ try { d = await tmdbOverview((t.type==='serie'?'/tv/':'/movie/')+t.tmdbId, null); } catch {} }
+    if (!d) continue;
+    try { await S.db.doc('titles/'+t.id).set({ ...t, description:d, updatedAt:Date.now() }); n++; } catch {}
+  }
+  if (n) toast(`Completé la descripción de ${n} título${n>1?'s':''}.`);
+  const left = S.titles.filter(t => !(t.description||'').trim()).length;
+  if (left && manual) toast(`${left} título${left>1?'s siguen':' sigue'} sin descripción: cargala a mano.`, true);
+}
+async function tmdbQuickSearch(q){
+  const E = S.editing; if (!E || !S.qt) return; S.qt.q = q; S.qt.results = []; S.qt.pick = null; S.qt.status = 'Buscando…'; rerenderPanel();
+  try {
+    const r = await tmdb(E.type==='serie' ? '/search/tv' : '/search/movie', { query:q, include_adult:'false' });
+    S.qt.results = (r.results||[]).slice(0,12);
+    S.qt.status = S.qt.results.length ? 'Tocá el resultado correcto' : 'No se encontraron resultados.';
+  } catch(err){ S.qt.status = err.message; }
+  rerenderPanel(); document.getElementById('qt-q')?.focus();
+}
+async function tmdbQuickPick(id){
+  const E = S.editing; if (!E || !S.qt) return; const isS = E.type==='serie'; const base = (isS?'/tv/':'/movie/')+id;
+  S.qt.status = 'Cargando…'; rerenderPanel();
+  try {
+    const det = await tmdb(base, { append_to_response: isS ? 'content_ratings' : 'release_dates' });
+    let cert = '';
+    if (isS){ const cr = det.content_ratings?.results||[]; cert = (cr.find(x=>x.iso_3166_1==='AR')||cr.find(x=>x.iso_3166_1==='MX')||cr.find(x=>x.iso_3166_1==='US'))?.rating; }
+    else { const rd = det.release_dates?.results||[]; const pk = rd.find(x=>x.iso_3166_1==='AR')||rd.find(x=>x.iso_3166_1==='MX')||rd.find(x=>x.iso_3166_1==='US'); cert = pk?.release_dates?.find(x=>x.certification)?.certification; }
+    S.qt.pick = { id, title: det.name||det.title||'', year: (det.first_air_date||det.release_date||'').slice(0,4), rating: mapRating(cert), poster: tmdbImg(det.poster_path,'w500'), overview: await tmdbOverview(base, det) };
+    S.qt.status = '';
+  } catch(err){ S.qt.status = err.message; }
+  rerenderPanel();
+}
 async function tmdbImport(id){
   const E = S.editing; const isSerie = E.type==='serie';
   S.tmdb.status = 'Importando datos…'; S.tmdb.results = []; rerenderPanel();
@@ -1048,7 +1116,7 @@ async function tmdbImport(id){
     E.tmdbId = id;
     E.title = det.name || det.title || E.title;
     E.tagline = det.tagline || det2.tagline || '';
-    E.description = det.overview || det2.overview || '';
+    E.description = det.overview || det2.overview || DESC_ES[id] || await tmdbOverview(base, null);
     const first = det.first_air_date || det.release_date || '';
     E.year = first.slice(0,4) || E.year;
     if (isSerie) E.yearEnd = (det.status === 'Ended' || det.status === 'Canceled') && det.last_air_date && det.last_air_date.slice(0,4) !== E.year ? det.last_air_date.slice(0,4) : '';
@@ -1272,8 +1340,12 @@ app.addEventListener('click', async e => {
   if (d.catfilter){ S.catalogFilter = d.catfilter; document.querySelectorAll('[data-catfilter]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.catfilter===d.catfilter))); syncPillSegs(); const g=document.getElementById('catGrid'); if (g){ g.innerHTML = catalogGridHtml(); hydrate(g); g.classList.remove('grid-in'); void g.offsetWidth; g.classList.add('grid-in'); } return; }
   if (d.etab){ S.editorTab = d.etab; rerenderPanel(true); return; }
   if (d.nuevoOpen !== undefined){ S.catalogPicker = true; rerenderPanel(); return; }
-  if (d.pickerClose !== undefined){ S.catalogPicker = false; if (S.quick){ S.quick = false; S.editing = null; S.dirty = false; } rerenderPanel(); return; }
-  if (d.quickTmdb !== undefined){ S.quick = false; S.tmdb = { open:true }; S.editorTab = 'info'; rerenderPanel(true); return; }
+  if (d.pickerClose !== undefined){ S.qt = null; S.catalogPicker = false; if (S.quick){ S.quick = false; S.editing = null; S.dirty = false; } rerenderPanel(); return; }
+  if (d.quickTmdb !== undefined){ S.qt = { q: S.editing.title||'', results:[], status: tmdbKey()?'':'Falta la clave de TMDB (Cambiar clave en el editor).' }; rerenderPanel(); setTimeout(()=>{ const i=document.getElementById('qt-q'); i?.focus(); if (i && i.value.trim()) tmdbQuickSearch(i.value.trim()); },80); return; }
+  if (d.fillDesc !== undefined){ fillMissingDescriptions(true); return; }
+  if (d.qtBack !== undefined){ if (S.qt?.pick){ S.qt.pick = null; } else S.qt = null; rerenderPanel(); return; }
+  if (d.qtPick !== undefined){ tmdbQuickPick(d.qtPick); return; }
+  if (d.qtConfirm !== undefined){ const id = d.qtConfirm; S.qt = null; S.quick = false; S.catalogPicker = false; S.tmdb = { open:true, specials:false }; S.editorTab = 'info'; rerenderPanel(true); tmdbImport(+id); return; }
   if (d.new){ S.tmdb = { open:false }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.quick = true; S.dirty=false; S.editorTab='info'; rerenderPanel(); setTimeout(()=>document.getElementById('f-title')?.focus(), 120); return; }
   if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.dirty=false; S.editorTab='info'; rerenderPanel(true); window.scrollTo(0,0); return; }
   if (d.del !== undefined && d.del){ inlineConfirm(t.closest('[data-row]'), '¿Eliminar?', () => deleteTitle(d.del)); return; }
@@ -1484,6 +1556,7 @@ function renderFooter(){
 }
 
 app.addEventListener('submit', async e => {
+  if (e.target.matches('[data-qt-form]')){ e.preventDefault(); const q = document.getElementById('qt-q').value.trim(); if (q) tmdbQuickSearch(q); return; }
   if (e.target.matches('[data-quick-form]')){ e.preventDefault(); if (!S.editing || !S.editing.title.trim()){ toast('Poné un título para crearlo.', true); document.getElementById('f-title')?.focus(); return; } S.quick = false; S.catalogPicker = false; S.editorTab = 'info'; await saveTitle(); animatePanel(); return; }
   if (e.target.id === 'tmdbForm'){ e.preventDefault(); S.tmdb.specials = !!document.getElementById('tmdb-specials')?.checked; const q = document.getElementById('tmdb-q').value.trim(); if (q) tmdbSearch(q); return; }
   if (e.target.id !== 'loginForm') return;
@@ -2053,6 +2126,7 @@ function render(){
   document.body.classList.toggle('home', S.route==='home' && !S.q.trim() && !S.noDb);
   document.body.classList.toggle('in-admin', S.route==='admin');
   renderAccount();
+  if (S.route==='admin' && S.loaded.t && !S._descRun){ S._descRun = true; setTimeout(()=>fillMissingDescriptions(false), 800); }
   document.querySelectorAll('.nav a').forEach(a => { if (a.dataset.r===S.route && !S.q) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current'); });
   let html;
   if (S.noDb) html = `<div class="lock"><div class="dial" style="width:64px;height:64px" aria-hidden="true"></div><h1>Falta conectar la base de datos</h1><p>Completá <code>config.js</code> con los datos de tu proyecto de Supabase. Los pasos están en el archivo README.</p></div>`;
