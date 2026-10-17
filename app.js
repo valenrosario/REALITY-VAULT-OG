@@ -572,14 +572,20 @@ function renderLock(){
 function renderAdmin(){
   if (!S.owner) return renderLock();
   const tab = S.adminTab;
-  return `<div class="admin"><aside class="side"><div class="lbl">Panel de control</div>
-    <button data-tab="catalogo" aria-current="${tab==='catalogo'}">Catálogo <span>${S.titles.length}</span></button>
-    <button data-tab="banners" aria-current="${tab==='banners'}">Banners <span>${S.banners.length}</span></button>
-    <button data-tab="etiquetas" aria-current="${tab==='etiquetas'}">Géneros y etiquetas</button>
-    <button data-tab="filas" aria-current="${tab==='filas'}">Filas destacadas <span>${(S.frows||[]).length}</span></button>
-    <button data-tab="sitio" aria-current="${tab==='sitio'}">Sitio</button>
-    <button data-logout style="margin-top:auto">Cerrar sesión</button>
-    </aside><section class="panel${tab==='catalogo' && !S.editing?' panel-light':''}" id="panel">${tab==='catalogo' ? (S.editing ? renderEditor() : renderCatalog()) : tab==='banners' ? renderBanners() : tab==='sitio' ? renderSite() : tab==='filas' ? renderFrowsAdmin() : renderTaxonomy()}</section></div>`;
+  const sections = [
+    ['catalogo','Catálogo', S.titles.length],
+    ['banners','Banners', S.banners.length],
+    ['etiquetas','Géneros y etiquetas', null],
+    ['filas','Filas destacadas', (S.frows||[]).length],
+    ['sitio','Sitio', null],
+  ];
+  return `<div class="admin admin-light">
+    <div class="adm-top">
+      <div class="adm-brand"><span class="adm-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M4 10h16v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8Z"/><path d="M4 10l3-6h10l3 6"/></svg></span>REALITY <span>VAULT</span></div>
+      <nav class="adm-nav">${sections.map(([id,label,count])=>`<button data-tab="${id}" aria-pressed="${tab===id}">${esc(label)}${count!=null?`<span>${count}</span>`:''}</button>`).join('')}</nav>
+      <div class="adm-top-actions"><a class="adm-ghost" href="/">← Volver al sitio</a><button class="adm-ghost" data-logout>Cerrar sesión</button></div>
+    </div>
+    <section class="panel" id="panel">${tab==='catalogo' ? (S.editing ? renderEditor() : renderCatalog()) : tab==='banners' ? renderBanners() : tab==='sitio' ? renderSite() : tab==='filas' ? renderFrowsAdmin() : renderTaxonomy()}</section></div>`;
 }
 function catalogList(){
   const f = S.adminFilter.toLowerCase();
@@ -607,15 +613,14 @@ function catPicker(){
 }
 function renderCatalog(){
   const ser = S.titles.filter(t=>t.type==='serie'), mov = S.titles.filter(t=>t.type!=='serie');
-  return `<div class="cat-top">
-      <div class="cat-logo"><span class="cat-logo-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M4 10h16v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8Z"/><path d="M4 10l3-6h10l3 6"/></svg></span>REALITY <span>VAULT</span></div>
-      <div class="spacer"></div>
+  return `<div class="cat-tools">
       <div class="cat-seg" id="catSeg"><span class="cat-seg-pill" id="catSegPill"></span>
         <button data-catfilter="todo" aria-pressed="${S.catalogFilter==='todo'}">Todo</button>
         <button data-catfilter="serie" aria-pressed="${S.catalogFilter==='serie'}">Series</button>
         <button data-catfilter="pelicula" aria-pressed="${S.catalogFilter==='pelicula'}">Películas</button>
       </div>
       <label class="cat-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="adminFilter" placeholder="Filtrar por título" value="${esc(S.adminFilter)}"></label>
+      <div class="spacer"></div>
       <button class="btn-new" data-nuevo-open><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>
     </div>
     <div class="cat-stats"><div><b>${ser.length}</b>series</div><div><b>${mov.length}</b>películas</div><div><b>${ser.reduce((n,t)=>n+epCount(t),0)}</b>episodios</div><div><b>${S.titles.filter(t=>t.status==='borrador').length}</b>borradores</div></div>
@@ -1120,7 +1125,6 @@ function markDirty(){ S.dirty = true; const s = document.getElementById('saveSta
 function rerenderPanel(){
   const panel = document.getElementById('panel'); if (!panel) return render();
   const y = window.scrollY;
-  panel.classList.toggle('panel-light', S.adminTab==='catalogo' && !S.editing);
   panel.innerHTML = S.adminTab==='catalogo' ? (S.editing ? renderEditor() : renderCatalog()) : S.adminTab==='banners' ? renderBanners() : S.adminTab==='sitio' ? renderSite() : S.adminTab==='filas' ? renderFrowsAdmin() : renderTaxonomy();
   hydrate(panel); window.scrollTo(0,y);
 }
@@ -1227,7 +1231,7 @@ app.addEventListener('click', async e => {
   if (d.backupDl !== undefined){ downloadBackup(); return; }
   if (d.backupUp !== undefined){ importBackup(); return; }
   if (d.tab){ if (S.dirty && S.editing){ toast('Guardá o cancelá los cambios primero', true); return; } S.adminTab = d.tab; S.editing=null; render(); return; }
-  if (d.catfilter){ S.catalogFilter = d.catfilter; document.querySelectorAll('[data-catfilter]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.catfilter===d.catfilter))); syncCatSeg(); const g=document.getElementById('catGrid'); if (g) g.innerHTML = catalogGridHtml(); return; }
+  if (d.catfilter){ S.catalogFilter = d.catfilter; document.querySelectorAll('[data-catfilter]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.catfilter===d.catfilter))); syncCatSeg(); const g=document.getElementById('catGrid'); if (g){ g.innerHTML = catalogGridHtml(); hydrate(g); } return; }
   if (d.nuevoOpen !== undefined){ S.catalogPicker = true; rerenderPanel(); return; }
   if (d.pickerClose !== undefined){ S.catalogPicker = false; rerenderPanel(); return; }
   if (d.new){ S.tmdb = { open:true }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.dirty=false; rerenderPanel(); window.scrollTo(0,0); return; }
