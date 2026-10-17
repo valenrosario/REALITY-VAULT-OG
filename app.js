@@ -29,11 +29,11 @@ const mqMobile = window.matchMedia('(max-width:640px)');
 const isMobile = () => mqMobile.matches;
 function hydrate(root){
   root.querySelectorAll('[data-src]').forEach(el => {
-    const ref = (isMobile() && el.getAttribute('data-src-m')) || el.getAttribute('data-src'); el.removeAttribute('data-src'); el.removeAttribute('data-src-m');
+    const ref = (isMobile() && el.getAttribute('data-src-m')) || el.getAttribute('data-src'); el.dataset.srcDone = el.getAttribute('data-src'); el.removeAttribute('data-src'); el.removeAttribute('data-src-m');
     mediaUrl(ref).then(u => { if (u){ el.style.backgroundImage = `url("${u}")`; el.classList.add('has-img','filled'); } });
   });
   root.querySelectorAll('img[data-img]').forEach(el => {
-    const ref = el.getAttribute('data-img'); el.removeAttribute('data-img');
+    const ref = el.getAttribute('data-img'); el.dataset.imgDone = ref; el.removeAttribute('data-img');
     const showFb = () => { const fb = el.nextElementSibling; if (fb?.classList.contains('logo-fallback')) fb.hidden = false; el.remove(); };
     el.onerror = showFb;
     mediaUrl(ref).then(u => { if (u) { el.src = u; el.hidden = false; } else showFb(); });
@@ -1229,10 +1229,35 @@ function animatePanel(panel){
   panel = panel || document.getElementById('panel'); if (!panel) return;
   panel.classList.remove('enter'); void panel.offsetWidth; panel.classList.add('enter');
 }
+/* Actualiza el DOM existente en vez de reemplazarlo: no parpadea ni recarga imágenes */
+function morphAttrs(o, n){
+  for (const a of [...o.attributes]) if (!n.hasAttribute(a.name)) o.removeAttribute(a.name);
+  for (const a of [...n.attributes]) if (o.getAttribute(a.name) !== a.value) o.setAttribute(a.name, a.value);
+}
+function morph(oldP, newP){
+  const on = oldP.childNodes, nn = newP.childNodes;
+  for (let i = 0; i < nn.length; i++){
+    const n = nn[i], o = on[i];
+    if (!o){ oldP.appendChild(n.cloneNode(true)); continue; }
+    if (o.nodeType !== n.nodeType || (o.nodeType === 1 && o.tagName !== n.tagName)){ oldP.replaceChild(n.cloneNode(true), o); continue; }
+    if (o.nodeType !== 1){ if (o.nodeValue !== n.nodeValue) o.nodeValue = n.nodeValue; continue; }
+    if (n.hasAttribute('data-src') && o.dataset.srcDone === n.getAttribute('data-src')) continue;
+    if (n.hasAttribute('data-img') && o.dataset.imgDone === n.getAttribute('data-img')) continue;
+    morphAttrs(o, n);
+    const tag = o.tagName;
+    if (tag === 'INPUT'){ if (o.type === 'checkbox' || o.type === 'radio') o.checked = n.checked; else if (o.value !== n.value) o.value = n.value; }
+    else if (tag === 'TEXTAREA'){ if (o.value !== n.value) o.value = n.value; }
+    else if (tag === 'SELECT'){ morph(o, n); if (o.selectedIndex !== n.selectedIndex) o.selectedIndex = n.selectedIndex; continue; }
+    if (tag !== 'TEXTAREA') morph(o, n);
+  }
+  while (oldP.childNodes.length > nn.length) oldP.removeChild(oldP.lastChild);
+}
 function rerenderPanel(anim){
   const panel = document.getElementById('panel'); if (!panel) return render();
   const y = window.scrollY;
-  panel.innerHTML = S.adminTab==='catalogo' ? (S.editing && !S.quick ? renderEditor() : renderCatalog()) : S.adminTab==='banners' ? renderBanners() : S.adminTab==='sitio' ? renderSite() : S.adminTab==='filas' ? renderFrowsAdmin() : renderTaxonomy();
+  const html = S.adminTab==='catalogo' ? (S.editing && !S.quick ? renderEditor() : renderCatalog()) : S.adminTab==='banners' ? renderBanners() : S.adminTab==='sitio' ? renderSite() : S.adminTab==='filas' ? renderFrowsAdmin() : renderTaxonomy();
+  if (anim === true || !panel.firstElementChild) panel.innerHTML = html;
+  else { const tpl = document.createElement('div'); tpl.innerHTML = html; try { morph(panel, tpl); } catch { panel.innerHTML = html; } }
   hydrate(panel); window.scrollTo(0,y);
   if (anim === true) animatePanel(panel);
 }
