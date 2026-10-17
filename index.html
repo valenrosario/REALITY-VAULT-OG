@@ -1027,6 +1027,18 @@ body.in-landing .mchips,body.in-landing .mobile-chips{display:none}
 .au-pp b{position:absolute;right:5px;top:5px;width:22px;height:22px;border-radius:50%;background:#ff2e93;font-size:13px;line-height:22px;transform:scale(0);transition:transform .25s cubic-bezier(.3,1.6,.5,1)}.au-pp.s b{transform:scale(1)}
 @media(max-width:860px){.au-full{grid-template-columns:1fr}.au-side{display:none}.au-pk{grid-template-columns:repeat(4,1fr)}.au-full:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% -10%,#ff2e9333,transparent 55%)}.au-form-wrap{align-items:flex-start;padding-top:96px}}
 @media (prefers-reduced-motion:reduce){.lw-col,.lw-trk,.ld-hint{animation:none}.ld-rv{opacity:1;transform:none}}
+
+.au-pp{overflow:visible}
+.au-pp>span{border-radius:9px}
+.au-pp.pop{animation:auPop .5s cubic-bezier(.3,1.5,.5,1)}
+.au-pp.pop:after{content:"";position:absolute;inset:-3px;border-radius:14px;border:2px solid #ff2e93;animation:auRing .6s ease-out forwards;pointer-events:none}
+@keyframes auPop{0%{transform:scale(1)}35%{transform:scale(.9)}70%{transform:scale(1.08)}100%{transform:scale(1)}}
+@keyframes auRing{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(1.35)}}
+.au-spark{position:absolute;left:50%;top:50%;width:7px;height:7px;border-radius:50%;pointer-events:none;z-index:3;animation:auSpark .65s ease-out forwards}
+@keyframes auSpark{from{transform:translate(-50%,-50%) scale(1);opacity:1}to{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(.2);opacity:0}}
+.au-pp.s>span{animation:auGlow 1.8s ease-in-out infinite alternate}
+@keyframes auGlow{to{filter:brightness(1.1) saturate(1.15)}}
+@media (prefers-reduced-motion:reduce){.au-pp.pop,.au-pp.pop:after,.au-spark,.au-pp.s>span{animation:none}}
 </style>
 </head>
 <body>

@@ -1912,7 +1912,8 @@ overlayRoot.addEventListener('click', async e => {
   const c = S.authCtx; if (!c || !overlayRoot.querySelector('.au-full')) return;
   const m = e.target.closest('[data-auth-mode]'); if (m){ c.mode = m.dataset.authMode; c.step = 1; c.msg=''; renderAuth(); return; }
   if (e.target.closest('[data-au-back]')){ c.step = 1; c.msg=''; renderAuth(); return; }
-  const f = e.target.closest('[data-au-fav]'); if (f){ const id = f.dataset.auFav; c.favs = c.favs.includes(id) ? c.favs.filter(x=>x!==id) : [...c.favs, id]; f.classList.toggle('s'); f.setAttribute('aria-pressed', c.favs.includes(id));
+  const f = e.target.closest('[data-au-fav]'); if (f){ const id = f.dataset.auFav; const adding = !c.favs.includes(id); c.favs = adding ? [...c.favs, id] : c.favs.filter(x=>x!==id); f.classList.toggle('s'); f.setAttribute('aria-pressed', adding);
+    f.classList.remove('pop'); void f.offsetWidth; if (adding){ f.classList.add('pop'); for (let i=0;i<10;i++){ const p = document.createElement('i'); p.className='au-spark'; const a = (i/10)*Math.PI*2 + Math.random()*.5, d = 38 + Math.random()*34; p.style.setProperty('--dx', Math.cos(a)*d+'px'); p.style.setProperty('--dy', Math.sin(a)*d+'px'); p.style.background = ['#ff2e93','#ff9a5a','#fff','#ffd36b'][i%4]; f.appendChild(p); setTimeout(()=>p.remove(), 700); } }
     const fin = overlayRoot.querySelector('.au-btn[data-au-finish]'); if (fin) fin.textContent = c.favs.length ? 'Guardar y entrar' : 'Entrar a REALITY VAULT';
     const ft = overlayRoot.querySelector('.au-foot'); if (ft) ft.firstChild.textContent = (c.favs.length ? `${c.favs.length} elegido${c.favs.length>1?'s':''}` : 'Elegí los que quieras') + ' · '; return; }
   const fin = e.target.closest('[data-au-finish]'); if (fin){
