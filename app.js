@@ -1872,6 +1872,26 @@ document.addEventListener('click', e => {
   const o = e.target.closest('[data-land-open]'); if (o){ e.preventDefault(); openLandingTitle(o.dataset.landOpen); return; }
   const ss = e.target.closest('[data-lp-season]'); if (ss){ const box = overlayRoot.querySelector('.lp'); const y = box?.scrollTop||0; openLandingTitle(ss.dataset.lpId, +ss.dataset.lpSeason); const b2 = overlayRoot.querySelector('.lp'); if (b2) b2.scrollTop = y; }
 });
+function showWelcome(name, long){
+  return new Promise(resolve => {
+    const pubs = published().filter(t => t.poster);
+    const pool = []; while (pubs.length && pool.length < 40) pool.push(...shuffled(pubs, 'welcome' + pool.length));
+    const col = c => { const ps = pool.slice(c*5, c*5+5).map(t => `<span class="wl-p" data-src="${esc(t.poster)}"></span>`).join(''); return `<div class="wl-col${c%2?' up':''}">${ps}${ps}</div>`; };
+    const ph = userAvatar();
+    const dur = long ? 4200 : 2200;
+    const lines = long ? ['Creando tu cuenta…','Cargando tus realities favoritos…','Armando tu inicio…','¡Todo listo' + (name ? ', ' + esc(name) : '') + '!'] : ['Entrando…','Cargando tus realities…','¡Bienvenid@' + (name ? ', ' + esc(name) : '') + '!'];
+    overlayRoot.innerHTML = `<div class="wl" style="--dur:${dur}ms">
+      <div class="wl-wall" aria-hidden="true">${[0,1,2,3,4,5,6].map(col).join('')}</div><div class="wl-veil"></div>
+      <div class="wl-c">
+        <div class="wl-av">${ph ? `<span class="wl-img" style="background-image:url('${ph}')"></span>` : `<span class="wl-img wl-def">${esc((name||'R')[0].toUpperCase())}</span>`}<i class="wl-ring"></i><i class="wl-ring r2"></i></div>
+        <div class="wl-t" style="--n:${lines.length}">${lines.map((l,i)=>`<span style="--i:${i}">${l}</span>`).join('')}</div>
+        <div class="wl-bar"><i></i></div>
+      </div></div>`;
+    document.body.style.overflow = 'hidden';
+    hydrate(overlayRoot);
+    setTimeout(() => { const w = overlayRoot.querySelector('.wl'); if (!w){ resolve(); return; } w.classList.add('out'); setTimeout(resolve, 520); }, dur);
+  });
+}
 function openAuth(opts = {}){
   S.authCtx = { mode: opts.mode || 'signup', step: 1, email:'', name:'', favs:[], reason: opts.reason || '', href: opts.href || '', titleId: opts.titleId || '', tid: opts.tid || '', s: opts.s ?? '', e: opts.e ?? '', msg:'' };
   renderAuth();
@@ -1968,7 +1988,7 @@ overlayRoot.addEventListener('click', async e => {
       const rows = c.favs.filter(id => !S.myList.has(id)).map(id => ({ user_id: S.session.user.id, title_id: id }));
       if (rows.length){ const { error } = await S.sb.from('user_lists').insert(rows); if (!error){ S.myList = new Set([...rows.map(r=>r.title_id), ...S.myList]); toast('Guardamos tus favoritas en Mi lista'); } }
     }
-    if (c.href){ c.done = true; c.doneMsg = 'Tu cuenta está creada.'; renderAuth(); } else closeDetail();
+    if (c.href){ c.done = true; c.doneMsg = 'Tu cuenta está creada.'; renderAuth(); } else { await showWelcome(c.doneName || userName(), true); closeDetail(); }
     return; }
 });
 overlayRoot.addEventListener('submit', async e => {
@@ -1999,7 +2019,7 @@ overlayRoot.addEventListener('submit', async e => {
     c.done = true; c.doneName = ''; c.doneMsg = 'Ya ingresaste.';
     await afterLogin();
     if (c.titleId && c.reason === 'list' && !S.myList.has(c.titleId)) await toggleList(c.titleId);
-    if (!c.href){ closeDetail(); return; }
+    if (!c.href){ await showWelcome(userName(), false); closeDetail(); return; }
     renderAuth();
   } catch(err){
     const m = String(err.message||'');
