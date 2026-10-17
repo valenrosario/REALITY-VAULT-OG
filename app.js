@@ -605,13 +605,20 @@ function catalogGridHtml(){
 }
 function catPicker(){
   if (!S.catalogPicker) return '';
-  return `<div class="cat-picker"><button class="cat-picker-scrim" data-picker-close aria-label="Cerrar" tabindex="-1"></button>
-    <div class="cat-picker-box"><button class="cat-picker-close" data-picker-close aria-label="Cerrar">✕</button>
+  const withP = shuffled(S.titles.filter(t=>t.poster), 'picker');
+  let wall = '';
+  if (withP.length){
+    const pool = []; while (pool.length < 21) pool.push(...withP);
+    const col = c => { const ps = [0,1,2].map(r => `<div class="cp-poster" data-src="${esc(pool[c*3+r].poster)}"></div>`).join(''); return `<div class="cp-col${c%2?' up':''}">${ps}${ps}</div>`; };
+    wall = `<div class="cp-wall" aria-hidden="true">${[0,1,2,3,4,5,6].map(col).join('')}</div>`;
+  }
+  const art = type => { const t = shuffled(S.titles.filter(x=>(x.type==='serie')===(type==='serie') && (x.backdrop||x.bannerImage||x.poster)), 'pick-'+type)[0]; return t ? esc(t.backdrop||t.bannerImage||t.poster) : ''; };
+  const fall = { serie:'radial-gradient(circle at 78% 16%,hsla(345,90%,94%,.95),transparent 46%),linear-gradient(160deg,hsl(315,82%,86%),hsl(353,70%,78%))', pelicula:'radial-gradient(circle at 78% 16%,hsla(228,90%,94%,.95),transparent 46%),linear-gradient(160deg,hsl(198,82%,86%),hsl(236,70%,78%))' };
+  const choice = (type, label, sub) => { const img = art(type); return `<button class="cat-choice" data-new="${type}"><span class="cc-bg" ${img?`data-src="${img}"`:`style="background:${fall[type]}"`}></span><span class="cc-scrim"></span><span><span class="cc-lbl">${label}</span><span class="cc-sub">${sub}</span></span></button>`; };
+  return `<div class="cat-picker"><button class="cat-picker-scrim" data-picker-close aria-label="Cerrar" tabindex="-1"></button>${wall}<div class="cp-veil"></div>
+    <button class="cat-picker-close" data-picker-close aria-label="Cerrar">✕</button><div class="cat-picker-box">
       <h2>¿Qué querés crear?</h2><p>Elegí el tipo de título para empezar a cargarlo</p>
-      <div class="cat-choices">
-        <button class="cat-choice" data-new="serie"><span class="cc-bg" style="background:radial-gradient(circle at 78% 16%,hsla(345,90%,94%,.95),transparent 46%),linear-gradient(160deg,hsl(315,82%,86%),hsl(353,70%,78%))"></span><span class="cc-scrim"></span><span><span class="cc-lbl">Serie</span><span class="cc-sub">Temporadas y episodios</span></span></button>
-        <button class="cat-choice" data-new="pelicula"><span class="cc-bg" style="background:radial-gradient(circle at 78% 16%,hsla(228,90%,94%,.95),transparent 46%),linear-gradient(160deg,hsl(198,82%,86%),hsl(236,70%,78%))"></span><span class="cc-scrim"></span><span><span class="cc-lbl">Película</span><span class="cc-sub">Título único</span></span></button>
-      </div></div></div>`;
+      <div class="cat-choices">${choice('serie','Serie','Temporadas y episodios')}${choice('pelicula','Película','Título único')}</div></div></div>`;
 }
 function renderCatalog(){
   const ser = S.titles.filter(t=>t.type==='serie'), mov = S.titles.filter(t=>t.type!=='serie');
