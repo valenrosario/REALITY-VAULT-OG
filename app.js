@@ -1,7 +1,7 @@
 (() => {
 const S = { site:{}, db:null, user:null, owner:false, titles:[], banners:[], loaded:{t:false,b:false}, noDb:false,
   route:'home', q:'', genre:'', heroIdx:0, heroTimer:null,
-  adminTab:'catalogo', adminFilter:'', catalogFilter:'todo', catalogPicker:false, editing:null, dirty:false };
+  adminTab:'catalogo', adminFilter:'', catalogFilter:'todo', catalogPicker:false, editing:null, editorTab:'info', dirty:false };
 const app = document.getElementById('app');
 const overlayRoot = document.getElementById('overlayRoot');
 
@@ -38,17 +38,18 @@ function hydrate(root){
     el.onerror = showFb;
     mediaUrl(ref).then(u => { if (u) { el.src = u; el.hidden = false; } else showFb(); });
   });
-  if (root.querySelector('#catSeg')) syncCatSeg(true);
+  if (root.querySelector('.pillseg')) syncPillSegs(true);
 }
-function syncCatSeg(first){
-  const seg = document.getElementById('catSeg'); if (!seg) return;
-  const pill = document.getElementById('catSegPill');
-  const btn = seg.querySelector(`[data-catfilter="${S.catalogFilter}"]`) || seg.querySelector('[data-catfilter]');
-  if (!btn) return;
-  if (first) pill.style.transition = 'none';
-  const sr = seg.getBoundingClientRect(), r = btn.getBoundingClientRect();
-  pill.style.width = r.width + 'px'; pill.style.transform = `translateX(${r.left - sr.left - 4}px)`;
-  if (first) requestAnimationFrame(() => requestAnimationFrame(() => { pill.style.transition = ''; }));
+function syncPillSegs(first){
+  document.querySelectorAll('.pillseg').forEach(seg => {
+    const pill = seg.querySelector('.pillseg-pill');
+    const btn = seg.querySelector('button[aria-pressed="true"]') || seg.querySelector('button');
+    if (!pill || !btn) return;
+    if (first) pill.style.transition = 'none';
+    const sr = seg.getBoundingClientRect(), r = btn.getBoundingClientRect();
+    pill.style.width = r.width + 'px'; pill.style.transform = `translateX(${r.left - sr.left - 4}px)`;
+    if (first) requestAnimationFrame(() => requestAnimationFrame(() => { pill.style.transition = ''; }));
+  });
 }
 const webpOK = (() => { try { const c=document.createElement('canvas'); c.width=c.height=1; return c.toDataURL('image/webp').startsWith('data:image/webp'); } catch { return false; } })();
 async function processImage(file, maxW, maxH, alpha){
@@ -581,7 +582,8 @@ function renderAdmin(){
   ];
   return `<div class="admin admin-light">
     <div class="adm-top">
-      <div class="adm-brand"><span class="adm-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M4 10h16v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8Z"/><path d="M4 10l3-6h10l3 6"/></svg></span>REALITY <span>VAULT</span></div>
+      <div class="adm-brand">${S.site.logo ? `<img src="${esc(S.site.logo)}" alt="REALITY VAULT">` : 'REALITY <span>VAULT</span>'}</div>
+      <div class="spacer"></div>
       <nav class="adm-nav">${sections.map(([id,label,count])=>`<button data-tab="${id}" aria-pressed="${tab===id}">${esc(label)}${count!=null?`<span>${count}</span>`:''}</button>`).join('')}</nav>
       <div class="adm-top-actions"><a class="adm-ghost" href="/">← Volver al sitio</a><button class="adm-ghost" data-logout>Cerrar sesión</button></div>
     </div>
@@ -614,7 +616,7 @@ function catPicker(){
 function renderCatalog(){
   const ser = S.titles.filter(t=>t.type==='serie'), mov = S.titles.filter(t=>t.type!=='serie');
   return `<div class="cat-tools">
-      <div class="cat-seg" id="catSeg"><span class="cat-seg-pill" id="catSegPill"></span>
+      <div class="pillseg"><span class="pillseg-pill"></span>
         <button data-catfilter="todo" aria-pressed="${S.catalogFilter==='todo'}">Todo</button>
         <button data-catfilter="serie" aria-pressed="${S.catalogFilter==='serie'}">Series</button>
         <button data-catfilter="pelicula" aria-pressed="${S.catalogFilter==='pelicula'}">Películas</button>
@@ -642,9 +644,13 @@ function renderEditor(){
   const E = S.editing; const isSerie = E.type==='serie';
   const allTags = [...new Set(S.titles.flatMap(t=>t.tags||[]))];
   const allGenres = [...new Set([...S.titles.flatMap(t=>t.genres||[]), ...GENRE_SUGGEST])];
+  const etabs = [['info','Información'],['imagenes','Imágenes'],['contenido','Contenido'],['extra','Extra']];
+  const et = S.editorTab || 'info';
   return `<div class="panel-head"><button class="btn btn-line btn-sm" data-back>← Catálogo</button><h1>${E._new?'Nuevo título':esc(E.title||'Editar')}</h1><button class="btn btn-primary" data-tmdb-open>Importar de TMDB</button></div>
   ${S.tmdb?.open ? renderTmdbBox() : ''}
+  <div class="pillseg editor-tabs"><span class="pillseg-pill"></span>${etabs.map(([id,label])=>`<button data-etab="${id}" aria-pressed="${et===id}">${label}</button>`).join('')}</div>
   <div class="editor">
+    <div data-epanel="info" ${et==='info'?'':'hidden'}>
     <div class="fs"><h3>Información</h3>
       <div class="seg" role="group" aria-label="Tipo"><button data-type="serie" aria-pressed="${isSerie}">Serie</button><button data-type="pelicula" aria-pressed="${!isSerie}">Película</button></div>
       <div class="fgrid">
@@ -658,6 +664,12 @@ function renderEditor(){
         <label class="field"><span>${isSerie?'Creación':'Dirección'}</span><input class="input" id="f-dir" data-k="director" value="${esc(E.director)}"></label>
       </div>
     </div>
+    <div class="fs"><h3>Géneros y etiquetas</h3><div class="fgrid">
+      ${chipField('genres','Géneros (arman las filas del inicio)',E.genres,allGenres)}
+      ${chipField('tags','Etiquetas (para búsqueda y ficha)',E.tags,allTags)}
+    </div></div>
+    </div>
+    <div data-epanel="imagenes" ${et==='imagenes'?'':'hidden'}>
     <div class="fs"><h3>Imágenes <small>tocá para subir un archivo o usá 🔗 para pegar un enlace</small></h3>
       <div class="imgs">
         <div class="field"><span>Póster</span>${slot('poster','poster',E.poster,'r23','Subir póster')}<span class="hint"><b>1000 × 1500 px</b> (vertical 2:3)</span></div>
@@ -677,10 +689,8 @@ function renderEditor(){
         <div class="field"><span>Fondo de la ficha · TV</span>${slot('tv','backdropTv',E.backdropTv,'r169','Subir fondo para TV')}<span class="hint"><b>1920 × 1080 px</b> (16:9). Se ve a pantalla completa al abrir el título en la tele. También de ahí sale el color del fondo de los capítulos.</span></div>
       </div>
     </div>
-    <div class="fs"><h3>Géneros y etiquetas</h3><div class="fgrid">
-      ${chipField('genres','Géneros (arman las filas del inicio)',E.genres,allGenres)}
-      ${chipField('tags','Etiquetas (para búsqueda y ficha)',E.tags,allTags)}
-    </div></div>
+    </div>
+    <div data-epanel="contenido" ${et==='contenido'?'':'hidden'}>
     <div class="fs"><h3>Reparto <small>${E.cast.length} persona${E.cast.length===1?'':'s'}</small></h3>
       <div class="cast-ed">${E.cast.map((c,i)=>`<div class="cast-row">
         ${slot('face','cast.'+i+'.photo',c.photo,'','+')}
@@ -705,11 +715,14 @@ function renderEditor(){
       ${isSoon(E) ? `<label class="field" style="max-width:320px"><span>Fecha de estreno (opcional)</span><input class="input" id="f-release" data-k="releaseDate" value="${esc(E.releaseDate||'')}" placeholder="15 de noviembre"><span class="hint">Se muestra junto a “Próximamente”. Los enlaces para ver quedan ocultos hasta que lo cambies a disponible.</span></label>`
         : `<span class="hint">El botón “Ver ahora” abre ${E.type==='serie'?'el enlace del primer capítulo que lo tenga':'el enlace de la película'}.</span>`}
     </div>
+    </div>
+    <div data-epanel="extra" ${et==='extra'?'':'hidden'}>
     <div class="fs"><h3>Extras y publicación</h3><div class="fgrid">
       <label class="field span2"><span>Enlace al tráiler</span><input class="input" id="f-trailer" data-k="trailer" value="${esc(E.trailer)}" placeholder="https://www.youtube.com/watch?v=…"><span class="hint">Aparece el ícono de claqueta al lado de los botones y el tráiler se abre en una ventana encima de la página. Sirve YouTube, Vimeo, Google Drive o un .mp4.</span></label>
       <label class="check"><input type="checkbox" id="f-feat" data-k="featured" ${E.featured?'checked':''}> Mostrar en Destacados</label>
       <label class="check"><input type="checkbox" id="f-pub" data-k="published" ${E.status!=='borrador'?'checked':''}> Publicado (visible en el sitio)</label>
     </div></div>
+    </div>
     <div class="savebar"><span class="status" id="saveStatus">${S.dirty?'Cambios sin guardar':(E._new?'Nuevo, sin guardar':'Todo guardado')}</span>
       ${E._new?'':`<span data-row="${esc(E.id)}"><button class="btn btn-danger" data-del="${esc(E.id)}">Eliminar</button></span>`}
       <button class="btn btn-line" data-back>Cancelar</button><button class="btn btn-primary" data-save>Guardar</button></div>
@@ -1231,11 +1244,12 @@ app.addEventListener('click', async e => {
   if (d.backupDl !== undefined){ downloadBackup(); return; }
   if (d.backupUp !== undefined){ importBackup(); return; }
   if (d.tab){ if (S.dirty && S.editing){ toast('Guardá o cancelá los cambios primero', true); return; } S.adminTab = d.tab; S.editing=null; render(); return; }
-  if (d.catfilter){ S.catalogFilter = d.catfilter; document.querySelectorAll('[data-catfilter]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.catfilter===d.catfilter))); syncCatSeg(); const g=document.getElementById('catGrid'); if (g){ g.innerHTML = catalogGridHtml(); hydrate(g); } return; }
+  if (d.catfilter){ S.catalogFilter = d.catfilter; document.querySelectorAll('[data-catfilter]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.catfilter===d.catfilter))); syncPillSegs(); const g=document.getElementById('catGrid'); if (g){ g.innerHTML = catalogGridHtml(); hydrate(g); } return; }
+  if (d.etab){ S.editorTab = d.etab; rerenderPanel(); return; }
   if (d.nuevoOpen !== undefined){ S.catalogPicker = true; rerenderPanel(); return; }
   if (d.pickerClose !== undefined){ S.catalogPicker = false; rerenderPanel(); return; }
-  if (d.new){ S.tmdb = { open:true }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.dirty=false; rerenderPanel(); window.scrollTo(0,0); return; }
-  if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.dirty=false; rerenderPanel(); window.scrollTo(0,0); return; }
+  if (d.new){ S.tmdb = { open:true }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.dirty=false; S.editorTab='info'; rerenderPanel(); window.scrollTo(0,0); return; }
+  if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.dirty=false; S.editorTab='info'; rerenderPanel(); window.scrollTo(0,0); return; }
   if (d.del !== undefined && d.del){ inlineConfirm(t.closest('[data-row]'), '¿Eliminar?', () => deleteTitle(d.del)); return; }
   if (d.back !== undefined){ S.editing=null; S.dirty=false; rerenderPanel(); return; }
   if (d.save !== undefined){ saveTitle(); return; }
@@ -2010,6 +2024,7 @@ function renderBrand(){
 function render(){
   clearInterval(S.heroTimer); renderBrand();
   document.body.classList.toggle('home', S.route==='home' && !S.q.trim() && !S.noDb);
+  document.body.classList.toggle('in-admin', S.route==='admin');
   renderAccount();
   document.querySelectorAll('.nav a').forEach(a => { if (a.dataset.r===S.route && !S.q) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current'); });
   let html;
