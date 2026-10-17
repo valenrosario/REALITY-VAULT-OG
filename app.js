@@ -1,7 +1,7 @@
 (() => {
 const S = { site:{}, db:null, user:null, owner:false, titles:[], banners:[], loaded:{t:false,b:false}, noDb:false,
   route:'home', q:'', genre:'', heroIdx:0, heroTimer:null,
-  adminTab:'catalogo', adminFilter:'', catalogFilter:'todo', catalogPicker:false, quick:false, qt:null, editing:null, editorTab:'info', dirty:false };
+  adminTab:'catalogo', adminFilter:'', catalogFilter:'todo', catalogPicker:false, quick:false, qt:null, editing:null, editorTab:'info', dirty:false, openSeasons:new Set() };
 const app = document.getElementById('app');
 const overlayRoot = document.getElementById('overlayRoot');
 
@@ -178,6 +178,9 @@ function genBlock(t, label, logo){
   return `<div class="gen ${lg?'has-logo':''}" style="--h:${hue(t.title||t.id)}">${label?`<span class="g-code">${esc(label)}</span>`:'<span></span>'}<span class="g-title">${esc(t.title||'Sin título')}</span>${lg?`<img class="g-logo" alt="" data-img="${esc(lg)}" hidden>`:''}</div>`;
 }
 function isSoon(t){ return t.availability === 'proximamente'; }
+function seasonSoon(se){ return se && se.availability === 'proximamente'; }
+function episodeSoon(e){ return e && e.availability === 'proximamente'; }
+function itemSoon(t, se, e){ return isSoon(t) || seasonSoon(se) || episodeSoon(e); }
 function soonLabel(t){ return 'Próximamente' + (t.releaseDate ? ' · ' + t.releaseDate : ''); }
 function watchLink(t){
   if (isSoon(t)) return '';
@@ -513,11 +516,11 @@ function showDetail(id, seasonIdx){
           ${seasons.length>1 ? `<select class="select" id="seasonSel" aria-label="Temporada">${seasons.map((x,i)=>`<option value="${i}" ${i===detailSeason?'selected':''}>Temporada ${esc(x.number)}${x.title?' · '+esc(x.title):''}</option>`).join('')}</select>` : `<span class="meta">Temporada ${esc(s.number)}${s.title?' · '+esc(s.title):''}</span>`}
         </div>
         <div class="eps">${(s.episodes||[]).slice().sort((a,b)=>(a.number||0)-(b.number||0)).map(e => {
-          const u = isSoon(t) ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
-          return `<${tag} class="ep" ${u?`data-watch href="${esc(u)}" target="_blank" rel="noopener"`:''}>
+          const soon = itemSoon(t, s, e); const u = soon ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
+          return `<${tag} class="ep ${soon?'ep-soon':''}" ${u?`data-watch href="${esc(u)}" target="_blank" rel="noopener"`:''}>
             <span class="ep-n">${esc(e.number)}</span>
             <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number, t.logo)}</div>
-            <div class="ep-info"><strong>${esc(e.title || 'Episodio '+e.number)}<span>${esc(e.duration||'')}</span></strong>${e.description?`<p>${esc(e.description)}</p>`:''}</div>
+            <div class="ep-info"><strong>${esc(e.title || 'Episodio '+e.number)}<span>${soon?'Próximamente':esc(e.duration||'')}</span></strong>${e.description?`<p>${esc(e.description)}</p>`:''}</div>
           </${tag}>`; }).join('') || '<p class="empty-note" style="padding:12px 0">Esta temporada todavía no tiene episodios.</p>'}</div>
       </section>` : ''}
       ${(t.cast||[]).length ? `<section style="display:flex;flex-direction:column;gap:12px"><h3 class="section-h">Reparto</h3>
@@ -802,13 +805,17 @@ app.addEventListener('click', async e => {
 });
 function renderSeasonsEd(E){
   return `<div class="fs"><h3>Temporadas y capítulos <small>${E.seasons.length} temp. · ${epCount(E)} ep.</small></h3>
-    ${E.seasons.map((s,si)=>`<div class="season">
-      <div class="season-h"><span class="num">T${esc(s.number)}</span>
+    ${E.seasons.map((s,si)=>{ const open = S.openSeasons.has(si); const soon = seasonSoon(s);
+      return `<div class="season ${open?'open':''}">
+      <div class="season-h">
+        <button class="season-toggle" data-season-toggle="${si}" aria-expanded="${open}" aria-label="${open?'Contraer':'Expandir'} temporada"><span class="chev">›</span></button>
+        <span class="num">T${esc(s.number)}</span>
         <input class="input" id="s-t-${si}" data-season="${si}" data-f="title" value="${esc(s.title)}" placeholder="Nombre de la temporada (opcional)" aria-label="Nombre de la temporada">
         <input class="input" id="s-n-${si}" data-season="${si}" data-f="number" value="${esc(s.number)}" style="max-width:80px;flex:0" inputmode="numeric" aria-label="Número">
+        <button class="pill-toggle ${soon?'on':''}" data-season-soon="${si}" aria-pressed="${soon}">Próximamente</button>
         <span data-row="s${si}"><button class="btn btn-danger btn-sm" data-season-x="${si}">Quitar temporada</button></span></div>
-      <div class="season-b">
-        ${(s.episodes||[]).map((e,ei)=>`<div class="ep-ed">
+      <div class="season-b-wrap"><div class="season-b">
+        ${(s.episodes||[]).map((e,ei)=>{ const eSoon = episodeSoon(e); return `<div class="ep-ed ${eSoon?'ep-ed-soon':''}">
           <div class="field">${slot('thumb',`seasons.${si}.episodes.${ei}.thumb`,e.thumb,'r169','Miniatura')}<span class="hint">1280 × 720 px</span></div>
           <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
             <div class="fgrid">
@@ -819,10 +826,11 @@ function renderSeasonsEd(E){
             <label class="field"><span>Sinopsis</span><textarea class="textarea" style="min-height:64px" id="e-s-${si}-${ei}" data-ep="${si}.${ei}" data-f="description">${esc(e.description)}</textarea></label>
             <label class="field"><span>Subtítulos en español (.vtt)</span><input class="input" id="e-v-${si}-${ei}" data-ep="${si}.${ei}" data-f="subs" value="${esc(e.subs)}" placeholder="Enlace al archivo .vtt (opcional)"></label>
             <div class="ep-ed-foot"><input class="input" id="e-u-${si}-${ei}" data-ep="${si}.${ei}" data-f="url" value="${esc(e.url)}" placeholder="Enlace o código de inserción (embed) del video" aria-label="Enlace del capítulo">
+              <button class="pill-toggle btn-sm ${eSoon?'on':''}" data-ep-soon="${si}.${ei}" aria-pressed="${eSoon}">Próximamente</button>
               <button class="iconbtn" data-ep-x="${si}.${ei}" aria-label="Quitar capítulo">✕</button></div>
-          </div></div>`).join('')}
+          </div></div>`; }).join('')}
         <div><button class="btn btn-line btn-sm" data-ep-add="${si}">+ Capítulo</button></div>
-      </div></div>`).join('')}
+      </div></div></div>`; }).join('')}
     <div><button class="btn btn-line" data-season-add>+ Temporada</button></div></div>`;
 }
 function renderBanners(){
@@ -1377,9 +1385,9 @@ app.addEventListener('click', async e => {
   if (d.qtSeasall !== undefined){ S.qt.sel = S.qt.pick.seasons.map(x=>x.season_number); rerenderPanel(); return; }
   if (d.qtSeasnone !== undefined){ S.qt.sel = []; rerenderPanel(); return; }
   if (d.qtPick !== undefined){ tmdbQuickPick(d.qtPick); return; }
-  if (d.qtConfirm !== undefined){ const id = d.qtConfirm; const sel = S.qt.sel.slice(); S.qt = null; S.quick = false; S.catalogPicker = false; S.tmdb = { open:true, specials:false, sel }; S.editorTab = 'info'; rerenderPanel(true); tmdbImport(+id); return; }
-  if (d.new){ S.tmdb = { open:false }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.quick = true; S.dirty=false; S.editorTab='info'; rerenderPanel(); setTimeout(()=>document.getElementById('f-title')?.focus(), 120); return; }
-  if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.dirty=false; S.editorTab='info'; rerenderPanel(true); window.scrollTo(0,0); return; }
+  if (d.qtConfirm !== undefined){ const id = d.qtConfirm; const sel = S.qt.sel.slice(); S.qt = null; S.quick = false; S.catalogPicker = false; S.tmdb = { open:true, specials:false, sel }; S.editorTab = 'info'; S.openSeasons = new Set(); rerenderPanel(true); tmdbImport(+id); return; }
+  if (d.new){ S.tmdb = { open:false }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.quick = true; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(); rerenderPanel(); setTimeout(()=>document.getElementById('f-title')?.focus(), 120); return; }
+  if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(S.editing.seasons.length===1 ? [0] : []); rerenderPanel(true); window.scrollTo(0,0); return; }
   if (d.del !== undefined && d.del){ inlineConfirm(t.closest('[data-row]'), '¿Eliminar?', () => deleteTitle(d.del)); return; }
   if (d.back !== undefined){ S.editing=null; S.dirty=false; rerenderPanel(true); return; }
   if (d.save !== undefined){ saveTitle(); return; }
@@ -1395,8 +1403,11 @@ app.addEventListener('click', async e => {
   if (d.chipAdd){ addChip(d.chipAdd, d.v); return; }
   if (d.castAdd !== undefined){ E.cast.push({name:'',role:'',photo:''}); markDirty(); rerenderPanel(); document.getElementById('cast-n-'+(E.cast.length-1))?.focus(); return; }
   if (d.castX !== undefined){ E.cast.splice(+d.castX,1); markDirty(); rerenderPanel(); return; }
-  if (d.seasonAdd !== undefined){ const n = Math.max(0,...E.seasons.map(s=>+s.number||0))+1; E.seasons.push({id:uid('s'),number:n,title:'',episodes:[]}); markDirty(); rerenderPanel(); return; }
+  if (d.seasonAdd !== undefined){ const n = Math.max(0,...E.seasons.map(s=>+s.number||0))+1; E.seasons.push({id:uid('s'),number:n,title:'',episodes:[]}); S.openSeasons.add(E.seasons.length-1); markDirty(); rerenderPanel(); return; }
   if (d.seasonX !== undefined){ const si=+d.seasonX; inlineConfirm(t.closest('[data-row]'), '¿Quitar con sus capítulos?', ()=>{ E.seasons.splice(si,1); markDirty(); rerenderPanel(); }); return; }
+  if (d.seasonToggle !== undefined){ const si=+d.seasonToggle; S.openSeasons.has(si) ? S.openSeasons.delete(si) : S.openSeasons.add(si); rerenderPanel(); return; }
+  if (d.seasonSoon !== undefined){ const s = E.seasons[+d.seasonSoon]; s.availability = s.availability === 'proximamente' ? '' : 'proximamente'; markDirty(); rerenderPanel(); return; }
+  if (d.epSoon){ const [si,ei]=d.epSoon.split('.').map(Number); const e2 = E.seasons[si].episodes[ei]; e2.availability = e2.availability === 'proximamente' ? '' : 'proximamente'; markDirty(); rerenderPanel(); return; }
   if (d.epAdd !== undefined){ const s = E.seasons[+d.epAdd]; const n = Math.max(0,...s.episodes.map(x=>+x.number||0))+1; s.episodes.push({id:uid('e'),number:n,title:'',description:'',duration:'',thumb:'',url:''}); markDirty(); rerenderPanel(); document.getElementById(`e-t-${d.epAdd}-${s.episodes.length-1}`)?.focus(); return; }
   if (d.epX){ const [si,ei]=d.epX.split('.').map(Number); E.seasons[si].episodes.splice(ei,1); markDirty(); rerenderPanel(); return; }
   if (d.clear){ e.stopPropagation();
@@ -1501,13 +1512,13 @@ function renderEpisodesTab(t, seasons){
   const s = seasons[S.tpSeason] || seasons[0]; if (!s) return '';
   return `${seasons.length>1 ? `<select class="pill-select" id="tpSeason" aria-label="Temporada">${seasons.map((x,i)=>`<option value="${i}" ${i===S.tpSeason?'selected':''}>Temporada ${esc(x.number)}${x.title?' · '+esc(x.title):''}</option>`).join('')}</select>` : `<span class="pill-select" style="background-image:none;padding-right:16px">Temporada ${esc(s.number)}</span>`}
     ${s.episodes.length ? `<div class="row-wrap ep-row"><button class="rail-btn l" data-scroll="-1" aria-label="Anteriores">‹</button><div class="rail rail-eps">${s.episodes.map(e => {
-      const u = isSoon(t) ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
+      const soon = itemSoon(t, s, e); const u = soon ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
       const seen = (S.progress.get(t.id)?.watched || []).includes(epKey(s.number, e.number));
-      return `<${tag} class="ep-card ${seen?'seen':''}" ${u?`${watchAttrs(t, s.number, e.number)} href="${esc(u)}" target="_blank" rel="noopener"`:''}>
-        <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number, t.logo)}${seen?'<span class="seen-tag">✓ Visto</span>':''}</div>
+      return `<${tag} class="ep-card ${seen?'seen':''} ${soon?'ep-soon':''}" ${u?`${watchAttrs(t, s.number, e.number)} href="${esc(u)}" target="_blank" rel="noopener"`:''}>
+        <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number, t.logo)}${seen?'<span class="seen-tag">✓ Visto</span>':soon?'<span class="seen-tag soon-tag">Próximamente</span>':''}</div>
         <div class="ep-meta"><span class="ep-label">Episodio ${esc(e.number)}</span><strong>${esc(e.title || 'Episodio '+e.number)}</strong></div>
         ${e.description?`<p>${esc(e.description)}</p>`:''}
-        ${e.duration?`<div class="ep-d">${esc(e.duration)}</div>`:''}</${tag}>`; }).join('')}</div><button class="rail-btn r" data-scroll="1" aria-label="Siguientes">›</button></div>` : '<p class="empty-note" style="padding:0">Esta temporada todavía no tiene episodios.</p>'}`;
+        ${!soon && e.duration?`<div class="ep-d">${esc(e.duration)}</div>`:''}</${tag}>`; }).join('')}</div><button class="rail-btn r" data-scroll="1" aria-label="Siguientes">›</button></div>` : '<p class="empty-note" style="padding:0">Esta temporada todavía no tiene episodios.</p>'}`;
 }
 function renderSuggTab(t){
   const pub = published().filter(x=>x.id!==t.id);
@@ -1665,7 +1676,7 @@ function flatEpisodes(t){ const out = []; sortedSeasons(t).forEach(s => s.episod
 function playTarget(t){
   if (isSoon(t)) return null;
   if (t.type !== 'serie') return safeUrl(t.url) ? { url: t.url, label: posResumable(getPos(t.id, null, null)) ? 'Continuar' : S.progress.has(t.id) ? 'Volver a ver' : 'Ver', movie:true } : null;
-  const eps = flatEpisodes(t).filter(x => safeUrl(x.e.url));
+  const eps = flatEpisodes(t).filter(x => safeUrl(x.e.url) && !seasonSoon(x.s) && !episodeSoon(x.e));
   if (!eps.length) return null;
   const p = S.progress.get(t.id);
   let i = 0, cont = false;
@@ -2174,7 +2185,7 @@ function loadHls(){
 }
 function nextAfter(t, season, episode){
   if (!t || t.type !== 'serie' || season == null || season === '') return null;
-  const eps = flatEpisodes(t).filter(x => safeUrl(x.e.url));
+  const eps = flatEpisodes(t).filter(x => safeUrl(x.e.url) && !seasonSoon(x.s) && !episodeSoon(x.e));
   const i = eps.findIndex(x => +x.s.number === +season && +x.e.number === +episode);
   return i >= 0 && i + 1 < eps.length ? eps[i + 1] : null;
 }
