@@ -605,7 +605,7 @@ function catalogGridHtml(){
 }
 function catPicker(){
   if (!S.catalogPicker) return '';
-  return `<div class="cat-picker"><div class="cat-picker-scrim" data-picker-close></div>
+  return `<div class="cat-picker"><button class="cat-picker-scrim" data-picker-close aria-label="Cerrar" tabindex="-1"></button>
     <div class="cat-picker-box"><button class="cat-picker-close" data-picker-close aria-label="Cerrar">✕</button>
       <h2>¿Qué querés crear?</h2><p>Elegí el tipo de título para empezar a cargarlo</p>
       <div class="cat-choices">
