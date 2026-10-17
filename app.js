@@ -1,7 +1,7 @@
 (() => {
 const S = { site:{}, db:null, user:null, owner:false, titles:[], banners:[], loaded:{t:false,b:false}, noDb:false,
   route:'home', q:'', genre:'', heroIdx:0, heroTimer:null,
-  adminTab:'catalogo', adminFilter:'', catalogFilter:'todo', catalogPicker:false, editing:null, editorTab:'info', dirty:false };
+  adminTab:'catalogo', adminFilter:'', catalogFilter:'todo', catalogPicker:false, quick:false, editing:null, editorTab:'info', dirty:false };
 const app = document.getElementById('app');
 const overlayRoot = document.getElementById('overlayRoot');
 
@@ -587,7 +587,7 @@ function renderAdmin(){
       <nav class="adm-nav">${sections.map(([id,label,count])=>`<button data-tab="${id}" aria-pressed="${tab===id}">${esc(label)}${count!=null?`<span>${count}</span>`:''}</button>`).join('')}</nav>
       <div class="adm-top-actions"><a class="adm-ghost" href="/">← Volver al sitio</a><button class="adm-ghost" data-logout>Cerrar sesión</button></div>
     </div>
-    <section class="panel" id="panel">${tab==='catalogo' ? (S.editing ? renderEditor() : renderCatalog()) : tab==='banners' ? renderBanners() : tab==='sitio' ? renderSite() : tab==='filas' ? renderFrowsAdmin() : renderTaxonomy()}</section></div>`;
+    <section class="panel" id="panel">${tab==='catalogo' ? (S.editing && !S.quick ? renderEditor() : renderCatalog()) : tab==='banners' ? renderBanners() : tab==='sitio' ? renderSite() : tab==='filas' ? renderFrowsAdmin() : renderTaxonomy()}</section></div>`;
 }
 function catalogList(){
   const f = S.adminFilter.toLowerCase();
@@ -604,7 +604,7 @@ function catalogGridHtml(){
       </div>`).join('')}</div>` : `<p class="empty-note" style="padding:20px 0">${S.titles.length ? 'Ningún título coincide con el filtro.' : 'El catálogo está vacío. Empezá con “Nuevo”.'}</p>`;
 }
 function catPicker(){
-  if (!S.catalogPicker) return '';
+  if (!S.catalogPicker && !S.quick) return '';
   const withP = shuffled(S.titles.filter(t=>t.poster), 'picker');
   let wall = '';
   if (withP.length){
@@ -615,10 +615,23 @@ function catPicker(){
   const art = type => { const t = shuffled(S.titles.filter(x=>(x.type==='serie')===(type==='serie') && (x.backdrop||x.bannerImage||x.poster)), 'pick-'+type)[0]; return t ? esc(t.backdrop||t.bannerImage||t.poster) : ''; };
   const fall = { serie:'radial-gradient(circle at 78% 16%,hsla(345,90%,94%,.95),transparent 46%),linear-gradient(160deg,hsl(315,82%,86%),hsl(353,70%,78%))', pelicula:'radial-gradient(circle at 78% 16%,hsla(228,90%,94%,.95),transparent 46%),linear-gradient(160deg,hsl(198,82%,86%),hsl(236,70%,78%))' };
   const choice = (type, label, sub) => { const img = art(type); return `<button class="cat-choice" data-new="${type}"><span class="cc-bg" ${img?`data-src="${img}"`:`style="background:${fall[type]}"`}></span><span class="cc-scrim"></span><span><span class="cc-lbl">${label}</span><span class="cc-sub">${sub}</span></span></button>`; };
-  return `<div class="cat-picker"><button class="cat-picker-scrim" data-picker-close aria-label="Cerrar" tabindex="-1"></button>${wall}<div class="cp-veil"></div>
-    <button class="cat-picker-close" data-picker-close aria-label="Cerrar">✕</button><div class="cat-picker-box">
+  const E = S.editing;
+  const inner = S.quick && E ? `<form class="cq-box" data-quick-form>
+        <div class="cq-top"><span class="cq-chip">${E.type==='serie'?'Nueva serie':'Nueva película'}</span><button type="button" class="cq-x" data-picker-close aria-label="Cerrar">✕</button></div>
+        <div class="cq-body">
+          <div class="cq-poster"><span>Póster</span>${slot('poster','poster',E.poster,'r23','Subir póster')}</div>
+          <div class="cq-fields">
+            <label class="field"><span>Título</span><input class="input" id="f-title" data-k="title" value="${esc(E.title)}" placeholder="${E.type==='serie'?'Ej: La Isla de los Secretos':'Ej: Detrás del Final'}" autocomplete="off"></label>
+            <div class="cq-row"><label class="field"><span>Año</span><input class="input" data-k="year" inputmode="numeric" value="${esc(E.year)}"></label>
+              <label class="field"><span>Clasificación</span><select class="select" data-k="rating">${RATINGS.map(r=>`<option ${E.rating===r?'selected':''}>${r}</option>`).join('')}</select></label></div>
+            <label class="field"><span>Descripción corta</span><textarea class="textarea" data-k="description" placeholder="De qué trata, en una o dos líneas"></textarea></label>
+          </div>
+        </div>
+        <div class="cq-foot"><button type="button" class="cq-link" data-quick-tmdb>Importar de TMDB</button><span class="spacer"></span><button type="button" class="btn btn-line" data-picker-close>Cancelar</button><button type="submit" class="btn-new">Crear y seguir</button></div>
+      </form>` : `<div class="cat-picker-box">
       <h2>¿Qué querés crear?</h2><p>Elegí el tipo de título para empezar a cargarlo</p>
-      <div class="cat-choices">${choice('serie','Serie','Temporadas y episodios')}${choice('pelicula','Película','Título único')}</div></div></div>`;
+      <div class="cat-choices">${choice('serie','Serie','Temporadas y episodios')}${choice('pelicula','Película','Título único')}</div></div>`;
+  return `<div class="cat-picker"><button class="cat-picker-scrim" data-picker-close aria-label="Cerrar" tabindex="-1"></button>${wall}<div class="cp-veil"></div>${S.quick?'':'<button class="cat-picker-close" data-picker-close aria-label="Cerrar">✕</button>'}${inner}</div>`;
 }
 function renderCatalog(){
   const ser = S.titles.filter(t=>t.type==='serie'), mov = S.titles.filter(t=>t.type!=='serie');
@@ -638,7 +651,7 @@ function renderCatalog(){
 }
 function slot(kind, path, value, cls, label){
   return `<div class="slot ${cls} ${value?'filled':''}" role="button" tabindex="0" data-slot="${kind}" data-path="${esc(path)}" ${value?`data-src="${esc(value)}"`:''} aria-label="${esc(label)}">
-    <span class="slot-empty">${esc(label)}</span><button class="slot-x" data-clear="${esc(path)}" aria-label="Quitar imagen">✕</button><button class="slot-url" data-slot-url="${esc(path)}" aria-label="Usar un enlace de imagen" title="Pegar enlace de imagen">🔗</button></div>`;
+    <span class="slot-empty">${esc(label)}</span><button type="button" class="slot-x" data-clear="${esc(path)}" aria-label="Quitar imagen">✕</button><button type="button" class="slot-url" data-slot-url="${esc(path)}" aria-label="Usar un enlace de imagen" title="Pegar enlace de imagen">🔗</button></div>`;
 }
 function chipField(key, label, list, suggest){
   const sugg = (suggest||[]).filter(x=>!list.includes(x)).slice(0,14);
@@ -1149,7 +1162,7 @@ function animatePanel(panel){
 function rerenderPanel(anim){
   const panel = document.getElementById('panel'); if (!panel) return render();
   const y = window.scrollY;
-  panel.innerHTML = S.adminTab==='catalogo' ? (S.editing ? renderEditor() : renderCatalog()) : S.adminTab==='banners' ? renderBanners() : S.adminTab==='sitio' ? renderSite() : S.adminTab==='filas' ? renderFrowsAdmin() : renderTaxonomy();
+  panel.innerHTML = S.adminTab==='catalogo' ? (S.editing && !S.quick ? renderEditor() : renderCatalog()) : S.adminTab==='banners' ? renderBanners() : S.adminTab==='sitio' ? renderSite() : S.adminTab==='filas' ? renderFrowsAdmin() : renderTaxonomy();
   hydrate(panel); window.scrollTo(0,y);
   if (anim === true) animatePanel(panel);
 }
@@ -1259,8 +1272,9 @@ app.addEventListener('click', async e => {
   if (d.catfilter){ S.catalogFilter = d.catfilter; document.querySelectorAll('[data-catfilter]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.catfilter===d.catfilter))); syncPillSegs(); const g=document.getElementById('catGrid'); if (g){ g.innerHTML = catalogGridHtml(); hydrate(g); g.classList.remove('grid-in'); void g.offsetWidth; g.classList.add('grid-in'); } return; }
   if (d.etab){ S.editorTab = d.etab; rerenderPanel(true); return; }
   if (d.nuevoOpen !== undefined){ S.catalogPicker = true; rerenderPanel(); return; }
-  if (d.pickerClose !== undefined){ S.catalogPicker = false; rerenderPanel(); return; }
-  if (d.new){ S.tmdb = { open:true }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.dirty=false; S.editorTab='info'; rerenderPanel(true); window.scrollTo(0,0); return; }
+  if (d.pickerClose !== undefined){ S.catalogPicker = false; if (S.quick){ S.quick = false; S.editing = null; S.dirty = false; } rerenderPanel(); return; }
+  if (d.quickTmdb !== undefined){ S.quick = false; S.tmdb = { open:true }; S.editorTab = 'info'; rerenderPanel(true); return; }
+  if (d.new){ S.tmdb = { open:false }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.quick = true; S.dirty=false; S.editorTab='info'; rerenderPanel(); setTimeout(()=>document.getElementById('f-title')?.focus(), 120); return; }
   if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.dirty=false; S.editorTab='info'; rerenderPanel(true); window.scrollTo(0,0); return; }
   if (d.del !== undefined && d.del){ inlineConfirm(t.closest('[data-row]'), '¿Eliminar?', () => deleteTitle(d.del)); return; }
   if (d.back !== undefined){ S.editing=null; S.dirty=false; rerenderPanel(true); return; }
@@ -1470,6 +1484,7 @@ function renderFooter(){
 }
 
 app.addEventListener('submit', async e => {
+  if (e.target.matches('[data-quick-form]')){ e.preventDefault(); if (!S.editing || !S.editing.title.trim()){ toast('Poné un título para crearlo.', true); document.getElementById('f-title')?.focus(); return; } S.quick = false; S.catalogPicker = false; S.editorTab = 'info'; await saveTitle(); animatePanel(); return; }
   if (e.target.id === 'tmdbForm'){ e.preventDefault(); S.tmdb.specials = !!document.getElementById('tmdb-specials')?.checked; const q = document.getElementById('tmdb-q').value.trim(); if (q) tmdbSearch(q); return; }
   if (e.target.id !== 'loginForm') return;
   e.preventDefault();
