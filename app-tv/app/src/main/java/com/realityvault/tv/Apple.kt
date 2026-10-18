@@ -477,7 +477,7 @@ fun DetailScreen(id: String, nav: Nav) {
                     Box(Modifier.fillMaxWidth().height(screenH - 30.dp).onFocusChanged { heroFocused = it.hasFocus }) {
                         if (t.tvBg.isNotBlank()) Img(t.tvBg, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
                         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .8f), .36f to Color.Black.copy(alpha = .45f), .58f to Color.Transparent)))
-                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .55f to Color.Transparent, 1f to tint)))
+                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .42f to Color.Transparent, .68f to tint.copy(alpha = .75f), .88f to tint, 1f to tint)))
                         Column(Modifier.align(Alignment.BottomStart).padding(start = 48.dp, bottom = 70.dp).width(380.dp)) {
                             TitleLogo(t, 230.dp, 76.dp, 28)
                             Spacer(Modifier.height(10.dp))

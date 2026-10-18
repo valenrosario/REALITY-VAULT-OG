@@ -68,7 +68,9 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player as M3Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import androidx.core.content.res.ResourcesCompat
 import kotlinx.coroutines.delay
 
 /* ---------------- pantalla del reproductor ---------------- */
@@ -212,6 +214,24 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                     useController = false
                     keepScreenOn = true
                     setBackgroundColor(AColor.BLACK)
+                    // subtítulos: misma tipografía del sitio, más arriba para no chocar con la barra de abajo
+                    subtitleView?.apply {
+                        setBottomPaddingFraction(0.16f)
+                        setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 21f)
+                        setApplyEmbeddedStyles(false)
+                        setApplyEmbeddedFontSizes(false)
+                        val gg = runCatching { ResourcesCompat.getFont(c, R.font.gg_book) }.getOrNull()
+                        setStyle(
+                            CaptionStyleCompat(
+                                AColor.WHITE,
+                                AColor.TRANSPARENT,
+                                AColor.TRANSPARENT,
+                                CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                                AColor.argb(190, 0, 0, 0),
+                                gg
+                            )
+                        )
+                    }
                 }
             }
         )
