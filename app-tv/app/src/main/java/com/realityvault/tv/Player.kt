@@ -214,9 +214,9 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                     useController = false
                     keepScreenOn = true
                     setBackgroundColor(AColor.BLACK)
-                    // subtítulos: misma tipografía del sitio, más arriba para no chocar con la barra de abajo
+                    // subtítulos: misma tipografía del sitio, con su cuadro negro de fondo, bien arriba de la barra de abajo
                     subtitleView?.apply {
-                        setBottomPaddingFraction(0.16f)
+                        setBottomPaddingFraction(0.22f)
                         setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 21f)
                         setApplyEmbeddedStyles(false)
                         setApplyEmbeddedFontSizes(false)
@@ -224,10 +224,10 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                         setStyle(
                             CaptionStyleCompat(
                                 AColor.WHITE,
+                                AColor.argb(160, 0, 0, 0),
                                 AColor.TRANSPARENT,
-                                AColor.TRANSPARENT,
-                                CaptionStyleCompat.EDGE_TYPE_OUTLINE,
-                                AColor.argb(190, 0, 0, 0),
+                                CaptionStyleCompat.EDGE_TYPE_NONE,
+                                AColor.BLACK,
                                 gg
                             )
                         )

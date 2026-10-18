@@ -101,63 +101,54 @@ fun App(nav: Nav, onExit: () -> Unit) {
                     Screen.Account -> AccountScreen(nav)
                     else -> {}
                 }
-                TopTabs(nav, Modifier.align(Alignment.TopStart))
+                TopNavBar(nav, Modifier.align(Alignment.TopStart))
             }
         }
     }
 }
 
-/* ---------------- menú de arriba (pastilla "‹ Inicio" que se abre) ---------------- */
+/* ---------------- menú de arriba, igual que el sitio web ---------------- */
 
 @Composable
-fun TopTabs(nav: Nav, modifier: Modifier = Modifier) {
-    var open by remember { mutableStateOf(false) }
-    var entered by remember { mutableStateOf(false) }
-    val items = listOf(
-        Triple(Screen.Search, Ic.search, "Buscar"), Triple(Screen.Home, Ic.home, "Inicio"),
-        Triple(Screen.Series, Ic.tv, "Series"), Triple(Screen.Movies, Ic.film, "Películas"),
-        Triple(Screen.MyList, Ic.plus, "Mi lista"),
-        Triple(Screen.Account, Ic.user, if (Store.session != null) "Mi cuenta" else "Entrar")
-    )
-    val cur = items.firstOrNull { it.first == nav.top } ?: items[1]
-    val curReq = remember { FocusRequester() }
-    Box(modifier.padding(start = 44.dp, top = 24.dp)) {
-        if (!open) {
-            Focusable({ open = true }, Modifier.height(30.dp), shape = RoundedCornerShape(99.dp), scale = 1.05f, ring = false, onFocus = { open = true }) { f ->
-                Row(
-                    Modifier.background(if (f) Color.White else Color(0x8C26262C)).padding(start = 8.dp, end = 13.dp).height(30.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Ic.back, null, tint = (if (f) Color.Black else Color.White).copy(alpha = .6f), modifier = Modifier.size(11.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Box(Modifier.size(21.dp).background((if (f) Color.Black else Color.White).copy(alpha = .16f), CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(cur.second, null, tint = if (f) Color.Black else Color.White, modifier = Modifier.size(12.dp))
-                    }
-                    Spacer(Modifier.width(7.dp))
-                    Text(cur.third, style = ts(12, FontWeight.Bold, if (f) Color.Black else Color.White))
-                }
-            }
-        } else {
-            Row(
-                Modifier.background(Color(0xCC1E1E24), RoundedCornerShape(99.dp)).padding(3.dp)
-                    .onFocusChanged { if (it.hasFocus) entered = true else if (entered) { open = false; entered = false } },
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                items.forEach { (scr, ic, label) ->
-                    val sel = scr == cur.first
-                    Focusable({ if (nav.top != scr) nav.section(scr) }, Modifier.height(28.dp), shape = RoundedCornerShape(99.dp), scale = 1.04f, ring = false, requester = if (sel) curReq else null) { f ->
-                        Row(
-                            Modifier.background(if (f) Color.White else if (sel) Color.White.copy(alpha = .16f) else Color.Transparent).padding(horizontal = 11.dp).height(28.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(ic, null, tint = if (f) Color.Black else Color.White, modifier = Modifier.size(12.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(label, style = ts(12, FontWeight.Bold, if (f) Color.Black else Color.White))
-                        }
-                    }
-                }
-            }
-            AutoFocus(curReq, "tabs")
+fun TopNavBar(nav: Nav, modifier: Modifier = Modifier) {
+    val items = listOf(Screen.Home to "Inicio", Screen.Series to "Series", Screen.Movies to "Películas", Screen.MyList to "Mi lista")
+    Row(
+        modifier
+            .fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .85f), Color.Black.copy(alpha = .35f), Color.Transparent)))
+            .padding(start = 48.dp, end = 48.dp, top = 24.dp, bottom = 46.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (Store.siteLogo.isNotBlank()) Img(Store.siteLogo, Modifier.height(24.dp).width(140.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
+        else LocalLogo(Modifier.height(24.dp).width(140.dp))
+        Spacer(Modifier.width(40.dp))
+        items.forEach { (scr, label) ->
+            NavLink(label, nav.top == scr) { if (nav.top != scr) nav.section(scr) }
+            Spacer(Modifier.width(28.dp))
+        }
+        Spacer(Modifier.weight(1f))
+        RoundButton(Ic.search, "Buscar", { nav.go(Screen.Search) })
+        Spacer(Modifier.width(16.dp))
+        Focusable({ nav.go(Screen.Account) }, Modifier.size(36.dp), shape = CircleShape, scale = 1.1f, ring = false) { f ->
+            Box(
+                Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFFFFD1E6), C.accent)), CircleShape)
+                    .border(if (f) 2.5.dp else 0.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center
+            ) { Text(Store.session?.email?.take(1)?.uppercase() ?: "?", style = ts(14, FontWeight.Bold, Color.White)) }
+        }
+    }
+}
+
+@Composable
+private fun NavLink(label: String, selected: Boolean, onClick: () -> Unit) {
+    Focusable(onClick, Modifier, shape = RoundedCornerShape(6.dp), scale = 1f, ring = false) { f ->
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(label, style = ts(15, FontWeight.Bold, if (f || selected) Color.White else C.muted))
+            Spacer(Modifier.height(5.dp))
+            Box(
+                Modifier.width(if (selected || f) 22.dp else 0.dp).height(3.dp)
+                    .background(if (selected || f) C.accent else Color.Transparent, RoundedCornerShape(2.dp))
+            )
         }
     }
 }
@@ -285,17 +276,17 @@ fun HeroA(all: List<Slide>, idx: Int, height: Dp, nav: Nav, req: FocusRequester,
         }
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .75f), .38f to Color.Black.copy(alpha = .35f), .6f to Color.Transparent)))
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .5f to Color.Transparent, .8f to Color.Black.copy(alpha = .45f), 1f to Color.Black)))
-        Column(Modifier.align(Alignment.BottomStart).padding(start = 48.dp, bottom = 46.dp).width(380.dp)) {
-            if (slide.headline.isNotBlank()) Text(slide.headline, style = ts(28, FontWeight.Bold, Color.White), maxLines = 2)
-            else TitleLogo(t, 230.dp, 76.dp, 28)
-            Spacer(Modifier.height(10.dp))
+        Column(Modifier.align(Alignment.BottomStart).padding(start = 48.dp, bottom = 58.dp).width(540.dp)) {
+            if (slide.headline.isNotBlank()) Text(slide.headline, style = ts(44, FontWeight.Bold, Color.White), maxLines = 2)
+            else TitleLogo(t, 320.dp, 100.dp, 40)
+            Spacer(Modifier.height(12.dp))
             KindLine(t)
             if (slide.text.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
-                Text(slide.text, style = ts(12, FontWeight.Light, Color.White.copy(alpha = .8f)), maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 16.sp)
+                Spacer(Modifier.height(8.dp))
+                Text(slide.text, style = ts(15, FontWeight.Light, Color.White.copy(alpha = .85f)), maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 20.sp)
             }
-            Spacer(Modifier.height(15.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            Spacer(Modifier.height(20.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 when {
                     t.isSoon -> PlayPill(if (t.releaseDate.isNotBlank()) "Próximamente · ${t.releaseDate}" else "Próximamente", null, req) { nav.go(Screen.Detail(t.id)) }
                     target != null -> PlayPill(if (target.cont) target.label else "Reproducir", Ic.play, req) { nav.play(t, target.url, target.season, target.episode) }
@@ -309,13 +300,13 @@ fun HeroA(all: List<Slide>, idx: Int, height: Dp, nav: Nav, req: FocusRequester,
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Ic.chevron, "Siguiente", tint = if (f) Color.White else Color.White.copy(alpha = .8f), modifier = Modifier.size(17.dp)) }
                 }
             }
-        }
-        if (all.size > 1) Row(
-            Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp).background(Color(0x7326262C), RoundedCornerShape(99.dp)).padding(horizontal = 7.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically
-        ) {
-            all.indices.forEach { i ->
-                Box(Modifier.height(4.dp).width(if (i == idx) 11.dp else 4.dp).background(if (i == idx) Color.White else Color.White.copy(alpha = .45f), RoundedCornerShape(9.dp)))
+            if (all.size > 1) {
+                Spacer(Modifier.height(18.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    all.indices.forEach { i ->
+                        Box(Modifier.height(4.dp).width(if (i == idx) 26.dp else 14.dp).background(if (i == idx) C.accent else Color.White.copy(alpha = .3f), RoundedCornerShape(4.dp)))
+                    }
+                }
             }
         }
     }
@@ -324,33 +315,33 @@ fun HeroA(all: List<Slide>, idx: Int, height: Dp, nav: Nav, req: FocusRequester,
 @Composable
 fun KindLine(t: Title) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text((listOf(t.kind()) + t.genres.take(2)).joinToString(" · "), style = ts(12, color = Color.White.copy(alpha = .88f)), maxLines = 1)
-        if (t.rating.isNotBlank()) { Spacer(Modifier.width(7.dp)); RatingBox(t.rating) }
+        Text((listOf(t.kind()) + t.genres.take(2)).joinToString(" · "), style = ts(14, color = Color.White.copy(alpha = .88f)), maxLines = 1)
+        if (t.rating.isNotBlank()) { Spacer(Modifier.width(9.dp)); RatingBox(t.rating) }
     }
 }
 
 @Composable
 fun RatingBox(r: String) {
-    Box(Modifier.border(1.dp, Color.White.copy(alpha = .75f), RoundedCornerShape(2.dp)).padding(horizontal = 3.dp)) {
-        Text(r, style = ts(8, FontWeight.Bold, Color.White))
+    Box(Modifier.border(1.dp, Color.White.copy(alpha = .75f), RoundedCornerShape(3.dp)).padding(horizontal = 4.dp)) {
+        Text(r, style = ts(10, FontWeight.Bold, Color.White))
     }
 }
 
 @Composable
 fun PlayPill(text: String, icon: ImageVector?, req: FocusRequester? = null, onClick: () -> Unit) {
-    Focusable(onClick, Modifier.height(33.dp), shape = RoundedCornerShape(99.dp), scale = 1.07f, ring = false, lift = true, requester = req) {
-        Row(Modifier.background(Color.White).padding(horizontal = 22.dp).height(33.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (icon != null) { Icon(icon, null, tint = Color.Black, modifier = Modifier.size(11.dp)); Spacer(Modifier.width(6.dp)) }
-            Text(text, style = ts(13, FontWeight.Bold, Color.Black), maxLines = 1)
+    Focusable(onClick, Modifier.height(46.dp), shape = RoundedCornerShape(99.dp), scale = 1.06f, ring = false, lift = true, requester = req) {
+        Row(Modifier.background(Color.White).padding(horizontal = 28.dp).height(46.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) { Icon(icon, null, tint = Color.Black, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(8.dp)) }
+            Text(text, style = ts(15, FontWeight.Bold, Color.Black), maxLines = 1)
         }
     }
 }
 
 @Composable
 fun GlassButton(icon: ImageVector, onClick: () -> Unit) {
-    Focusable(onClick, Modifier.size(31.dp), shape = CircleShape, scale = 1.12f, ring = false, lift = true) { f ->
+    Focusable(onClick, Modifier.size(42.dp), shape = CircleShape, scale = 1.1f, ring = false, lift = true) { f ->
         Box(Modifier.fillMaxSize().background(if (f) Color.White else Color(0x9C3C3C42)), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = if (f) Color.Black else Color.White, modifier = Modifier.size(14.dp))
+            Icon(icon, null, tint = if (f) Color.Black else Color.White, modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -478,13 +469,13 @@ fun DetailScreen(id: String, nav: Nav) {
                         if (t.tvBg.isNotBlank()) Img(t.tvBg, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
                         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .8f), .36f to Color.Black.copy(alpha = .45f), .58f to Color.Transparent)))
                         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .42f to Color.Transparent, .68f to tint.copy(alpha = .75f), .88f to tint, 1f to tint)))
-                        Column(Modifier.align(Alignment.BottomStart).padding(start = 48.dp, bottom = 70.dp).width(380.dp)) {
-                            TitleLogo(t, 230.dp, 76.dp, 28)
-                            Spacer(Modifier.height(10.dp))
+                        Column(Modifier.align(Alignment.BottomStart).padding(start = 48.dp, bottom = 80.dp).width(540.dp)) {
+                            TitleLogo(t, 320.dp, 100.dp, 40)
+                            Spacer(Modifier.height(12.dp))
                             KindLine(t)
                             if (t.description.isNotBlank()) {
-                                Spacer(Modifier.height(6.dp))
-                                Text(t.description, style = ts(12, FontWeight.Light, Color.White.copy(alpha = .8f)), maxLines = 3, overflow = TextOverflow.Ellipsis, lineHeight = 16.sp)
+                                Spacer(Modifier.height(8.dp))
+                                Text(t.description, style = ts(15, FontWeight.Light, Color.White.copy(alpha = .85f)), maxLines = 3, overflow = TextOverflow.Ellipsis, lineHeight = 20.sp)
                             }
                             val facts = listOfNotNull(
                                 t.year.takeIf { it.isNotBlank() }?.let { if (t.yearEnd.isNotBlank()) "$it – ${t.yearEnd}" else it },
@@ -493,12 +484,12 @@ fun DetailScreen(id: String, nav: Nav) {
                             if (facts.isNotBlank()) {
                                 Spacer(Modifier.height(10.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(facts, style = ts(11, color = Color.White.copy(alpha = .85f)))
-                                    if (t.rating.isNotBlank()) { Spacer(Modifier.width(7.dp)); RatingBox(t.rating) }
+                                    Text(facts, style = ts(13, color = Color.White.copy(alpha = .85f)))
+                                    if (t.rating.isNotBlank()) { Spacer(Modifier.width(9.dp)); RatingBox(t.rating) }
                                 }
                             }
-                            Spacer(Modifier.height(15.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                            Spacer(Modifier.height(20.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 when {
                                     t.isSoon -> PlayPill(if (t.releaseDate.isNotBlank()) "Próximamente · ${t.releaseDate}" else "Próximamente", null, playReq) {}
                                     target != null -> PlayPill(target.label, Ic.play, playReq) { nav.play(t, target.url, target.season, target.episode) }
