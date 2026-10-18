@@ -10,6 +10,9 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -33,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,8 +50,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -168,7 +175,35 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     LaunchedEffect(Unit) { AutoFocusOnce(playReq) }
     LaunchedEffect(playing) { if (!playing) AutoFocusOnce(contReq) }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    // -- avisos de "-10 / +10" cuando se adelanta/atrasa con el control, sin tocar los botones --
+    var backPulse by remember { mutableIntStateOf(0) }
+    var fwdPulse by remember { mutableIntStateOf(0) }
+    var showBack by remember { mutableStateOf(false) }
+    var showFwd by remember { mutableStateOf(false) }
+    LaunchedEffect(backPulse) { if (backPulse > 0) { showBack = true; delay(650); showBack = false } }
+    LaunchedEffect(fwdPulse) { if (fwdPulse > 0) { showFwd = true; delay(650); showFwd = false } }
+
+    fun doSeekBack() { player.seekBack(); backPulse++; bump() }
+    fun doSeekForward() { player.seekForward(); fwdPulse++; bump() }
+    fun doToggle() { if (player.isPlaying) player.pause() else player.play(); bump() }
+
+    Box(
+        Modifier.fillMaxSize().background(Color.Black)
+            .onPreviewKeyEvent { e ->
+                // se intercepta ANTES que cualquier botón: así el control de la tele
+                // (adelantar/atrasar/pausa) funciona siempre, esté lo que esté enfocado,
+                // y la tele no muestra su propia ventanita de reproducción encima.
+                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (e.key) {
+                    Key.MediaPlayPause -> { doToggle(); true }
+                    Key.MediaPlay -> { player.play(); bump(); true }
+                    Key.MediaPause -> { player.pause(); bump(); true }
+                    Key.DirectionLeft, Key.MediaRewind -> { doSeekBack(); true }
+                    Key.DirectionRight, Key.MediaFastForward -> { doSeekForward(); true }
+                    else -> false
+                }
+            }
+    ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { c ->
@@ -183,29 +218,35 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         // capa invisible: cualquier botón del control despierta la interfaz
         if (!controlsVisible) WakeLayer(Modifier.fillMaxSize()) { bump() }
 
+        // avisos de -10 / +10 (tipo Netflix), aparecen con cualquier adelantar/atrasar
+        AnimatedVisibility(showBack, Modifier.align(Alignment.CenterStart).padding(start = 170.dp), enter = fadeIn(), exit = fadeOut()) {
+            SeekFlash(back = true)
+        }
+        AnimatedVisibility(showFwd, Modifier.align(Alignment.CenterEnd).padding(end = 170.dp), enter = fadeIn(), exit = fadeOut()) {
+            SeekFlash(back = false)
+        }
+
         if (controlsVisible) {
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .55f), .22f to Color.Transparent, .62f to Color.Transparent, 1f to Color.Black.copy(alpha = .8f))))
+            // en pausa se oscurece más el fondo, para que se note bien que está pausado
+            if (!playing) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .5f)))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .6f), .22f to Color.Transparent, .62f to Color.Transparent, 1f to Color.Black.copy(alpha = .85f))))
 
             if (playing) {
-                // ---- reproduciendo: info arriba, controles al medio, barra abajo ----
-                Row(Modifier.align(Alignment.TopStart).padding(start = 64.dp, top = 44.dp).width(900.dp), verticalAlignment = Alignment.Top) {
-                    Column(Modifier.weight(1f)) {
-                        TopInfo(t, episode, s.season)
-                    }
-                    if (m.subsUrl.isNotBlank()) CcButton(subsOn) {
+                // ---- reproduciendo: info arriba, pausa al medio, barra abajo ----
+                Box(Modifier.align(Alignment.TopStart).padding(start = 64.dp, top = 44.dp).width(760.dp)) {
+                    TopInfo(t, episode, s.season)
+                }
+                if (m.subsUrl.isNotBlank()) Box(Modifier.align(Alignment.TopEnd).padding(end = 64.dp, top = 44.dp)) {
+                    CcButton(subsOn) {
                         subsOn = !subsOn
                         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(M3C.TRACK_TYPE_TEXT, !subsOn).build()
                         bump()
                     }
                 }
-                Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(70.dp), verticalAlignment = Alignment.CenterVertically) {
-                    SkipButton(back = true) { player.seekBack(); bump() }
-                    Focusable({ player.pause(); bump() }, Modifier.size(90.dp), shape = CircleShape, scale = 1.08f, ring = false, requester = playReq, onFocus = { bump() }) {
-                        Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .96f), CircleShape), contentAlignment = Alignment.Center) {
-                            Icon(Ic.pause, null, tint = Color.Black, modifier = Modifier.size(34.dp))
-                        }
+                Focusable({ doToggle() }, Modifier.align(Alignment.Center).size(84.dp), shape = CircleShape, scale = 1.08f, ring = false, requester = playReq, onFocus = { bump() }) {
+                    Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .96f), CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(Ic.pause, null, tint = Color.Black, modifier = Modifier.size(32.dp))
                     }
-                    SkipButton(back = false) { player.seekForward(); bump() }
                 }
                 Column(Modifier.align(Alignment.BottomStart).padding(start = 64.dp, end = 64.dp, bottom = 48.dp).fillMaxWidth()) {
                     Scrub(posMs, durMs)
@@ -216,7 +257,14 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                     }
                 }
             } else {
-                // ---- en pausa: tarjeta con logo, capítulo y controles chicos ----
+                // ---- en pausa: tarjeta con logo, capítulo y controles, tipo Netflix ----
+                if (m.subsUrl.isNotBlank()) Box(Modifier.align(Alignment.TopEnd).padding(end = 64.dp, top = 44.dp)) {
+                    CcButton(subsOn) {
+                        subsOn = !subsOn
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(M3C.TRACK_TYPE_TEXT, !subsOn).build()
+                        bump()
+                    }
+                }
                 Column(Modifier.align(Alignment.BottomStart).padding(start = 64.dp, bottom = 56.dp).width(760.dp)) {
                     if (t != null) TitleLogo(t, 220.dp, 42.dp, 26)
                     Spacer(Modifier.height(14.dp))
@@ -230,8 +278,8 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         PillButton("Continuar", { player.play(); bump() }, requester = contReq, onFocus = { bump() })
                         GlassButton(Ic.back) { nav.back() }
-                        SmallGlass(back = true) { player.seekBack(); bump() }
-                        SmallGlass(back = false) { player.seekForward(); bump() }
+                        SmallGlass(back = true) { doSeekBack() }
+                        SmallGlass(back = false) { doSeekForward() }
                     }
                 }
             }
@@ -239,6 +287,14 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         if (buffering && !ended) Box(Modifier.align(Alignment.Center)) {
             androidx.compose.material3.CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp)
         }
+    }
+}
+
+/** El aviso "-10" / "+10" que aparece un instante al adelantar o atrasar. */
+@Composable
+private fun SeekFlash(back: Boolean) {
+    Box(Modifier.size(84.dp).background(Color.Black.copy(alpha = .55f), CircleShape), contentAlignment = Alignment.Center) {
+        SeekIcon(back, Color.White, 44.dp)
     }
 }
 
@@ -253,33 +309,32 @@ private fun TopInfo(t: Title?, episode: Episode?, season: Int?) {
     }
 }
 
+/** Botón de subtítulos: siempre con fondo sólido para que se vea sobre cualquier video. */
 @Composable
 private fun CcButton(on: Boolean, onClick: () -> Unit) {
-    Focusable(onClick, Modifier.size(46.dp), shape = CircleShape, scale = 1.12f, ring = false) { f ->
-        Box(
-            Modifier.fillMaxSize()
-                .background(if (f) Color.White else Color.White.copy(alpha = if (on) .18f else .08f), CircleShape)
-                .border(1.6.dp, if (f) Color.White else Color.White.copy(alpha = if (on) .9f else .35f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) { Text("CC", style = ts(13, FontWeight.Bold, if (f) Color.Black else if (on) Color.White else Color.White.copy(alpha = .45f))) }
-    }
-}
-
-@Composable
-private fun SkipButton(back: Boolean, onClick: () -> Unit) {
-    Focusable(onClick, Modifier.size(72.dp), shape = CircleShape, scale = 1.12f, ring = false) { f ->
-        Box(
-            Modifier.fillMaxSize().background(if (f) Color.White else Color.White.copy(alpha = .14f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) { SeekIcon(back, if (f) Color.Black else Color.White, 42.dp) }
+    Focusable(onClick, Modifier.height(44.dp), shape = RoundedCornerShape(99.dp), scale = 1.08f, ring = false, lift = true) { f ->
+        Row(
+            Modifier
+                .background(if (f) Color.White else Color.Black.copy(alpha = .6f), RoundedCornerShape(99.dp))
+                .border(1.3.dp, if (f) Color.White else if (on) C.accent.copy(alpha = .85f) else Color.White.copy(alpha = .4f), RoundedCornerShape(99.dp))
+                .padding(horizontal = 16.dp).height(44.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(9.dp).background(if (f) Color.Black else if (on) C.accent else Color.White.copy(alpha = .4f), CircleShape)
+            )
+            Spacer(Modifier.width(9.dp))
+            Text("Subtítulos", style = ts(13, FontWeight.Bold, if (f) Color.Black else Color.White))
+        }
     }
 }
 
 @Composable
 private fun SmallGlass(back: Boolean, onClick: () -> Unit) {
-    Focusable(onClick, Modifier.size(50.dp), shape = CircleShape, scale = 1.12f, ring = false, lift = true) { f ->
+    Focusable(onClick, Modifier.size(52.dp), shape = CircleShape, scale = 1.12f, ring = false, lift = true) { f ->
         Box(
-            Modifier.fillMaxSize().background(if (f) Color.White else Color(0x9C3C3C42), CircleShape),
+            Modifier.fillMaxSize().background(if (f) Color.White else Color.Black.copy(alpha = .55f), CircleShape)
+                .border(1.dp, if (f) Color.White else Color.White.copy(alpha = .35f), CircleShape),
             contentAlignment = Alignment.Center
         ) { SeekIcon(back, if (f) Color.Black else Color.White, 26.dp) }
     }

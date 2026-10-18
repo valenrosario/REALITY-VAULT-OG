@@ -76,6 +76,7 @@ import kotlinx.coroutines.launch
 /* ---------------- navegación ---------------- */
 
 sealed class Screen {
+    data object Splash : Screen()
     data object Home : Screen()
     data object Series : Screen()
     data object Movies : Screen()
@@ -84,7 +85,8 @@ sealed class Screen {
     data object Account : Screen()
     data class Detail(val id: String) : Screen()
     data class Player(val titleId: String, val url: String, val season: Int?, val episode: Int?, val trailer: Boolean = false) : Screen()
-    data class Login(val then: Screen? = null) : Screen()
+    /** required = true: es la puerta de entrada obligatoria, no se puede saltear. */
+    data class Login(val then: Screen? = null, val required: Boolean = false) : Screen()
     data class Person(val name: String) : Screen()
 }
 
@@ -100,7 +102,7 @@ class Memory {
 }
 
 class Nav {
-    val stack = mutableStateListOf<Screen>(Screen.Home)
+    val stack = mutableStateListOf<Screen>(Screen.Splash)
     val top get() = stack.last()
     val memory = Memory()
     fun go(s: Screen) { stack.add(s) }
@@ -225,7 +227,7 @@ fun fieldColors() = OutlinedTextFieldDefaults.colors(
 /* ---------------- cuenta ---------------- */
 
 @Composable
-fun EmailLogin(nav: Nav, done: () -> Unit, note: String?, onBack: () -> Unit) {
+fun EmailLogin(nav: Nav, done: () -> Unit, note: String?, required: Boolean = false, onBack: () -> Unit) {
     var email by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
     var err by remember { mutableStateOf("") }
@@ -274,7 +276,7 @@ fun EmailLogin(nav: Nav, done: () -> Unit, note: String?, onBack: () -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 PillButton(if (busy) "Entrando…" else "Entrar", { run(false) }, icon = null)
                 TextButtonTv("Crear cuenta", { run(true) })
-                TextButtonTv(if (note == null) "Volver" else "Ahora no", { if (note == null) onBack() else nav.back() })
+                TextButtonTv(if (note == null) "Volver" else "Ahora no", { if (note == null || required) onBack() else nav.back() })
             }
         }
     }

@@ -76,12 +76,17 @@ import kotlinx.coroutines.launch
 @Composable
 fun App(nav: Nav, onExit: () -> Unit) {
     BackHandler {
-        if (!nav.back()) {
+        val top = nav.top
+        if (top is Screen.Login && top.required) {
+            // es la puerta de entrada: no hay a dónde volver, salir de la app
+            onExit()
+        } else if (!nav.back()) {
             if (nav.top != Screen.Home) nav.section(Screen.Home) else onExit()
         }
     }
     Box(Modifier.fillMaxSize().background(C.bg)) {
         when (val s = nav.top) {
+            Screen.Splash -> SplashScreen(nav)
             is Screen.Player -> PlayerScreen(s, nav)
             is Screen.Detail -> DetailScreen(s.id, nav)
             is Screen.Login -> LoginScreen(s, nav)
