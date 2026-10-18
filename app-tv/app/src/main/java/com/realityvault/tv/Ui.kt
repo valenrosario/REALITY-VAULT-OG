@@ -107,6 +107,8 @@ object Ic {
     val user = icon("M8 8a4 4 0 1 0 8 0a4 4 0 1 0 -8 0", "M4 20.5c1.5 -4 4.5 -6 8 -6s6.5 2 8 6")
     val clapper = icon("M3.5 10h17v9.5a1.5 1.5 0 0 1 -1.5 1.5H5a1.5 1.5 0 0 1 -1.5 -1.5z", "M3.2 9.9L2.6 7.3a1.5 1.5 0 0 1 1.1 -1.8l13.6 -3.2a1.5 1.5 0 0 1 1.8 1.1l0.6 2.6z", "M7.6 4.9l2.6 4.1M12.6 3.7l2.6 4.1", width = 1.9f)
     val play = filled("M7 4.5v15l12.5 -7.5z")
+    val pause = ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
+        .addPath(pathData = addPathNodes("M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z"), fill = SolidColor(Color.White)).build()
     val info = icon("M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0", "M12 11v6", "M12 7.6v0.2", width = 2f)
     val chevron = icon("M9 5l7 7l-7 7", width = 2.6f)
     val back = icon("M15 5l-7 7l7 7", width = 2.6f)

@@ -17,7 +17,7 @@ import java.util.UUID
 
 data class Episode(
     val number: Int, val title: String, val description: String,
-    val duration: String, val url: String, val thumb: String
+    val duration: String, val url: String, val thumb: String, val subs: String = ""
 )
 
 data class Season(val number: Int, val name: String, val episodes: List<Episode>)
@@ -31,7 +31,7 @@ data class Title(
     val logo: String, val thumbWide: String, val bannerImage: String, val url: String,
     val trailer: String, val featured: Boolean, val status: String, val availability: String,
     val releaseDate: String, val createdAt: Long, val seasons: List<Season>,
-    val cast: List<CastMember> = emptyList(), val bannerTv: String = "", val backdropTv: String = ""
+    val cast: List<CastMember> = emptyList(), val bannerTv: String = "", val backdropTv: String = "", val subs: String = ""
 ) {
     val isSerie get() = type == "serie"
     val isSoon get() = availability == "proximamente"
@@ -82,7 +82,7 @@ fun parseTitle(o: JSONObject): Title {
             so.optJSONArray("episodes")?.let { ea ->
                 for (j in 0 until ea.length()) {
                     val eo = ea.optJSONObject(j) ?: continue
-                    eps += Episode(eo.i("number", j + 1), eo.s("title"), eo.s("description"), eo.s("duration"), eo.s("url").trim(), eo.s("thumb"))
+                    eps += Episode(eo.i("number", j + 1), eo.s("title"), eo.s("description"), eo.s("duration"), eo.s("url").trim(), eo.s("thumb"), eo.s("subs").trim())
                 }
             }
             seasons += Season(so.i("number", i + 1), so.s("name").ifBlank { so.s("title") }, eps)
@@ -97,7 +97,7 @@ fun parseTitle(o: JSONObject): Title {
         availability = o.s("availability"), releaseDate = o.s("releaseDate"), createdAt = o.optLong("createdAt"),
         seasons = seasons.sortedBy { it.number },
         cast = o.optJSONArray("cast")?.let { a -> (0 until a.length()).mapNotNull { k -> a.optJSONObject(k)?.let { c -> CastMember(c.s("name"), c.s("role"), c.s("photo")).takeIf { it.name.isNotBlank() } } } } ?: emptyList(),
-        bannerTv = o.s("bannerImageTv"), backdropTv = o.s("backdropTv")
+        bannerTv = o.s("bannerImageTv"), backdropTv = o.s("backdropTv"), subs = o.s("subs").trim()
     )
 }
 
@@ -384,5 +384,17 @@ object Store {
         }
         val (s, e) = eps[i]
         return Target(e.url, s.number, e.number, "${if (cont) "Continuar" else "Ver"} T${s.number}:E${e.number}", cont)
+    }
+
+    /** Capítulos con enlace para reproducir, en orden. */
+    fun flatPlayable(t: Title): List<Pair<Season, Episode>> =
+        t.seasons.sortedBy { it.number }.flatMap { s -> s.episodes.filter { isHttp(it.url) }.sortedBy { it.number }.map { s to it } }
+
+    /** El capítulo que sigue después de este (para pasar solo al terminar). */
+    fun nextAfter(t: Title, season: Int?, episode: Int?): Pair<Season, Episode>? {
+        if (season == null || episode == null) return null
+        val eps = flatPlayable(t)
+        val i = eps.indexOfFirst { it.first.number == season && it.second.number == episode }
+        return if (i in eps.indices && i + 1 < eps.size) eps[i + 1] else null
     }
 }

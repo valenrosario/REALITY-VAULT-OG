@@ -497,7 +497,7 @@ fun DetailScreen(id: String, nav: Nav) {
                                 when {
                                     t.isSoon -> PlayPill(if (t.releaseDate.isNotBlank()) "Próximamente · ${t.releaseDate}" else "Próximamente", null, playReq) {}
                                     target != null -> PlayPill(target.label, Ic.play, playReq) { nav.play(t, target.url, target.season, target.episode) }
-                                    else -> PlayPill("Sin video por ahora", null, playReq) {}
+                                    else -> PlayPill("No disponible por el momento", null, playReq) {}
                                 }
                                 GlassButton(if (t.id in Store.myList) Ic.check else Ic.plus) {
                                     if (Store.session == null) nav.go(Screen.Login()) else scope.launch { Store.toggleList(t.id) }

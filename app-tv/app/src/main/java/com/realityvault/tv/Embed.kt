@@ -4,11 +4,11 @@ import android.net.Uri
 
 /** Cómo se reproduce un enlace: con el reproductor nativo (mp4 / m3u8) o con el reproductor del servicio (iframe). */
 sealed class Media {
-    data class Native(val url: String, val hls: Boolean) : Media()
+    data class Native(val url: String, val hls: Boolean, val subsUrl: String = "") : Media()
     data class Embed(val url: String) : Media()
 }
 
-fun mediaFor(raw: String): Media? {
+fun mediaFor(raw: String, subsUrl: String = ""): Media? {
     val url = raw.trim()
     if (!isHttp(url)) return null
     val u = runCatching { Uri.parse(url) }.getOrNull() ?: return null
@@ -40,7 +40,7 @@ fun mediaFor(raw: String): Media? {
     }
     if (h == "ok.ru") Regex("video(?:embed)?/(\\d+)").find(path)?.let { return Media.Embed("https://ok.ru/videoembed/${it.groupValues[1]}") }
     if (h == "archive.org") Regex("/(?:details|embed)/(.+)").find(path)?.let { return Media.Embed("https://archive.org/embed/${it.groupValues[1]}") }
-    if (Regex("\\.(mp4|webm|mkv|mov|m4v)$", RegexOption.IGNORE_CASE).containsMatchIn(path)) return Media.Native(url, false)
-    if (Regex("\\.m3u8$", RegexOption.IGNORE_CASE).containsMatchIn(path)) return Media.Native(url, true)
+    if (Regex("\\.(mp4|webm|mkv|mov|m4v)$", RegexOption.IGNORE_CASE).containsMatchIn(path)) return Media.Native(url, false, subsUrl)
+    if (Regex("\\.m3u8$", RegexOption.IGNORE_CASE).containsMatchIn(path)) return Media.Native(url, true, subsUrl)
     return Media.Embed(url)
 }
