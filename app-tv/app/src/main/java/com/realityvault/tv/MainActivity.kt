@@ -20,6 +20,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Store.init(this)
+        Updater.init(this)
         // imágenes: caché en memoria y en disco para que todo aparezca al instante
         Coil.setImageLoader(
             ImageLoader.Builder(this)
@@ -35,6 +36,9 @@ class MainActivity : ComponentActivity() {
                 while (true) {
                     Store.refreshCatalog()
                     Store.refreshUser()
+                    // No bloquea el arranque ni la pantalla: si falla o no hay internet, sigue
+                    // normal. checkSilently() ya evita comprobar más de 1 vez cada 4 horas.
+                    Updater.checkSilently()
                     delay(3 * 60_000)
                 }
             }

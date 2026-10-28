@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Carpeta donde se guarda el APK descargado por el sistema de actualizaciones,
+     compartida con el instalador del sistema a través de FileProvider. -->
+<paths>
+    <external-files-path name="updates" path="updates/" />
+</paths>

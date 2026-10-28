@@ -104,6 +104,9 @@ fun App(nav: Nav, onExit: () -> Unit) {
                 TopNavBar(nav, Modifier.align(Alignment.TopStart))
             }
         }
+        // Aviso de actualización: se dibuja último para quedar siempre arriba de todo, pero
+        // UpdateOverlay se oculta solo mientras se está reproduciendo un video.
+        UpdateOverlay(nav)
     }
 }
 

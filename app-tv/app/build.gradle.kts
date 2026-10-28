@@ -9,6 +9,14 @@ val siteConfig = rootProject.file("../config.js").readText()
 fun cfg(key: String): String =
     Regex("$key\\s*:\\s*'([^']*)'").find(siteConfig)?.groupValues?.get(1) ?: ""
 
+// Firma de las versiones publicadas: si el workflow de CI define estas variables de entorno
+// (a partir de secrets de GitHub), se usa un keystore de release fijo para que todas las
+// versiones queden firmadas con la MISMA clave y Android pueda instalar la actualización
+// encima de la anterior sin pedir desinstalar. Si no están definidas (build local, o antes
+// de configurar los secrets), se cae al keystore de debug de siempre — pero en ese caso las
+// actualizaciones NO van a poder instalarse sobre una versión ya instalada.
+val relKeystorePath = System.getenv("RV_KEYSTORE_PATH")
+
 android {
     namespace = "com.realityvault.tv"
     compileSdk = 34
@@ -22,6 +30,20 @@ android {
         buildConfigField("String", "SUPABASE_URL", "\"${cfg("supabaseUrl")}\"")
         buildConfigField("String", "SUPABASE_KEY", "\"${cfg("supabaseAnonKey")}\"")
         buildConfigField("String", "SITE_URL", "\"https://reality-vault.vercel.app/\"")
+        // Manifiesto JSON con la última versión publicada (ver sección 5 de la auditoría de
+        // actualizaciones). Centralizado acá para poder cambiarlo sin tocar la lógica del updater.
+        buildConfigField("String", "UPDATE_URL", "\"https://github.com/valenrosario/REALITY-VAULT-OG/releases/download/tv/update.json\"")
+    }
+
+    signingConfigs {
+        if (relKeystorePath != null) {
+            create("release") {
+                storeFile = file(relKeystorePath)
+                storePassword = System.getenv("RV_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RV_KEY_ALIAS") ?: "realityvault"
+                keyPassword = System.getenv("RV_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -29,7 +51,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (relKeystorePath != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
     buildFeatures {

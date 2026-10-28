@@ -27,12 +27,36 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      # Si los secrets de firma están configurados, usa SIEMPRE la misma clave de release para
+      # que una actualización se pueda instalar encima de la anterior sin desinstalar. Si todavía
+      # no están configurados, este paso no hace nada y el build cae al keystore de debug de
+      # siempre (las actualizaciones no se van a poder instalar encima hasta que se configuren).
+      - name: Preparar la clave de firma (si está configurada)
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.keystore"
       - name: Compilar la app de la TV
+        env:
+          RV_KEYSTORE_PATH: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' && format('{0}/release.keystore', runner.temp) || '' }}
+          RV_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RV_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RV_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: gradle :app:assembleRelease --no-daemon --stacktrace
       - name: Publicar para descargar
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cp app/build/outputs/apk/release/app-release.apk reality-vault-tv.apk
+          SHA256=$(sha256sum reality-vault-tv.apk | cut -d' ' -f1)
+          NOTES=$(git log -1 --format=%s | sed 's/"/\\"/g')
+          cat > update.json <<JSON
+          {
+            "versionCode": ${{ github.run_number }},
+            "versionName": "1.${{ github.run_number }}",
+            "apkUrl": "https://github.com/valenrosario/REALITY-VAULT-OG/releases/download/tv/reality-vault-tv.apk",
+            "notes": "$NOTES",
+            "sha256": "$SHA256",
+            "mandatory": false
+          }
+          JSON
           gh release delete tv --yes --cleanup-tag || true
-          gh release create tv reality-vault-tv.apk --title "REALITY VAULT · TV" --notes "App para Android TV / Google TV generada automáticamente. Descargá reality-vault-tv.apk e instalala en la tele." --target "$GITHUB_SHA"
+          gh release create tv reality-vault-tv.apk update.json --title "REALITY VAULT · TV" --notes "App para Android TV / Google TV generada automáticamente. Descargá reality-vault-tv.apk e instalala en la tele." --target "$GITHUB_SHA"

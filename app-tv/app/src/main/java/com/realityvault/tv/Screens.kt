@@ -295,6 +295,32 @@ fun AccountScreen(nav: Nav) {
             Spacer(Modifier.height(22.dp))
             TextButtonTv("Entrar o crear cuenta", { nav.go(Screen.Login()) }, requester = req)
         }
+        Spacer(Modifier.height(40.dp))
+        AboutSection()
+    }
+}
+
+/* ---------------- acerca de / actualizaciones ---------------- */
+
+@Composable
+private fun AboutSection() {
+    val scope = rememberCoroutineScope()
+    Column(Modifier.width(560.dp)) {
+        Text("Acerca de", style = ts(16, FontWeight.Bold, Color.White))
+        Spacer(Modifier.height(8.dp))
+        Text("Versión ${BuildConfig.VERSION_NAME}", style = ts(13, color = C.muted))
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            TextButtonTv(if (Updater.checking) "Buscando…" else "Buscar actualizaciones", { scope.launch { Updater.checkManually() } })
+            // Herramienta de prueba: muestra el aviso real (con el manifiesto/APK publicados de
+            // verdad) sin esperar a que exista una versión nueva. Pensada para verificar el
+            // diálogo y la descarga/instalación sin tener que subir una build falsa.
+            TextButtonTv("Probar aviso de actualización", { scope.launch { Updater.simulateForTesting() } })
+        }
+        Updater.lastResult?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(it, style = ts(13, color = C.fg2))
+        }
     }
 }
 
