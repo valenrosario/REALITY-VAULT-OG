@@ -32,11 +32,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,9 +61,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -192,37 +185,32 @@ fun SearchScreen(nav: Nav) {
     val res = if (n.isBlank()) emptyList() else pub.filter { t ->
         t.title.lowercase().contains(n) || t.genres.any { it.lowercase().contains(n) } || t.description.lowercase().contains(n)
     }
-    Column(Modifier.fillMaxSize().padding(start = 48.dp, top = 74.dp, end = 48.dp)) {
-        Text("Buscar", style = ts(24, FontWeight.Bold, Color.White))
-        Spacer(Modifier.height(14.dp))
-        OutlinedTextField(
-            value = q, onValueChange = { q = it; nav.memory.focus["searchQ"] = it },
-            modifier = Modifier.width(420.dp).focusRequester(req),
-            placeholder = { Text("Títulos, géneros…", style = ts(14, color = C.faint)) },
-            textStyle = ts(15), singleLine = true, colors = fieldColors(),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
-        )
-        Spacer(Modifier.height(18.dp))
-        if (n.isNotBlank() && res.isEmpty()) Text("No encontramos nada con “$q”.", style = ts(14, color = C.fg2))
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(100.dp), contentPadding = PaddingValues(top = 10.dp, bottom = 40.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(res, key = { it.id }) { t ->
-                Focusable({ nav.go(Screen.Detail(t.id)) }, Modifier.aspectRatio(2f / 3f)) { PosterCard(t) }
+    Row(Modifier.fillMaxSize().padding(start = 48.dp, top = 74.dp, end = 48.dp)) {
+        Column(Modifier.width(420.dp)) {
+            Text("Buscar", style = ts(24, FontWeight.Bold, Color.White))
+            Spacer(Modifier.height(14.dp))
+            TvFieldDisplay("BUSCAR", q, "Títulos, géneros…")
+            Spacer(Modifier.height(14.dp))
+            TvKeyboard(
+                onChar = { c -> q += c; nav.memory.focus["searchQ"] = q },
+                onBackspace = { q = q.dropLast(1); nav.memory.focus["searchQ"] = q },
+                onDone = {}, doneLabel = "Listo",
+                firstReq = req
+            )
+        }
+        Column(Modifier.fillMaxWidth().padding(start = 40.dp, top = 38.dp)) {
+            if (n.isNotBlank() && res.isEmpty()) Text("No encontramos nada con “$q”.", style = ts(14, color = C.fg2))
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(100.dp), contentPadding = PaddingValues(top = 10.dp, bottom = 40.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(res, key = { it.id }) { t ->
+                    Focusable({ nav.go(Screen.Detail(t.id)) }, Modifier.aspectRatio(2f / 3f)) { PosterCard(t) }
+                }
             }
         }
     }
 }
-
-
-@Composable
-fun fieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = C.fg, unfocusedTextColor = C.fg, cursorColor = C.accent,
-    focusedBorderColor = Color.White, unfocusedBorderColor = Color.White.copy(alpha = .3f),
-    focusedContainerColor = Color.White.copy(alpha = .06f), unfocusedContainerColor = Color.White.copy(alpha = .04f),
-    focusedLabelColor = C.fg, unfocusedLabelColor = C.muted
-)
 
 /* ---------------- cuenta ---------------- */
 
@@ -230,11 +218,12 @@ fun fieldColors() = OutlinedTextFieldDefaults.colors(
 fun EmailLogin(nav: Nav, done: () -> Unit, note: String?, required: Boolean = false, onBack: () -> Unit) {
     var email by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
+    var active by remember { mutableStateOf("email") }
     var err by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val req = remember { FocusRequester() }
-    AutoFocus(req)
+    val kbReq = remember { FocusRequester() }
+    AutoFocus(kbReq)
     fun run(signup: Boolean) {
         if (busy) return
         if (!email.contains("@") || pass.length < 6) { err = "Escribí tu email y una contraseña de al menos 6 caracteres."; return }
@@ -252,32 +241,33 @@ fun EmailLogin(nav: Nav, done: () -> Unit, note: String?, required: Boolean = fa
         }
     }
     Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF2A1520), Color.Black), radius = 1400f)), contentAlignment = Alignment.Center) {
-        Column(Modifier.width(440.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            if (Store.siteLogo.isNotBlank()) Img(Store.siteLogo, Modifier.width(260.dp).height(48.dp), scale = ContentScale.Fit)
-            else LocalLogo(Modifier.width(260.dp).height(48.dp))
-            Spacer(Modifier.height(18.dp))
-            Text(note ?: "Entrá con tu cuenta para ver series y películas", style = ts(14, color = C.fg2), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            Spacer(Modifier.height(24.dp))
-            OutlinedTextField(
-                email, { email = it }, Modifier.fillMaxWidth().focusRequester(req),
-                label = { Text("Email", style = ts(12)) }, textStyle = ts(15), singleLine = true, colors = fieldColors(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next)
-            )
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                pass, { pass = it }, Modifier.fillMaxWidth(),
-                label = { Text("Contraseña", style = ts(12)) }, textStyle = ts(15), singleLine = true, colors = fieldColors(),
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { run(false) })
-            )
-            if (err.isNotBlank()) { Spacer(Modifier.height(12.dp)); Text(err, style = ts(15, FontWeight.Bold, C.accent)) }
-            Spacer(Modifier.height(22.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                PillButton(if (busy) "Entrando…" else "Entrar", { run(false) }, icon = null)
-                TextButtonTv("Crear cuenta", { run(true) })
+        Row(Modifier.width(900.dp), horizontalArrangement = Arrangement.spacedBy(56.dp)) {
+            Column(Modifier.width(380.dp)) {
+                if (Store.siteLogo.isNotBlank()) Img(Store.siteLogo, Modifier.width(220.dp).height(42.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
+                else LocalLogo(Modifier.width(220.dp).height(42.dp))
+                Spacer(Modifier.height(18.dp))
+                Text(note ?: "Entrá con tu cuenta para ver series y películas", style = ts(14, color = C.fg2))
+                Spacer(Modifier.height(22.dp))
+                TvFieldChip("EMAIL", email, active == "email") { active = "email" }
+                Spacer(Modifier.height(10.dp))
+                TvFieldChip("CONTRASEÑA", pass, active == "password", masked = true) { active = "password" }
+                if (err.isNotBlank()) { Spacer(Modifier.height(12.dp)); Text(err, style = ts(13, FontWeight.Bold, C.accent)) }
+                Spacer(Modifier.height(20.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    PillButton(if (busy) "Entrando…" else "Entrar", { run(false) }, icon = null)
+                    TextButtonTv("Crear cuenta", { run(true) })
+                }
+                Spacer(Modifier.height(10.dp))
                 TextButtonTv(if (note == null) "Volver" else "Ahora no", { if (note == null || required) onBack() else nav.back() })
             }
+            TvKeyboard(
+                onChar = { c -> if (active == "email") email += c else pass += c },
+                onBackspace = { if (active == "email") email = email.dropLast(1) else pass = pass.dropLast(1) },
+                onDone = { run(false) },
+                doneLabel = "Entrar ✓",
+                modifier = Modifier.width(460.dp),
+                firstReq = kbReq
+            )
         }
     }
 }

@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -59,6 +60,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -68,9 +70,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player as M3Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
-import androidx.core.content.res.ResourcesCompat
 import kotlinx.coroutines.delay
 
 /* ---------------- pantalla del reproductor ---------------- */
@@ -145,6 +145,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                 .setTrackTypeDisabled(M3C.TRACK_TYPE_TEXT, m.subsUrl.isBlank()).build()
         }
     }
+    var cueText by remember { mutableStateOf("") }
     DisposableEffect(player) {
         val l = object : M3Player.Listener {
             override fun onIsPlayingChanged(p: Boolean) { playing = p }
@@ -152,6 +153,11 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                 buffering = state == M3Player.STATE_BUFFERING
                 if (state == M3Player.STATE_READY) durMs = player.duration.coerceAtLeast(0)
                 ended = state == M3Player.STATE_ENDED
+            }
+            // subtítulos propios: no usamos la vista nativa (queda pegada abajo del todo y
+            // no respeta nuestra tipografía); tomamos el texto del cue y lo dibujamos nosotros.
+            override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
+                cueText = cueGroup.cues.joinToString("\n") { it.text?.toString().orEmpty() }.trim()
             }
         }
         player.addListener(l)
@@ -214,29 +220,30 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                     useController = false
                     keepScreenOn = true
                     setBackgroundColor(AColor.BLACK)
-                    // subtítulos: misma tipografía del sitio, con su cuadro negro de fondo, bien arriba de la barra de abajo
-                    subtitleView?.apply {
-                        setBottomPaddingFraction(0.22f)
-                        setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 21f)
-                        setApplyEmbeddedStyles(false)
-                        setApplyEmbeddedFontSizes(false)
-                        val gg = runCatching { ResourcesCompat.getFont(c, R.font.gg_book) }.getOrNull()
-                        setStyle(
-                            CaptionStyleCompat(
-                                AColor.WHITE,
-                                AColor.argb(160, 0, 0, 0),
-                                AColor.TRANSPARENT,
-                                CaptionStyleCompat.EDGE_TYPE_NONE,
-                                AColor.BLACK,
-                                gg
-                            )
-                        )
-                    }
+                    // ocultamos la vista nativa de subtítulos: la posición de sus cues ignora
+                    // nuestro padding y queda pegada abajo del todo. Dibujamos los nuestros en Compose.
+                    subtitleView?.visibility = android.view.View.GONE
                 }
             }
         )
         // capa invisible: cualquier botón del control despierta la interfaz
         if (!controlsVisible) WakeLayer(Modifier.fillMaxSize()) { bump() }
+
+        // subtítulos propios: tipografía del sitio, cuadro negro, bien arriba del borde y de la barra de controles
+        if (subsOn && cueText.isNotBlank()) {
+            Box(
+                Modifier.align(Alignment.BottomCenter)
+                    .padding(bottom = if (controlsVisible) 150.dp else 64.dp)
+                    .widthIn(max = 1300.dp)
+                    .padding(horizontal = 56.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    cueText, style = ts(24, FontWeight.Bold, Color.White), textAlign = TextAlign.Center,
+                    modifier = Modifier.background(Color.Black.copy(alpha = .68f), RoundedCornerShape(8.dp)).padding(horizontal = 16.dp, vertical = 7.dp)
+                )
+            }
+        }
 
         // avisos de -10 / +10 (tipo Netflix), aparecen con cualquier adelantar/atrasar
         AnimatedVisibility(showBack, Modifier.align(Alignment.CenterStart).padding(start = 170.dp), enter = fadeIn(), exit = fadeOut()) {

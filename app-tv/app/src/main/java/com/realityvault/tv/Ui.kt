@@ -10,9 +10,11 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -205,6 +207,80 @@ fun TextButtonTv(text: String, onClick: () -> Unit, modifier: Modifier = Modifie
             Modifier.background(if (f) Color.White else Color.White.copy(alpha = .12f)).padding(horizontal = 18.dp).height(38.dp),
             contentAlignment = Alignment.Center
         ) { Text(text, style = ts(14, FontWeight.Bold, if (f) Color.Black else C.fg), maxLines = 1) }
+    }
+}
+
+/* ---------------- teclado en pantalla (nada de teclado de sistema / formulario de escritorio) ---------------- */
+
+private val KB_ROWS = listOf("qwertyuiop", "asdfghjklñ", "zxcvbnm@.-")
+
+@Composable
+fun TvKeyboard(
+    onChar: (String) -> Unit,
+    onBackspace: () -> Unit,
+    onDone: () -> Unit,
+    doneLabel: String,
+    modifier: Modifier = Modifier,
+    firstReq: FocusRequester? = null
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        KB_ROWS.forEachIndexed { ri, row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEachIndexed { ci, ch ->
+                    KeyTv(ch.toString(), Modifier.width(42.dp).height(42.dp), requester = if (ri == 0 && ci == 0) firstReq else null) { onChar(ch.toString()) }
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            KeyTv("espacio", Modifier.weight(2.4f).height(42.dp)) { onChar(" ") }
+            KeyTv("⌫ borrar", Modifier.weight(2.4f).height(42.dp)) { onBackspace() }
+            KeyTv(doneLabel, Modifier.weight(2.4f).height(42.dp), accent = true) { onDone() }
+        }
+    }
+}
+
+@Composable
+private fun KeyTv(label: String, modifier: Modifier, accent: Boolean = false, requester: FocusRequester? = null, onClick: () -> Unit) {
+    Focusable(onClick, modifier, shape = RoundedCornerShape(10.dp), scale = 1.1f, ring = false, requester = requester) { f ->
+        Box(
+            Modifier.fillMaxSize()
+                .background(if (f) Color.White else if (accent) C.accent.copy(alpha = .2f) else Color.White.copy(alpha = .08f), RoundedCornerShape(10.dp))
+                .then(if (accent && !f) Modifier.border(1.dp, C.accent.copy(alpha = .55f), RoundedCornerShape(10.dp)) else Modifier),
+            contentAlignment = Alignment.Center
+        ) { Text(label, style = ts(14, FontWeight.Bold, if (f) Color.Black else if (accent) C.accent else C.fg)) }
+    }
+}
+
+/** Campo que se elige con el control (no abre teclado del sistema); el que está activo recibe lo que se escribe en TvKeyboard. */
+@Composable
+fun TvFieldChip(label: String, value: String, active: Boolean, masked: Boolean = false, onClick: () -> Unit) {
+    Focusable(onClick, Modifier.fillMaxWidth().height(58.dp), shape = RoundedCornerShape(12.dp), scale = 1f, ring = false) {
+        Column(
+            Modifier.fillMaxSize()
+                .background(if (active) C.accent.copy(alpha = .1f) else Color.White.copy(alpha = .05f), RoundedCornerShape(12.dp))
+                .border(1.5.dp, if (active) C.accent.copy(alpha = .75f) else Color.White.copy(alpha = .18f), RoundedCornerShape(12.dp))
+                .padding(horizontal = 18.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(label, style = ts(10, FontWeight.Bold, C.muted))
+            val shown = if (masked) "•".repeat(value.length) else value
+            Text(shown.ifBlank { " " }, style = ts(16, color = C.fg), maxLines = 1)
+        }
+    }
+}
+
+/** Igual que arriba pero de solo lectura (para un único campo, como buscar). */
+@Composable
+fun TvFieldDisplay(label: String, value: String, placeholder: String) {
+    Column(
+        Modifier.fillMaxWidth().height(58.dp)
+            .background(C.accent.copy(alpha = .1f), RoundedCornerShape(12.dp))
+            .border(1.5.dp, C.accent.copy(alpha = .6f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 18.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(label, style = ts(10, FontWeight.Bold, C.muted))
+        Text(value.ifBlank { placeholder }, style = ts(16, color = if (value.isBlank()) C.faint else C.fg), maxLines = 1)
     }
 }
 
