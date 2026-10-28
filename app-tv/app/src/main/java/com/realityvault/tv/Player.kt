@@ -180,8 +180,13 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
 
     val playReq = remember { FocusRequester() }
     val contReq = remember { FocusRequester() }
-    LaunchedEffect(Unit) { AutoFocusOnce(playReq) }
-    LaunchedEffect(playing) { if (!playing) AutoFocusOnce(contReq) }
+    // Cada vez que aparecen los controles (al abrir el video, o al despertarlos de nuevo), el foco
+    // vuelve siempre a Reproducir/Pausar — nunca se queda en Subtítulos ni en otro botón por defecto.
+    // El bloque "if (controlsVisible)" se desmonta por completo cuando se ocultan, así que el foco
+    // hay que volver a pedirlo cada vez que se vuelven a mostrar, no solo una vez al entrar.
+    LaunchedEffect(controlsVisible, playing) {
+        if (controlsVisible) AutoFocusOnce(if (playing) playReq else contReq)
+    }
 
     // -- avisos de "-10 / +10" cuando se adelanta/atrasa con el control, sin tocar los botones --
     var backPulse by remember { mutableIntStateOf(0) }
@@ -270,10 +275,15 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                         bump()
                     }
                 }
-                Focusable({ doToggle() }, Modifier.align(Alignment.Center).size(84.dp), shape = CircleShape, scale = 1.08f, ring = false, requester = playReq, onFocus = { bump() }) {
-                    Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .96f), CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(Ic.pause, null, tint = Color.Black, modifier = Modifier.size(32.dp))
+                // retroceder / reproducir-pausar / adelantar, repartidos en línea y centrados — mismo tamaño entre sí
+                Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(30.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SmallGlass(back = true) { doSeekBack() }
+                    Focusable({ doToggle() }, Modifier.size(84.dp), shape = CircleShape, scale = 1.08f, ring = false, requester = playReq, onFocus = { bump() }) {
+                        Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .96f), CircleShape), contentAlignment = Alignment.Center) {
+                            Icon(Ic.pause, null, tint = Color.Black, modifier = Modifier.size(32.dp))
+                        }
                     }
+                    SmallGlass(back = false) { doSeekForward() }
                 }
                 Column(Modifier.align(Alignment.BottomStart).padding(start = 64.dp, end = 64.dp, bottom = 48.dp).fillMaxWidth()) {
                     Scrub(posMs, durMs)

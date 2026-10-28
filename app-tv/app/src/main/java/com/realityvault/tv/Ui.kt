@@ -35,9 +35,6 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -45,6 +42,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.inset
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
@@ -139,19 +138,19 @@ fun Focusable(
     val src = remember { MutableInteractionSource() }
     val focused by src.collectIsFocusedAsState()
     val s by animateFloatAsState(if (focused) scale else 1f, tween(160), label = "s")
-    val radius = when (shape) { CircleShape -> 999.dp; else -> 10.dp }
     Box(
         modifier
             .graphicsLayer { scaleX = s; scaleY = s }
             .drawWithContent {
                 drawContent()
                 if (focused && ring) {
+                    // el contorno sigue SIEMPRE la forma real del botón (círculo, píldora o esquina
+                    // redondeada), calculado desde la misma shape que recorta el contenido —
+                    // nunca un radio adivinado que pueda quedar cuadrado sobre un botón redondo.
                     val g = 3.5.dp.toPx(); val w = 2.dp.toPx()
-                    val r = (radius.toPx() + g).coerceAtMost(size.minDimension / 2 + g)
-                    drawRoundRect(
-                        Color.White, topLeft = Offset(-g, -g), size = Size(size.width + 2 * g, size.height + 2 * g),
-                        cornerRadius = CornerRadius(r, r), style = Stroke(w)
-                    )
+                    inset(-g, -g) {
+                        drawOutline(shape.createOutline(size, layoutDirection, this), Color.White, style = Stroke(w))
+                    }
                 }
             }
             .then(if (lift && focused) Modifier.shadow(14.dp, shape) else Modifier)

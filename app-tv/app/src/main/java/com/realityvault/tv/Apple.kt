@@ -245,6 +245,12 @@ fun HomeScreen(nav: Nav) {
     }
     LaunchedEffect(heroFocused) { if (heroFocused && (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0)) listState.animateScrollToItem(0) }
     if (mem.focus["home"] == null) AutoFocus(heroReq, "hero")
+    // Atrás mientras estás abajo en las filas: primero vuelve arriba (con el foco puesto),
+    // igual que cualquier app de streaming de verdad. Solo sale de la app si ya estás arriba del todo.
+    val scope = rememberCoroutineScope()
+    BackHandler(enabled = !heroFocused) {
+        scope.launch { listState.animateScrollToItem(0); AutoFocusOnce(heroReq) }
+    }
 
     if (!Store.loaded) { Loading(); return }
     if (all.isEmpty() && rows.isEmpty()) { Empty("Todavía no hay títulos publicados."); return }
