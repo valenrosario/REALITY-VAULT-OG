@@ -9,13 +9,14 @@ val siteConfig = rootProject.file("../config.js").readText()
 fun cfg(key: String): String =
     Regex("$key\\s*:\\s*'([^']*)'").find(siteConfig)?.groupValues?.get(1) ?: ""
 
-// Firma de las versiones publicadas: si el workflow de CI define estas variables de entorno
-// (a partir de secrets de GitHub), se usa un keystore de release fijo para que todas las
-// versiones queden firmadas con la MISMA clave y Android pueda instalar la actualización
-// encima de la anterior sin pedir desinstalar. Si no están definidas (build local, o antes
-// de configurar los secrets), se cae al keystore de debug de siempre — pero en ese caso las
-// actualizaciones NO van a poder instalarse sobre una versión ya instalada.
-val relKeystorePath = System.getenv("RV_KEYSTORE_PATH")
+// Firma de las versiones publicadas: si el workflow de CI escribió un keystore de release
+// (a partir de un secret de GitHub) en la ruta que indica RV_KEYSTORE_PATH, se usa ESE
+// keystore fijo para que todas las versiones queden firmadas con la MISMA clave y Android
+// pueda instalar la actualización encima de la anterior sin pedir desinstalar. Si el archivo
+// no existe (build local, o antes de configurar el secret en el repo), se cae al keystore de
+// debug de siempre — pero en ese caso las actualizaciones NO van a poder instalarse sobre una
+// versión ya instalada sin desinstalar primero.
+val relKeystorePath = System.getenv("RV_KEYSTORE_PATH")?.takeIf { file(it).exists() }
 
 android {
     namespace = "com.realityvault.tv"
