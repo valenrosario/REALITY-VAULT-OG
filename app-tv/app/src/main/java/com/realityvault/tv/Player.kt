@@ -1,6 +1,7 @@
 package com.realityvault.tv
 
 import android.annotation.SuppressLint
+import androidx.activity.compose.BackHandler
 import android.graphics.Color as AColor
 import android.view.View
 import android.view.ViewGroup
@@ -11,6 +12,8 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -199,6 +202,10 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     fun doSeekForward() { player.seekForward(); fwdPulse++; bump() }
     fun doToggle() { if (player.isPlaying) player.pause() else player.play(); bump() }
 
+    // "Atrás" del control: si los botones están en pantalla, lo primero es ocultarlos — recién
+    // si ya estaban ocultos, "atrás" sale de verdad del reproductor (vuelve al detalle).
+    BackHandler(enabled = controlsVisible) { controlsVisible = false }
+
     Box(
         Modifier.fillMaxSize().background(Color.Black)
             .onPreviewKeyEvent { e ->
@@ -258,8 +265,10 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         }
 
         if (controlsVisible) {
-            // en pausa se oscurece más el fondo, para que se note bien que está pausado
-            if (!playing) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .5f)))
+            // en pausa se oscurece más el fondo, para que se note bien que está pausado — con un
+            // fundido suave, no de golpe apenas se aprieta pausa.
+            val pauseDim by animateFloatAsState(if (!playing) .5f else 0f, tween(420), label = "pauseDim")
+            if (pauseDim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = pauseDim)))
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .6f), .22f to Color.Transparent, .62f to Color.Transparent, 1f to Color.Black.copy(alpha = .85f))))
 
             if (playing) {
@@ -360,7 +369,7 @@ private fun CcButton(on: Boolean, onClick: () -> Unit) {
                 Modifier.size(9.dp).background(if (f) Color.Black else if (on) C.accent else Color.White.copy(alpha = .4f), CircleShape)
             )
             Spacer(Modifier.width(9.dp))
-            Text("Subtítulos", style = ts(13, FontWeight.Bold, if (f) Color.Black else Color.White))
+            Text("CC", style = ts(13, FontWeight.Bold, if (f) Color.Black else Color.White))
         }
     }
 }

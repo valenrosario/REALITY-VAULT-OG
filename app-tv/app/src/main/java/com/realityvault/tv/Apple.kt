@@ -353,18 +353,26 @@ fun HomeScreen(nav: Nav) {
     if (!Store.loaded) { Loading(); return }
     if (all.isEmpty() && rows.isEmpty()) { Empty("Todavía no hay títulos publicados."); return }
 
-    CompositionLocalProvider(LocalBringIntoViewSpec provides spec) {
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 220.dp)) {
-            item(key = "hero") {
-                if (all.isNotEmpty()) HeroA(all, heroIdx % all.size, screenH - 74.dp, nav, heroReq, { heroIdx = (heroIdx + 1) % all.size }) { heroFocused = it }
-                else Spacer(Modifier.height(80.dp))
-            }
-            items(rows, key = { it.key }) { r ->
-                CompositionLocalProvider(LocalBringIntoViewSpec provides defaultSpec) {
-                    RowA(r, nav, "home", mem.list("row-" + r.key))
+    Box(Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalBringIntoViewSpec provides spec) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 220.dp)) {
+                item(key = "hero") {
+                    if (all.isNotEmpty()) HeroA(all, heroIdx % all.size, screenH - 74.dp, nav, heroReq, { heroIdx = (heroIdx + 1) % all.size }) { heroFocused = it }
+                    else Spacer(Modifier.height(80.dp))
+                }
+                items(rows, key = { it.key }) { r ->
+                    CompositionLocalProvider(LocalBringIntoViewSpec provides defaultSpec) {
+                        RowA(r, nav, "home", mem.list("row-" + r.key))
+                    }
                 }
             }
         }
+        // oscurecimiento leve abajo de todo, tipo Netflix, para que el catálogo no corte de
+        // golpe contra el borde de la pantalla. Solo visual: no bloquea el foco ni los clicks.
+        Box(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(150.dp)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .55f))))
+        )
     }
 }
 
@@ -404,12 +412,18 @@ fun HeroA(all: List<Slide>, idx: Int, height: Dp, nav: Nav, req: FocusRequester,
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Ic.chevron, "Siguiente", tint = if (f) Color.White else Color.White.copy(alpha = .8f), modifier = Modifier.size(17.dp)) }
                 }
             }
-            if (all.size > 1) {
-                Spacer(Modifier.height(18.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    all.indices.forEach { i ->
-                        Box(Modifier.height(4.dp).width(if (i == idx) 26.dp else 14.dp).background(if (i == idx) C.accent else Color.White.copy(alpha = .3f), RoundedCornerShape(4.dp)))
-                    }
+        }
+        // indicador de cuántos banners hay: puntitos redondos en el otro costado (abajo a la
+        // derecha), no al lado de los botones.
+        if (all.size > 1) {
+            Row(
+                Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 62.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically
+            ) {
+                all.indices.forEach { i ->
+                    val on = i == idx
+                    val sz by animateFloatAsState(if (on) 8f else 6f, tween(220), label = "dot")
+                    Box(Modifier.size(sz.dp).background(if (on) C.accent else Color.White.copy(alpha = .4f), CircleShape))
                 }
             }
         }
@@ -501,7 +515,10 @@ fun GlassButton(icon: ImageVector, onClick: () -> Unit) {
 @Composable
 fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
     val restore = nav.memory.focus[screenKey]
-    Column(Modifier.padding(top = 4.dp)) {
+    // Espacio de sobra antes del título: la tarjeta enfocada de la fila de ARRIBA crece hacia
+    // abajo al agrandarse (ver pivotTop en Focusable), y sin este margen terminaba pisando el
+    // título de la fila siguiente ("Novedades", "Series", etc).
+    Column(Modifier.padding(top = 22.dp)) {
         Text(r.title, style = ts(13, FontWeight.Bold, Color.White.copy(alpha = .92f)), modifier = Modifier.padding(start = 48.dp))
         LazyRow(
             state = state,
