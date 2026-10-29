@@ -165,8 +165,16 @@ private fun NavLink(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @OptIn(ExperimentalFoundationApi::class)
 class PivotSpec(private val pivotPx: Float, private val atTop: () -> Boolean) : BringIntoViewSpec {
-    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
-        if (atTop()) 0f else offset - pivotPx
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        if (atTop()) return 0f
+        val delta = offset - pivotPx
+        // Mover el foco de costado dentro de una misma fila también dispara este cálculo
+        // (no solo bajar/subir de fila), y ahí "offset" cae casi siempre en el mismo lugar.
+        // Sin este margen, una diferencia de redondeo de menos de un pixel hacía que la
+        // lista se reacomodara sola en cada tecla, y eso se sentía como un tembleque en
+        // toda la pantalla. Si ya está prácticamente en su lugar, no hace falta reanimar.
+        return if (kotlin.math.abs(delta) < 2f) 0f else delta
+    }
 }
 
 /* ---------------- color de fondo sacado de la imagen ---------------- */
