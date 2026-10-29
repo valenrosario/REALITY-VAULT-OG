@@ -1,6 +1,7 @@
 package com.realityvault.tv
 
 import android.graphics.drawable.BitmapDrawable
+import android.view.TextureView
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -92,10 +93,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.VideoSize
 import androidx.media3.common.Player as M3Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import coil.imageLoader
 import coil.request.ImageRequest
 import kotlinx.coroutines.delay
@@ -557,14 +558,23 @@ fun GlassButton(icon: ImageVector, onFocus: (() -> Unit)? = null, onClick: () ->
 
 /* ---------------- filas ---------------- */
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
     val restore = nav.memory.focus[screenKey]
     // Espacio de sobra antes del título: la tarjeta enfocada de la fila de ARRIBA crece hacia
     // abajo al agrandarse (ver pivotTop en Focusable), y sin este margen terminaba pisando el
     // título de la fila siguiente ("Novedades", "Series", etc).
+    // En las filas de pósters la tarjeta enfocada se abre a lo ancho (tipo Netflix). Para que
+    // no baile de costado mientras se abre/cierra, la tarjeta enfocada queda siempre clavada
+    // a la izquierda de la fila: su borde izquierdo no se mueve, así que no hay nada que
+    // reacomodar mientras cambia de ancho. La altura NUNCA cambia (ni el espaciado).
+    val density = LocalDensity.current
+    val rowSpec = remember { PivotSpec(with(density) { 48.dp.toPx() }) { false } }
+    val pin = r.kind != "feat" && r.kind != "wide" && r.kind != "top"
     Column(Modifier.padding(top = 22.dp)) {
         Text(r.title, style = ts(13, FontWeight.Bold, Color.White.copy(alpha = .92f)), modifier = Modifier.padding(start = 48.dp))
+        CompositionLocalProvider(LocalBringIntoViewSpec provides (if (pin) rowSpec else LocalBringIntoViewSpec.current)) {
         LazyRow(
             state = state,
             contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp),
@@ -586,11 +596,53 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
                     }
                     "top" -> Row(verticalAlignment = Alignment.Bottom) {
                         Text("${i + 1}", modifier = Modifier.offset(x = 8.dp, y = 8.dp), style = ts(86, FontWeight.Bold, C.accent).copy(drawStyle = Stroke(width = 4f)))
-                        CardA(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, Modifier.width(128.dp).aspectRatio(2f / 3f)) { f -> PosterCard(t, f) }
+                        ExpandPoster(t, 128.dp, k, restore, nav, screenKey) { nav.go(Screen.Detail(t.id)) }
                     }
-                    else -> CardA(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, Modifier.width(152.dp).aspectRatio(2f / 3f)) { f -> PosterCard(t, f) }
+                    else -> ExpandPoster(t, 152.dp, k, restore, nav, screenKey) { nav.go(Screen.Detail(t.id)) }
                 }
             }
+        }
+        }
+    }
+}
+
+/**
+ * Póster que, al quedar enfocado, se ABRE A LO ANCHO en el mismo lugar como en Netflix:
+ * mantiene exactamente la misma altura que tenía (no se agranda nada para arriba ni para
+ * abajo, así el espaciado entre filas y el desplazamiento vertical no cambian), y solo se
+ * estira hacia la derecha hasta quedar en formato horizontal 16:9, corriendo a las vecinas.
+ * Mientras se abre, el póster vertical se funde con la imagen horizontal del título, y
+ * después arranca el "Video del banner principal" (previewVideo) con un crossfade.
+ */
+@Composable
+fun ExpandPoster(t: Title, baseW: Dp, key: String, restore: String?, nav: Nav, screenKey: String, onClick: () -> Unit) {
+    val req = remember { FocusRequester() }
+    if (key == restore) AutoFocus(req, key)
+    val src = remember { MutableInteractionSource() }
+    val focused by src.collectIsFocusedAsState()
+    val h = baseW * 1.5f
+    val openW = h * (16f / 9f)
+    val w by animateDpAsState(if (focused) openW else baseW, tween(320), label = "pw")
+    val open by animateFloatAsState(if (focused) 1f else 0f, tween(320), label = "po")
+    Focusable(
+        onClick, Modifier.width(w).height(h), shape = RoundedCornerShape(9.dp), scale = 1.08f, ring = true, lift = true,
+        requester = req, onFocus = { nav.memory.focus[screenKey] = key }, pivotTop = true, interactionSource = src
+    ) { f ->
+        Box(Modifier.fillMaxSize().background(C.surface)) {
+            if (t.poster.isNotBlank()) Img(t.poster, Modifier.fillMaxSize().graphicsLayer { alpha = 1f - open })
+            else Placeholder(t, Modifier.fillMaxSize().graphicsLayer { alpha = 1f - open })
+            if (open > 0f && t.wide.isNotBlank()) Img(t.wide, Modifier.fillMaxSize().graphicsLayer { alpha = open })
+            PreviewOverlay(t, f)
+            if (open > 0f) {
+                Box(Modifier.fillMaxSize().graphicsLayer { alpha = open }.background(Brush.verticalGradient(0f to Color.Transparent, .55f to Color.Transparent, 1f to Color.Black.copy(alpha = .75f))))
+                Box(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp).graphicsLayer { alpha = open }) {
+                    TitleLogo(t, 150.dp, 42.dp, 15)
+                }
+            }
+            if (t.isSoon) Text(
+                "Próximamente", style = ts(8, FontWeight.Bold, Color.Black),
+                modifier = Modifier.align(Alignment.TopStart).padding(6.dp).background(C.accent, RoundedCornerShape(99.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
+            )
         }
     }
 }
@@ -654,24 +706,49 @@ private fun PreviewLayer(media: Media.Native, modifier: Modifier = Modifier, onR
             playWhenReady = true
         }
     }
+    // TextureView (no PlayerView/SurfaceView): una SurfaceView se dibuja en una capa aparte,
+    // por encima de todo, sin respetar las esquinas redondeadas, la opacidad del crossfade
+    // ni el tamaño de la tarjeta. La TextureView sí se comporta como cualquier otra vista.
+    val vsize = remember { IntArray(2) }
+    val tvRef = remember { arrayOfNulls<TextureView>(1) }
     DisposableEffect(player) {
         val l = object : M3Player.Listener {
             override fun onRenderedFirstFrame() { onReady() }
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                vsize[0] = (videoSize.width * videoSize.pixelWidthHeightRatio).toInt(); vsize[1] = videoSize.height
+                tvRef[0]?.cropTo(vsize[0], vsize[1])
+            }
         }
         player.addListener(l)
-        onDispose { player.removeListener(l); player.release() }
+        onDispose { player.removeListener(l); player.clearVideoTextureView(tvRef[0]); player.release() }
     }
     AndroidView(
         modifier = modifier.fillMaxSize(),
-        factory = { c -> PlayerView(c).apply { this.player = player; useController = false } }
+        factory = { c ->
+            TextureView(c).apply {
+                tvRef[0] = this
+                player.setVideoTextureView(this)
+                // recorta al centro para llenar la tarjeta sin deformar (también mientras se abre)
+                addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> (v as TextureView).cropTo(vsize[0], vsize[1]) }
+            }
+        }
     )
+}
+
+/** Escala el video para que LLENE la vista recortando lo que sobra (centrado), sin estirarlo. */
+private fun TextureView.cropTo(vw: Int, vh: Int) {
+    val w = width.toFloat(); val h = height.toFloat()
+    if (w <= 0f || h <= 0f || vw <= 0 || vh <= 0) return
+    val va = vw.toFloat() / vh; val viewA = w / h
+    val m = android.graphics.Matrix()
+    if (va > viewA) m.setScale(va / viewA, 1f, w / 2f, h / 2f) else m.setScale(1f, viewA / va, w / 2f, h / 2f)
+    setTransform(m)
 }
 
 @Composable
 fun PosterCard(t: Title, focused: Boolean = false) {
     Box(Modifier.fillMaxSize().background(C.surface)) {
         if (t.poster.isNotBlank()) Img(t.poster, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
-        PreviewOverlay(t, focused)
         if (t.isSoon) Text(
             "Próximamente", style = ts(8, FontWeight.Bold, Color.Black),
             modifier = Modifier.align(Alignment.TopStart).padding(6.dp).background(C.accent, RoundedCornerShape(99.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
