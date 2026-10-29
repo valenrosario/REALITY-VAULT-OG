@@ -290,10 +290,10 @@ fun HeroA(all: List<Slide>, idx: Int, height: Dp, nav: Nav, req: FocusRequester,
         Crossfade(slide.image, animationSpec = tween(450), label = "hero") { u ->
             Box(Modifier.fillMaxSize()) { if (u.isNotBlank()) Img(u, Modifier.fillMaxSize(), alignment = Alignment.TopCenter, crossfade = false) }
         }
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .75f), .38f to Color.Black.copy(alpha = .35f), .6f to Color.Transparent)))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .5f to Color.Transparent, .8f to Color.Black.copy(alpha = .45f), 1f to Color.Black)))
-        Column(Modifier.align(Alignment.BottomStart).padding(start = 48.dp, bottom = 58.dp).width(540.dp)) {
-            if (slide.headline.isNotBlank()) Text(slide.headline, style = ts(44, FontWeight.Bold, Color.White), maxLines = 2)
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .86f), .42f to Color.Black.copy(alpha = .4f), .66f to Color.Transparent)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .46f to Color.Transparent, .78f to Color.Black.copy(alpha = .5f), 1f to Color.Black)))
+        Column(Modifier.align(Alignment.BottomStart).padding(start = 48.dp, bottom = 58.dp).width(560.dp)) {
+            if (slide.headline.isNotBlank()) Text(slide.headline, style = ts(48, FontWeight.Bold, Color.White), maxLines = 2, lineHeight = 50.sp)
             else TitleLogo(t, 320.dp, 100.dp, 40)
             Spacer(Modifier.height(12.dp))
             KindLine(t)
@@ -436,9 +436,9 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
                     }
                     "top" -> Row(verticalAlignment = Alignment.Bottom) {
                         Text("${i + 1}", modifier = Modifier.offset(x = 8.dp, y = 8.dp), style = ts(86, FontWeight.Bold, C.accent).copy(drawStyle = Stroke(width = 4f)))
-                        CardA(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, Modifier.width(96.dp).aspectRatio(2f / 3f)) { PosterCard(t) }
+                        CardA(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, Modifier.width(128.dp).aspectRatio(2f / 3f)) { PosterCard(t) }
                     }
-                    else -> CardA(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, Modifier.width(96.dp).aspectRatio(2f / 3f)) { PosterCard(t) }
+                    else -> CardA(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, Modifier.width(152.dp).aspectRatio(2f / 3f)) { PosterCard(t) }
                 }
             }
         }
@@ -449,7 +449,7 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
 fun CardA(key: String, restore: String?, nav: Nav, screenKey: String, onClick: () -> Unit, modifier: Modifier, content: @Composable () -> Unit) {
     val req = remember { FocusRequester() }
     if (key == restore) AutoFocus(req, key)
-    Focusable(onClick, modifier, shape = RoundedCornerShape(9.dp), scale = 1.1f, ring = false, lift = true, requester = req, onFocus = { nav.memory.focus[screenKey] = key }) { content() }
+    Focusable(onClick, modifier, shape = RoundedCornerShape(9.dp), scale = 1.08f, ring = true, lift = true, requester = req, onFocus = { nav.memory.focus[screenKey] = key }) { content() }
 }
 
 @Composable
