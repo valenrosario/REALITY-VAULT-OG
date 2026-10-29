@@ -349,15 +349,8 @@ private fun SeekFlash(back: Boolean) {
 
 @Composable
 private fun TopInfo(t: Title?, episode: Episode?, season: Int?) {
-    // El logo de la serie/película en vez del nombre escrito — igual que la tarjeta de pausa.
+    // Solo el logo arriba mientras reproduce — sin la línea de temporada/episodio debajo.
     if (t != null) TitleLogo(t, 300.dp, 56.dp, 26)
-    if (episode != null) {
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "T$season · E${episode.number} · ${episode.title.ifBlank { "Episodio ${episode.number}" }}",
-            style = ts(14, FontWeight.Bold, Color.White.copy(alpha = .7f)), maxLines = 1, overflow = TextOverflow.Ellipsis
-        )
-    }
 }
 
 /** Botón de subtítulos: siempre con fondo sólido para que se vea sobre cualquier video. */

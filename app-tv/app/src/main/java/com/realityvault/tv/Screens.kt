@@ -149,7 +149,10 @@ fun GridScreen(nav: Nav, kind: String) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(100.dp), state = nav.memory.grid(kind + genre),
             contentPadding = PaddingValues(top = 10.dp, end = 48.dp, bottom = 40.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
+            // Bastante más separación vertical que horizontal: el póster enfocado de la fila de
+            // arriba crece hacia abajo al agrandarse (ver pivotTop en Focusable), y con poco
+            // margen terminaba chocando contra la fila de abajo.
+            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(34.dp)
         ) {
             items(list, key = { it.id }) { t ->
                 val k = "$kind/${t.id}"
@@ -202,10 +205,10 @@ fun SearchScreen(nav: Nav) {
             if (n.isNotBlank() && res.isEmpty()) Text("No encontramos nada con “$q”.", style = ts(14, color = C.fg2))
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(100.dp), contentPadding = PaddingValues(top = 10.dp, bottom = 40.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(34.dp)
             ) {
                 items(res, key = { it.id }) { t ->
-                    Focusable({ nav.go(Screen.Detail(t.id)) }, Modifier.aspectRatio(2f / 3f)) { PosterCard(t) }
+                    Focusable({ nav.go(Screen.Detail(t.id)) }, Modifier.aspectRatio(2f / 3f), pivotTop = true) { PosterCard(t) }
                 }
             }
         }

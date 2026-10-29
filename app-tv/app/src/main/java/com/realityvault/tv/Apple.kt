@@ -733,7 +733,11 @@ fun DetailScreen(id: String, nav: Nav) {
                 // también te podría gustar
                 if (related.isNotEmpty()) item(key = "rel") {
                     CompositionLocalProvider(LocalBringIntoViewSpec provides defaultSpec) {
-                        Column(Modifier.padding(top = 14.dp)) {
+                        // Las tarjetas de episodios de arriba son más altas y crecen hacia abajo
+                        // al enfocarse (clipContent=false, para que no le corte el anillo ni la
+                        // sombra), así que acá hace falta bastante más margen que en otras filas
+                        // para que no termine pisando esta fila.
+                        Column(Modifier.padding(top = 34.dp)) {
                             SectionTitle("También te podría gustar")
                             LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                 items(related, key = { it.id }) { o ->
@@ -746,7 +750,7 @@ fun DetailScreen(id: String, nav: Nav) {
                 // reparto
                 if (t.cast.isNotEmpty()) item(key = "cast") {
                     CompositionLocalProvider(LocalBringIntoViewSpec provides defaultSpec) {
-                        Column(Modifier.padding(top = 14.dp)) {
+                        Column(Modifier.padding(top = 24.dp)) {
                             SectionTitle("Reparto")
                             LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                                 items(t.cast) { c -> CastA(c) { nav.go(Screen.Person(c.name)) } }
