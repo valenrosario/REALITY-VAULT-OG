@@ -285,6 +285,22 @@ class PivotSpec(private val pivotPx: Float, private val atTop: () -> Boolean) : 
     }
 }
 
+/** Asegura que una tarjeta que se abre a lo ancho entre ENTERA en la fila, calculando con su
+ * ancho ya abierto (fijo) — así el resultado no cambia mientras se va abriendo y no tiembla. */
+@OptIn(ExperimentalFoundationApi::class)
+class OpenSpec(private val openPx: Float, private val leftPx: Float, private val rightPx: Float) : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val w = maxOf(size, openPx)
+        val over = offset + w - (containerSize - rightPx)
+        val d = when {
+            offset < leftPx -> offset - leftPx
+            over > 0f -> minOf(over, offset - leftPx)
+            else -> 0f
+        }
+        return if (kotlin.math.abs(d) < 2f) 0f else d
+    }
+}
+
 /* ---------------- color de fondo sacado de la imagen ---------------- */
 
 private val tintCache = HashMap<String, Color>()
@@ -571,10 +587,15 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
     // reacomodar mientras cambia de ancho. La altura NUNCA cambia (ni el espaciado).
     val density = LocalDensity.current
     val rowSpec = remember { PivotSpec(with(density) { 48.dp.toPx() }) { false } }
-    val pin = r.kind != "feat" && r.kind != "wide" && r.kind != "top"
+    // Top 10: no se clava a la izquierda (taparía el número), pero sí se asegura de que la
+    // tarjeta ya ABIERTA entre entera en pantalla, con lugar para su número a la izquierda.
+    val topSpec = remember {
+        with(density) { OpenSpec(openPx = (128.dp * 1.5f * (16f / 9f)).toPx(), leftPx = (48 + 110).dp.toPx(), rightPx = 48.dp.toPx()) }
+    }
+    val pin = r.kind != "feat" && r.kind != "wide"
     Column(Modifier.padding(top = 22.dp)) {
         Text(r.title, style = ts(13, FontWeight.Bold, Color.White.copy(alpha = .92f)), modifier = Modifier.padding(start = 48.dp))
-        CompositionLocalProvider(LocalBringIntoViewSpec provides (if (pin) rowSpec else LocalBringIntoViewSpec.current)) {
+        CompositionLocalProvider(LocalBringIntoViewSpec provides (if (!pin) LocalBringIntoViewSpec.current else if (r.kind == "top") topSpec else rowSpec)) {
         LazyRow(
             state = state,
             contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp),
@@ -625,13 +646,14 @@ fun ExpandPoster(t: Title, baseW: Dp, key: String, restore: String?, nav: Nav, s
     val w by animateDpAsState(if (focused) openW else baseW, tween(320), label = "pw")
     val open by animateFloatAsState(if (focused) 1f else 0f, tween(320), label = "po")
     Focusable(
-        onClick, Modifier.width(w).height(h), shape = RoundedCornerShape(9.dp), scale = 1.08f, ring = true, lift = true,
+        onClick, Modifier.width(w).height(h), shape = RoundedCornerShape(9.dp), scale = 1f, ring = true, lift = true,
         requester = req, onFocus = { nav.memory.focus[screenKey] = key }, pivotTop = true, interactionSource = src
     ) { f ->
         Box(Modifier.fillMaxSize().background(C.surface)) {
             if (t.poster.isNotBlank()) Img(t.poster, Modifier.fillMaxSize().graphicsLayer { alpha = 1f - open })
             else Placeholder(t, Modifier.fillMaxSize().graphicsLayer { alpha = 1f - open })
-            if (open > 0f && t.wide.isNotBlank()) Img(t.wide, Modifier.fillMaxSize().graphicsLayer { alpha = open })
+            // imagen de FONDO del título (no la miniatura)
+            if (open > 0f && t.tvBg.isNotBlank()) Img(t.tvBg, Modifier.fillMaxSize().graphicsLayer { alpha = open })
             PreviewOverlay(t, f)
             if (open > 0f) {
                 Box(Modifier.fillMaxSize().graphicsLayer { alpha = open }.background(Brush.verticalGradient(0f to Color.Transparent, .55f to Color.Transparent, 1f to Color.Black.copy(alpha = .75f))))
