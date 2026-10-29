@@ -3,12 +3,15 @@ package com.realityvault.tv
 import android.graphics.drawable.BitmapDrawable
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +44,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,6 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathFillType
@@ -60,6 +65,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -69,6 +76,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.toSize
 import coil.imageLoader
 import coil.request.ImageRequest
 import kotlinx.coroutines.delay
@@ -117,9 +125,26 @@ fun App(nav: Nav, onExit: () -> Unit) {
 
 /* ---------------- menú de arriba, igual que el sitio web ---------------- */
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TopNavBar(nav: Nav, modifier: Modifier = Modifier) {
     val items = listOf(Screen.Home to "Inicio", Screen.Series to "Series", Screen.Movies to "Películas", Screen.MyList to "Mi lista")
+    // Píldora que se desliza y cambia de ancho para "seguir" al ítem activo del menú,
+    // igual a como se mueve el foco en Netflix/Apple TV: blanca y brillante cuando el
+    // control está puesto ahí, tenue cuando solo indica la sección en la que estás.
+    var rowHasFocus by remember { mutableStateOf(false) }
+    var focusedIdx by remember { mutableIntStateOf(-1) }
+    val selectedIdx = items.indexOfFirst { it.first == nav.top }
+    val bounds = remember { mutableStateMapOf<Int, Rect>() }
+    val activeIdx = if (rowHasFocus && focusedIdx >= 0) focusedIdx else selectedIdx
+    val target = bounds[activeIdx]
+    val density = LocalDensity.current
+    val pillSpec = spring<Dp>(dampingRatio = .82f, stiffness = 420f)
+    val animX by animateDpAsState(with(density) { (target?.left ?: 0f).toDp() }, pillSpec, label = "pillX")
+    val animW by animateDpAsState(with(density) { (target?.width ?: 0f).toDp() }, pillSpec, label = "pillW")
+    val bright = rowHasFocus && focusedIdx >= 0
+    val animAlpha by animateFloatAsState(if (target == null) 0f else if (bright) .95f else .16f, tween(160), label = "pillA")
+
     Row(
         modifier
             .fillMaxWidth()
@@ -130,9 +155,31 @@ fun TopNavBar(nav: Nav, modifier: Modifier = Modifier) {
         if (Store.siteLogo.isNotBlank()) Img(Store.siteLogo, Modifier.height(24.dp).width(140.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
         else LocalLogo(Modifier.height(24.dp).width(140.dp))
         Spacer(Modifier.width(40.dp))
-        items.forEach { (scr, label) ->
-            NavLink(label, nav.top == scr) { if (nav.top != scr) nav.section(scr) }
-            Spacer(Modifier.width(28.dp))
+        Box(
+            Modifier
+                .focusGroup()
+                .onFocusChanged { rowHasFocus = it.hasFocus }
+        ) {
+            Box(
+                Modifier
+                    .offset(x = animX)
+                    .width(animW)
+                    .height(38.dp)
+                    .background(Color.White.copy(alpha = animAlpha), RoundedCornerShape(99.dp))
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                items.forEachIndexed { i, (scr, label) ->
+                    NavLink(
+                        label,
+                        isActive = i == activeIdx,
+                        bright = bright,
+                        onBounds = { bounds[i] = it },
+                        onFocusIn = { focusedIdx = i },
+                        onClick = { if (nav.top != scr) nav.section(scr) }
+                    )
+                    if (i != items.lastIndex) Spacer(Modifier.width(8.dp))
+                }
+            }
         }
         Spacer(Modifier.weight(1f))
         RoundButton(Ic.search, "Buscar", { nav.go(Screen.Search) })
@@ -148,16 +195,20 @@ fun TopNavBar(nav: Nav, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun NavLink(label: String, selected: Boolean, onClick: () -> Unit) {
-    Focusable(onClick, Modifier, shape = RoundedCornerShape(6.dp), scale = 1f, ring = false) { f ->
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, style = ts(15, FontWeight.Bold, if (f || selected) Color.White else C.muted))
-            Spacer(Modifier.height(5.dp))
-            Box(
-                Modifier.width(if (selected || f) 22.dp else 0.dp).height(3.dp)
-                    .background(if (selected || f) C.accent else Color.Transparent, RoundedCornerShape(2.dp))
-            )
-        }
+private fun NavLink(label: String, isActive: Boolean, bright: Boolean, onBounds: (Rect) -> Unit, onFocusIn: () -> Unit, onClick: () -> Unit) {
+    Focusable(
+        onClick,
+        Modifier.onGloballyPositioned { onBounds(Rect(it.positionInParent(), it.size.toSize())) },
+        shape = RoundedCornerShape(99.dp),
+        scale = 1f,
+        ring = false,
+        onFocus = onFocusIn
+    ) {
+        Text(
+            label,
+            Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            style = ts(15, FontWeight.Bold, if (isActive && bright) Color.Black else Color.White)
+        )
     }
 }
 
@@ -457,7 +508,7 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
 fun CardA(key: String, restore: String?, nav: Nav, screenKey: String, onClick: () -> Unit, modifier: Modifier, content: @Composable () -> Unit) {
     val req = remember { FocusRequester() }
     if (key == restore) AutoFocus(req, key)
-    Focusable(onClick, modifier, shape = RoundedCornerShape(9.dp), scale = 1.08f, ring = true, lift = true, requester = req, onFocus = { nav.memory.focus[screenKey] = key }) { content() }
+    Focusable(onClick, modifier, shape = RoundedCornerShape(9.dp), scale = 1.08f, ring = true, lift = true, requester = req, onFocus = { nav.memory.focus[screenKey] = key }, pivotTop = true) { content() }
 }
 
 @Composable
@@ -608,7 +659,7 @@ fun DetailScreen(id: String, nav: Nav) {
                             SectionTitle("También te podría gustar")
                             LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                 items(related, key = { it.id }) { o ->
-                                    Focusable({ nav.go(Screen.Detail(o.id)) }, Modifier.width(110.dp).aspectRatio(2f / 3f), shape = RoundedCornerShape(9.dp), scale = 1.08f, ring = false, lift = true) { PosterCard(o) }
+                                    Focusable({ nav.go(Screen.Detail(o.id)) }, Modifier.width(110.dp).aspectRatio(2f / 3f), shape = RoundedCornerShape(9.dp), scale = 1.08f, ring = false, lift = true, pivotTop = true) { PosterCard(o) }
                                 }
                             }
                         }
@@ -640,7 +691,7 @@ fun EpisodeA(t: Title, s: Season, e: Episode, prog: Progress?, onClick: () -> Un
     val seen = prog?.watched?.contains("${s.number}:${e.number}") == true
     val current = prog?.season == s.number && prog?.episode == e.number
     val hasVideo = isHttp(e.url)
-    Focusable(onClick, Modifier.width(220.dp), shape = RoundedCornerShape(10.dp), scale = 1.06f, ring = true, lift = true, clipContent = false) { f ->
+    Focusable(onClick, Modifier.width(220.dp), shape = RoundedCornerShape(10.dp), scale = 1.06f, ring = true, lift = true, clipContent = false, pivotTop = true) { f ->
         Column {
             Box(
                 Modifier.fillMaxWidth().aspectRatio(16f / 9f)

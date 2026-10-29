@@ -38,6 +38,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -133,6 +134,14 @@ fun Focusable(
     clipContent: Boolean = true,
     requester: FocusRequester? = null,
     onFocus: (() -> Unit)? = null,
+    // Las tarjetas de las filas (pósters, episodios...) viven dentro de una lista que se
+    // desplaza sola para mantener la fila enfocada en su lugar (ver PivotSpec en Apple.kt).
+    // Si la tarjeta crece desde su centro al enfocarse, su borde de arriba sube un poco
+    // durante toda la animación de agrandado, y eso hace que esa lista se reacomode sola
+    // cuadro a cuadro — se siente como un tembleque en toda la pantalla cada vez que te
+    // movés para el costado. Agrandándola desde arriba en vez del centro, el borde de
+    // arriba no se mueve, así que no hay nada que corregir.
+    pivotTop: Boolean = false,
     content: @Composable BoxScope.(focused: Boolean) -> Unit
 ) {
     val src = remember { MutableInteractionSource() }
@@ -140,7 +149,10 @@ fun Focusable(
     val s by animateFloatAsState(if (focused) scale else 1f, tween(160), label = "s")
     Box(
         modifier
-            .graphicsLayer { scaleX = s; scaleY = s }
+            .graphicsLayer {
+                scaleX = s; scaleY = s
+                if (pivotTop) transformOrigin = TransformOrigin(0.5f, 0f)
+            }
             .drawWithContent {
                 drawContent()
                 if (focused && ring) {

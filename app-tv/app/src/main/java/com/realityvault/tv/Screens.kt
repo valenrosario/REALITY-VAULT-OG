@@ -155,7 +155,7 @@ fun GridScreen(nav: Nav, kind: String) {
                 val k = "$kind/${t.id}"
                 val req = remember { FocusRequester() }
                 if (k == restore || (restore == null && t.id == list.first().id)) AutoFocus(req, k)
-                Focusable({ nav.go(Screen.Detail(t.id)) }, Modifier.aspectRatio(2f / 3f), requester = req, onFocus = { nav.memory.focus[kind] = k }) {
+                Focusable({ nav.go(Screen.Detail(t.id)) }, Modifier.aspectRatio(2f / 3f), requester = req, onFocus = { nav.memory.focus[kind] = k }, pivotTop = true) {
                     PosterCard(t)
                 }
             }
