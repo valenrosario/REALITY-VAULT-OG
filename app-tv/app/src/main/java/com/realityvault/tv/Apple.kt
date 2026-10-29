@@ -544,10 +544,7 @@ fun DetailScreen(id: String, nav: Nav) {
                             ).joinToString(" · ")
                             if (facts.isNotBlank()) {
                                 Spacer(Modifier.height(10.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(facts, style = ts(13, color = Color.White.copy(alpha = .85f)))
-                                    if (t.rating.isNotBlank()) { Spacer(Modifier.width(9.dp)); RatingBox(t.rating) }
-                                }
+                                Text(facts, style = ts(13, color = Color.White.copy(alpha = .85f)))
                             }
                             Spacer(Modifier.height(20.dp))
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
