@@ -142,9 +142,13 @@ fun Focusable(
     // movés para el costado. Agrandándola desde arriba en vez del centro, el borde de
     // arriba no se mueve, así que no hay nada que corregir.
     pivotTop: Boolean = false,
+    // Para cuando quien llama necesita leer el estado de foco ANTES de construir el
+    // modifier que le pasa a este Focusable (p.ej. para animar el ancho real de una
+    // tarjeta y no solo su escala visual) — si no se pasa ninguna, crea la suya.
+    interactionSource: MutableInteractionSource? = null,
     content: @Composable BoxScope.(focused: Boolean) -> Unit
 ) {
-    val src = remember { MutableInteractionSource() }
+    val src = interactionSource ?: remember { MutableInteractionSource() }
     val focused by src.collectIsFocusedAsState()
     val s by animateFloatAsState(if (focused) scale else 1f, tween(160), label = "s")
     Box(

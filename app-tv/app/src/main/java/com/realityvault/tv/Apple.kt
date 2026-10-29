@@ -2,20 +2,26 @@ package com.realityvault.tv
 
 import android.graphics.drawable.BitmapDrawable
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -41,6 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -83,6 +90,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player as M3Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import coil.imageLoader
 import coil.request.ImageRequest
 import kotlinx.coroutines.delay
@@ -544,13 +557,17 @@ fun GlassButton(icon: ImageVector, onFocus: (() -> Unit)? = null, onClick: () ->
 
 /* ---------------- filas ---------------- */
 
+// cuánto crece (de ancho real, no visual) una tarjeta al enfocarse
+private const val GROW = 1.22f
+
 @Composable
 fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
     val restore = nav.memory.focus[screenKey]
-    // Espacio de sobra antes del título: la tarjeta enfocada de la fila de ARRIBA crece hacia
-    // abajo al agrandarse (ver pivotTop en Focusable), y sin este margen terminaba pisando el
-    // título de la fila siguiente ("Novedades", "Series", etc).
-    Column(Modifier.padding(top = 22.dp)) {
+    // Espacio de sobra antes del título: la tarjeta enfocada de la fila de ARRIBA ahora crece
+    // de tamaño real (no solo visual, para que las vecinas se corran como en Netflix) hacia
+    // abajo al agrandarse, y sin este margen terminaba pisando el título de la fila siguiente
+    // ("Novedades", "Series", etc).
+    Column(Modifier.padding(top = 58.dp)) {
         Text(r.title, style = ts(13, FontWeight.Bold, Color.White.copy(alpha = .92f)), modifier = Modifier.padding(start = 48.dp))
         LazyRow(
             state = state,
@@ -566,16 +583,36 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
                 when (r.kind) {
                     "wide" -> {
                         val p = if (r.key == "cont") Store.progress.firstOrNull { it.titleId == t.id } else null
-                        CardA(k, restore, nav, screenKey, {
-                            val tg = Store.playTarget(t)
-                            if (r.key == "cont" && tg != null) nav.play(t, tg.url, tg.season, tg.episode) else nav.go(Screen.Detail(t.id))
-                        }, Modifier.width(189.dp).aspectRatio(16f / 9f)) { WideCard(t, if (p?.season != null) "T${p.season}:E${p.episode}" else null) }
+                        ExpandCard(
+                            t, 189.dp, 16f / 9f, t.wide, k, restore, nav, screenKey,
+                            { val tg = Store.playTarget(t); if (r.key == "cont" && tg != null) nav.play(t, tg.url, tg.season, tg.episode) else nav.go(Screen.Detail(t.id)) },
+                            showTitleOnFocus = false
+                        ) {
+                            val label = if (p?.season != null) "T${p.season}:E${p.episode}" else null
+                            if (label != null) {
+                                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .55f to Color.Transparent, 1f to Color.Black.copy(alpha = .7f))))
+                                Text(label, style = ts(10, FontWeight.Bold, Color.White), modifier = Modifier.align(Alignment.BottomStart).padding(start = 9.dp, bottom = 14.dp))
+                                Box(Modifier.align(Alignment.BottomStart).padding(start = 9.dp, end = 9.dp, bottom = 7.dp).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = .35f), RoundedCornerShape(9.dp))) {
+                                    Box(Modifier.fillMaxWidth(.45f).height(3.dp).background(Color.White, RoundedCornerShape(9.dp)))
+                                }
+                            }
+                        }
                     }
                     "top" -> Row(verticalAlignment = Alignment.Bottom) {
                         Text("${i + 1}", modifier = Modifier.offset(x = 8.dp, y = 8.dp), style = ts(86, FontWeight.Bold, C.accent).copy(drawStyle = Stroke(width = 4f)))
-                        CardA(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, Modifier.width(128.dp).aspectRatio(2f / 3f)) { PosterCard(t) }
+                        ExpandCard(t, 128.dp, 2f / 3f, t.poster, k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }) {
+                            if (t.isSoon) Text(
+                                "Próximamente", style = ts(8, FontWeight.Bold, Color.Black),
+                                modifier = Modifier.align(Alignment.TopStart).padding(6.dp).background(C.accent, RoundedCornerShape(99.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     }
-                    else -> CardA(k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, Modifier.width(152.dp).aspectRatio(2f / 3f)) { PosterCard(t) }
+                    else -> ExpandCard(t, 152.dp, 2f / 3f, t.poster, k, restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }) {
+                        if (t.isSoon) Text(
+                            "Próximamente", style = ts(8, FontWeight.Bold, Color.Black),
+                            modifier = Modifier.align(Alignment.TopStart).padding(6.dp).background(C.accent, RoundedCornerShape(99.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
                 }
             }
         }
@@ -587,6 +624,101 @@ fun CardA(key: String, restore: String?, nav: Nav, screenKey: String, onClick: (
     val req = remember { FocusRequester() }
     if (key == restore) AutoFocus(req, key)
     Focusable(onClick, modifier, shape = RoundedCornerShape(9.dp), scale = 1.08f, ring = true, lift = true, requester = req, onFocus = { nav.memory.focus[screenKey] = key }, pivotTop = true) { content() }
+}
+
+/**
+ * Tarjeta que se agranda DE VERDAD (tamaño real, no solo escala visual) al recibir el
+ * foco, para que las tarjetas vecinas se corran como en Netflix en vez de superponerse.
+ * Si el título tiene un tráiler cargado, además arranca su vista previa en silencio
+ * detrás de la imagen: la imagen se ve siempre primero y de inmediato, el video se
+ * prepara invisible, y solo cuando tiene su primer cuadro listo aparece con un
+ * crossfade suave. Sin indicadores de carga ni pantallas negras en ningún momento;
+ * si no hay tráiler, tarda demasiado o falla, se queda con la imagen y listo.
+ */
+@Composable
+fun ExpandCard(
+    t: Title, baseWidth: Dp, aspect: Float, art: String, key: String, restore: String?,
+    nav: Nav, screenKey: String, onClick: () -> Unit,
+    showTitleOnFocus: Boolean = true,
+    overlay: @Composable BoxScope.() -> Unit = {}
+) {
+    val req = remember { FocusRequester() }
+    if (key == restore) AutoFocus(req, key)
+    val src = remember { MutableInteractionSource() }
+    val focused by src.collectIsFocusedAsState()
+    val w by animateDpAsState(if (focused) baseWidth * GROW else baseWidth, spring(dampingRatio = .82f, stiffness = 420f), label = "cw")
+
+    // Solo se intenta la vista previa si el tráiler es un archivo que el reproductor nativo
+    // puede abrir directo (mp4/m3u8) — si es un link de YouTube/Vimeo/etc (otro reproductor,
+    // con su propio iframe) no hay forma de precargarlo invisible, así que directamente no
+    // se intenta y se queda con la imagen, sin mostrar nada raro.
+    val media = remember(t.trailer) { mediaFor(t.trailer) as? Media.Native }
+    var showVideo by remember(key) { mutableStateOf(false) }
+    var videoReady by remember(key) { mutableStateOf(false) }
+    LaunchedEffect(focused, media) {
+        showVideo = false; videoReady = false
+        if (focused && media != null) {
+            // espera breve antes de pedir el video: si el usuario ya pasó de largo, nunca
+            // llega a arrancar la descarga (evita precargar todo lo que vas cruzando de paso)
+            delay(550)
+            showVideo = true
+            // si tarda demasiado en estar listo, se abandona y se queda con la imagen
+            delay(6000)
+            if (!videoReady) showVideo = false
+        }
+    }
+
+    Focusable(
+        onClick, Modifier.width(w).aspectRatio(aspect), shape = RoundedCornerShape(9.dp),
+        scale = 1f, ring = true, lift = true, clipContent = true, requester = req,
+        interactionSource = src, onFocus = { nav.memory.focus[screenKey] = key }
+    ) { f ->
+        Box(Modifier.fillMaxSize().background(C.surface)) {
+            if (art.isNotBlank()) Img(art, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
+            if (showVideo && media != null) AnimatedVisibility(videoReady, enter = fadeIn(tween(380)), exit = fadeOut(tween(0))) {
+                PreviewLayer(media) { videoReady = true }
+            }
+            overlay()
+            if (f && showTitleOnFocus) {
+                Box(
+                    Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                        .background(Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black.copy(alpha = .78f)))
+                        .padding(horizontal = 8.dp, vertical = 7.dp)
+                ) { Text(t.title, style = ts(11, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            }
+        }
+    }
+}
+
+/** Capa de video de la vista previa: se monta solo mientras hace falta y se desmonta
+ * (liberando el reproductor automáticamente) apenas deja de hacer falta — así nunca
+ * queda sonando ni reservando memoria el video de una selección anterior. */
+@OptIn(UnstableApi::class)
+@Composable
+private fun PreviewLayer(media: Media.Native, onReady: () -> Unit) {
+    val ctx = LocalContext.current
+    val player = remember(media.url) {
+        ExoPlayer.Builder(ctx).build().apply {
+            volume = 0f
+            repeatMode = M3Player.REPEAT_MODE_ONE
+            val item = MediaItem.Builder().setUri(media.url)
+                .apply { if (media.hls) setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8) }.build()
+            setMediaItem(item)
+            prepare()
+            playWhenReady = true
+        }
+    }
+    DisposableEffect(player) {
+        val l = object : M3Player.Listener {
+            override fun onRenderedFirstFrame() { onReady() }
+        }
+        player.addListener(l)
+        onDispose { player.removeListener(l); player.release() }
+    }
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { c -> PlayerView(c).apply { this.player = player; useController = false } }
+    )
 }
 
 @Composable
