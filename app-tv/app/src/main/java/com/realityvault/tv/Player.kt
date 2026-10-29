@@ -13,7 +13,6 @@ import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -46,11 +45,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -378,24 +377,23 @@ private fun SmallGlass(back: Boolean, onClick: () -> Unit) {
 }
 
 /** Flecha circular de 10 segundos (atrasar / adelantar), dibujada a mano. */
+// Antes esto se dibujaba a mano con arcos y líneas calculadas por trigonometría: en la tele
+// real se veía como un garabato ilegible (parecía una letra random, no una flecha). Se
+// reemplaza por el mismo ícono de "retroceder/adelantar" que usan YouTube/Material Design —
+// una forma ya probada y reconocible — con el "10" aparte abajo, sin pisarse con la flecha.
+private val SeekBackIcon: ImageVector = ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
+    .addPath(pathData = addPathNodes("M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"), fill = SolidColor(Color.White))
+    .build()
+
+private val SeekFwdIcon: ImageVector = ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
+    .addPath(pathData = addPathNodes("M18 13c0 3.31-2.69 6-6 6s-6-2.69-6-6 2.69-6 6-6v4l5-5-5-5v4c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8h-2z"), fill = SolidColor(Color.White))
+    .build()
+
 @Composable
 private fun SeekIcon(back: Boolean, color: Color, size: androidx.compose.ui.unit.Dp) {
-    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val sw = this.size.minDimension * .09f
-            val sweep = if (back) -230f else 230f
-            val start = if (back) 160f else -20f
-            drawArc(color, startAngle = start, sweepAngle = sweep, useCenter = false, style = Stroke(sw, cap = StrokeCap.Round))
-            val r = this.size.minDimension / 2
-            val ang = Math.toRadians((start + sweep).toDouble())
-            val cx = this.size.width / 2 + r * Math.cos(ang).toFloat()
-            val cy = this.size.height / 2 + r * Math.sin(ang).toFloat()
-            val aLen = this.size.minDimension * .17f
-            val dir = if (back) -1 else 1
-            drawLine(color, Offset(cx, cy), Offset(cx - aLen * dir, cy - aLen * 0.6f), sw * .9f, cap = StrokeCap.Round)
-            drawLine(color, Offset(cx, cy), Offset(cx - aLen * dir, cy + aLen * 0.6f), sw * .9f, cap = StrokeCap.Round)
-        }
-        Text("10", style = ts((size.value * .27f), FontWeight.Bold, color))
+    Column(Modifier.size(size), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Icon(if (back) SeekBackIcon else SeekFwdIcon, null, tint = color, modifier = Modifier.size(size * .58f))
+        Text("10", style = ts(size.value * .3f, FontWeight.Bold, color))
     }
 }
 
