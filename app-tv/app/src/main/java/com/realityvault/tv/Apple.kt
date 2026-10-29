@@ -596,10 +596,10 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
 }
 
 @Composable
-fun CardA(key: String, restore: String?, nav: Nav, screenKey: String, onClick: () -> Unit, modifier: Modifier, content: @Composable (focused: Boolean) -> Unit) {
+fun CardA(key: String, restore: String?, nav: Nav, screenKey: String, onClick: () -> Unit, modifier: Modifier, scale: Float = 1.08f, content: @Composable (focused: Boolean) -> Unit) {
     val req = remember { FocusRequester() }
     if (key == restore) AutoFocus(req, key)
-    Focusable(onClick, modifier, shape = RoundedCornerShape(9.dp), scale = 1.08f, ring = true, lift = true, requester = req, onFocus = { nav.memory.focus[screenKey] = key }, pivotTop = true) { f -> content(f) }
+    Focusable(onClick, modifier, shape = RoundedCornerShape(9.dp), scale = scale, ring = true, lift = true, requester = req, onFocus = { nav.memory.focus[screenKey] = key }, pivotTop = true) { f -> content(f) }
 }
 
 /**
@@ -626,8 +626,13 @@ private fun PreviewOverlay(t: Title, focused: Boolean) {
             if (!videoReady) showVideo = false
         }
     }
-    if (showVideo && media != null) AnimatedVisibility(videoReady, enter = fadeIn(tween(380)), exit = fadeOut(tween(0))) {
-        PreviewLayer(media) { videoReady = true }
+    // OJO: el reproductor tiene que estar montado DE VERDAD para poder avisar que ya
+    // tiene su primer cuadro — por eso esto no puede depender de "videoReady" para
+    // mostrarse (quedaría esperando algo que nunca llega a pasar). Se monta apenas hay
+    // que mostrar video, y el crossfade es solo la opacidad, no el montaje.
+    if (showVideo && media != null) {
+        val alpha by animateFloatAsState(if (videoReady) 1f else 0f, tween(380), label = "pv")
+        PreviewLayer(media, Modifier.graphicsLayer { this.alpha = alpha }) { videoReady = true }
     }
 }
 
@@ -636,7 +641,7 @@ private fun PreviewOverlay(t: Title, focused: Boolean) {
  * queda sonando ni reservando memoria el video de una selección anterior. */
 @OptIn(UnstableApi::class)
 @Composable
-private fun PreviewLayer(media: Media.Native, onReady: () -> Unit) {
+private fun PreviewLayer(media: Media.Native, modifier: Modifier = Modifier, onReady: () -> Unit) {
     val ctx = LocalContext.current
     val player = remember(media.url) {
         ExoPlayer.Builder(ctx).build().apply {
@@ -657,7 +662,7 @@ private fun PreviewLayer(media: Media.Native, onReady: () -> Unit) {
         onDispose { player.removeListener(l); player.release() }
     }
     AndroidView(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         factory = { c -> PlayerView(c).apply { this.player = player; useController = false } }
     )
 }
