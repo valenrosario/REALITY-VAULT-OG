@@ -153,6 +153,11 @@ object Store {
     var loaded by mutableStateOf(false)
     var offline by mutableStateOf(false)
 
+    // Orden de los banners del hero: se decide UNA sola vez por apertura de la app (como en el
+    // sitio, que también sortea un orden nuevo en cada visita) y se mantiene fijo mientras la
+    // app sigue abierta, para que no salte de golpe mientras estás navegando.
+    val bannerSeed = System.nanoTime()
+
     private lateinit var app: Context
     private val prefs get() = app.getSharedPreferences("rv", Context.MODE_PRIVATE)
     private val cacheFile get() = File(app.filesDir, "catalog.json")

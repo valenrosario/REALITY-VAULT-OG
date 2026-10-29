@@ -193,12 +193,14 @@ fun rememberTint(url: String): Color {
 data class Slide(val t: Title, val image: String, val headline: String, val text: String)
 
 fun slides(): List<Slide> {
-    val fromBanners = Store.banners.mapNotNull { b ->
+    // Mismo orden "al azar pero fijo durante la sesión" que usa el sitio web (ver Store.bannerSeed).
+    val seededRandom = kotlin.random.Random(Store.bannerSeed)
+    val fromBanners = Store.banners.shuffled(seededRandom).mapNotNull { b ->
         val t = Store.byId(b.titleId)?.takeIf { it.status != "borrador" } ?: return@mapNotNull null
         Slide(t, t.bannerTv.ifBlank { t.backdropTv.ifBlank { t.backdrop.ifBlank { b.image.ifBlank { t.tvHero } } } }, b.headline, b.text.ifBlank { t.tagline.ifBlank { t.description } })
     }
     if (fromBanners.isNotEmpty()) return fromBanners
-    return Store.published().filter { it.featured }.take(6).map { Slide(it, it.tvHero, "", it.tagline.ifBlank { it.description }) }
+    return Store.published().filter { it.featured }.shuffled(seededRandom).take(6).map { Slide(it, it.tvHero, "", it.tagline.ifBlank { it.description }) }
 }
 
 class RowSpec(val key: String, val title: String, val kind: String, val titles: List<Title>, val feat: List<Pair<Title, FeatItem>> = emptyList())
