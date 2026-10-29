@@ -171,7 +171,19 @@ function metaLine(t){
   if (t.type === 'serie'){ const n=(t.seasons||[]).length; if(n) bits.push(`<span>${n} temporada${n>1?'s':''}</span>`); }
   else if (t.duration) bits.push(`<span>${esc(t.duration)}</span>`);
   if ((t.genres||[]).length) bits.push(`<span>${esc(t.genres.slice(0,3).join(' · '))}</span>`);
+  bits.push(...fmtBadges(t));
   return bits.join('');
+}
+// Insignias de formato (4K / HDR / Dolby Atmos / 5.1), estilo Netflix: texto prolijo en vez de
+// reproducir los logos reales de las marcas (son propiedad de Dolby/DTS, no hay licencia para usarlos).
+function fmtBadges(t){
+  const f = t.formats || {};
+  const out = [];
+  if (f.uhd4k) out.push('<span class="fmt-badge">4K</span>');
+  if (f.hdr) out.push('<span class="fmt-badge">HDR</span>');
+  if (f.atmos) out.push('<span class="fmt-badge fmt-badge-wide">Dolby Atmos</span>');
+  if (f.surround51) out.push('<span class="fmt-badge">5.1</span>');
+  return out;
 }
 function genBlock(t, label, logo){
   const lg = logo === undefined ? t.logo : logo;
@@ -548,6 +560,7 @@ const RATINGS = ['ATP','+7','+13','+16','+18'];
 function blankTitle(type){
   return { id:uid('t'), type:type||'serie', title:'', tagline:'', description:'', year:String(new Date().getFullYear()), rating:'+13', duration:'',
     genres:[], tags:[], cast:[], director:'', poster:'', backdrop:'', logo:'', bannerImage:'', availability:'disponible', releaseDate:'', url:'', trailer:'', featured:false, status:'borrador',
+    formats:{ uhd4k:false, hdr:false, atmos:false, surround51:false },
     seasons: type==='pelicula' ? [] : [{ id:uid('s'), number:1, title:'', episodes:[] }], _new:true };
 }
 function renderLock(){
@@ -752,6 +765,15 @@ function renderEditor(){
       <div class="seg" role="group" aria-label="Disponibilidad"><button data-avail="disponible" aria-pressed="${!isSoon(E)}">Disponible para ver</button><button data-avail="proximamente" aria-pressed="${isSoon(E)}">Próximamente</button></div>
       ${isSoon(E) ? `<label class="field" style="max-width:320px"><span>Fecha de estreno (opcional)</span><input class="input" id="f-release" data-k="releaseDate" value="${esc(E.releaseDate||'')}" placeholder="15 de noviembre"><span class="hint">Se muestra junto a “Próximamente”. Los enlaces para ver quedan ocultos hasta que lo cambies a disponible.</span></label>`
         : `<span class="hint">El botón “Ver ahora” abre ${E.type==='serie'?'el enlace del primer capítulo que lo tenga':'el enlace de la película'}.</span>`}
+    </div>
+    <div class="fs"><h3>Formato y calidad</h3>
+      <div class="fmt-check-grid">
+        <label class="check"><input type="checkbox" data-fmt="uhd4k" ${E.formats?.uhd4k?'checked':''}> 4K Ultra HD</label>
+        <label class="check"><input type="checkbox" data-fmt="hdr" ${E.formats?.hdr?'checked':''}> HDR</label>
+        <label class="check"><input type="checkbox" data-fmt="atmos" ${E.formats?.atmos?'checked':''}> Dolby Atmos</label>
+        <label class="check"><input type="checkbox" data-fmt="surround51" ${E.formats?.surround51?'checked':''}> Audio 5.1</label>
+      </div>
+      <span class="hint">Marcá los que apliquen de verdad al archivo que subiste — esto es solo informativo, no cambia la calidad del video. Aparecen como insignias en la portada y en la ficha, igual que en Netflix.</span>
     </div>
     </div>
     <div data-epanel="extra" ${et==='extra'?'':'hidden'}>
@@ -1346,6 +1368,11 @@ app.addEventListener('change', async e => {
     if (el.dataset.k==='published') S.editing.status = el.checked ? 'publicado' : 'borrador';
     markDirty();
   }
+  if (S.editing && el.type==='checkbox' && el.dataset.fmt){
+    S.editing.formats = S.editing.formats || {};
+    S.editing.formats[el.dataset.fmt] = el.checked;
+    markDirty();
+  }
   if (el.dataset.bf){
     const id = el.closest('[data-banner]').dataset.banner;
     const val = el.type==='checkbox' ? el.checked : el.value;
@@ -1387,7 +1414,7 @@ app.addEventListener('click', async e => {
   if (d.qtPick !== undefined){ tmdbQuickPick(d.qtPick); return; }
   if (d.qtConfirm !== undefined){ const id = d.qtConfirm; const sel = S.qt.sel.slice(); S.qt = null; S.quick = false; S.catalogPicker = false; S.tmdb = { open:true, specials:false, sel }; S.editorTab = 'info'; S.openSeasons = new Set(); rerenderPanel(true); tmdbImport(+id); return; }
   if (d.new){ S.tmdb = { open:false }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.quick = true; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(); rerenderPanel(); setTimeout(()=>document.getElementById('f-title')?.focus(), 120); return; }
-  if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(S.editing.seasons.length===1 ? [0] : []); rerenderPanel(true); window.scrollTo(0,0); return; }
+  if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.editing.formats ||= {}; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(S.editing.seasons.length===1 ? [0] : []); rerenderPanel(true); window.scrollTo(0,0); return; }
   if (d.del !== undefined && d.del){ inlineConfirm(t.closest('[data-row]'), '¿Eliminar?', () => deleteTitle(d.del)); return; }
   if (d.back !== undefined){ S.editing=null; S.dirty=false; rerenderPanel(true); return; }
   if (d.save !== undefined){ saveTitle(); return; }
