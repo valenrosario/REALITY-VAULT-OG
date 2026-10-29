@@ -24,6 +24,11 @@ data class Season(val number: Int, val name: String, val episodes: List<Episode>
 
 data class CastMember(val name: String, val role: String, val photo: String)
 
+/** 4K / HDR / Dolby Atmos / 5.1, marcados desde el panel de web (campo "formats" del título). */
+data class Formats(val uhd4k: Boolean = false, val hdr: Boolean = false, val atmos: Boolean = false, val surround51: Boolean = false) {
+    val any get() = uhd4k || hdr || atmos || surround51
+}
+
 data class Title(
     val id: String, val type: String, val title: String, val tagline: String,
     val description: String, val year: String, val yearEnd: String, val rating: String,
@@ -31,7 +36,8 @@ data class Title(
     val logo: String, val thumbWide: String, val bannerImage: String, val url: String,
     val trailer: String, val featured: Boolean, val status: String, val availability: String,
     val releaseDate: String, val createdAt: Long, val seasons: List<Season>,
-    val cast: List<CastMember> = emptyList(), val bannerTv: String = "", val backdropTv: String = "", val subs: String = ""
+    val cast: List<CastMember> = emptyList(), val bannerTv: String = "", val backdropTv: String = "", val subs: String = "",
+    val formats: Formats = Formats()
 ) {
     val isSerie get() = type == "serie"
     val isSoon get() = availability == "proximamente"
@@ -97,7 +103,8 @@ fun parseTitle(o: JSONObject): Title {
         availability = o.s("availability"), releaseDate = o.s("releaseDate"), createdAt = o.optLong("createdAt"),
         seasons = seasons.sortedBy { it.number },
         cast = o.optJSONArray("cast")?.let { a -> (0 until a.length()).mapNotNull { k -> a.optJSONObject(k)?.let { c -> CastMember(c.s("name"), c.s("role"), c.s("photo")).takeIf { it.name.isNotBlank() } } } } ?: emptyList(),
-        bannerTv = o.s("bannerImageTv"), backdropTv = o.s("backdropTv"), subs = o.s("subs").trim()
+        bannerTv = o.s("bannerImageTv"), backdropTv = o.s("backdropTv"), subs = o.s("subs").trim(),
+        formats = o.optJSONObject("formats")?.let { f -> Formats(f.optBoolean("uhd4k"), f.optBoolean("hdr"), f.optBoolean("atmos"), f.optBoolean("surround51")) } ?: Formats()
     )
 }
 
