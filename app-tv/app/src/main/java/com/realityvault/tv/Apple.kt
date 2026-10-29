@@ -631,36 +631,29 @@ fun EpisodeA(t: Title, s: Season, e: Episode, prog: Progress?, onClick: () -> Un
     val seen = prog?.watched?.contains("${s.number}:${e.number}") == true
     val current = prog?.season == s.number && prog?.episode == e.number
     val hasVideo = isHttp(e.url)
-    Focusable(onClick, Modifier.width(210.dp), shape = RoundedCornerShape(10.dp), scale = 1f, ring = false, clipContent = false) { f ->
-        val sc by animateFloatAsState(if (f) 1.05f else 1f, tween(160), label = "ep")
+    Focusable(onClick, Modifier.width(220.dp), shape = RoundedCornerShape(10.dp), scale = 1.06f, ring = true, lift = true, clipContent = false) { f ->
         Column {
             Box(
-                Modifier.fillMaxWidth().aspectRatio(16f / 9f).graphicsLayer { scaleX = sc; scaleY = sc }
-                    .then(if (f) Modifier.shadow(12.dp, RoundedCornerShape(10.dp)) else Modifier)
+                Modifier.fillMaxWidth().aspectRatio(16f / 9f)
                     .clip(RoundedCornerShape(10.dp)).background(C.surface)
             ) {
                 val img = e.thumb.ifBlank { t.wide }
                 if (img.isNotBlank()) Img(img, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
                 if (!hasVideo) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .3f)))
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .6f to Color.Transparent, 1f to Color.Black.copy(alpha = .55f))))
-                Row(Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (hasVideo) { Icon(Ic.play, null, tint = Color.White, modifier = Modifier.size(9.dp)); Spacer(Modifier.width(4.dp)) }
-                    Text(if (!hasVideo) "Sin video" else e.duration.ifBlank { "Ver" }, style = ts(10.5f, FontWeight.Bold, Color.White))
+                Box(
+                    Modifier.align(Alignment.TopStart).padding(8.dp)
+                        .background(Color.Black.copy(alpha = .6f), RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 2.dp)
+                ) { Text("E${e.number}", style = ts(10.5f, FontWeight.Bold, Color.White)) }
+                if (f && hasVideo) Icon(Ic.play, null, tint = Color.White, modifier = Modifier.align(Alignment.Center).size(26.dp))
+                if (!hasVideo) Box(Modifier.align(Alignment.Center)) { Text("Sin video", style = ts(10.5f, FontWeight.Bold, Color.White.copy(alpha = .85f))) }
+                if (seen || current) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = .25f))) {
+                    Box(Modifier.fillMaxHeight().fillMaxWidth(if (current && !seen) .48f else 1f).background(C.accent))
                 }
-                if (seen || current) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(C.accent))
             }
-            Column(
-                Modifier.padding(top = 6.dp).fillMaxWidth()
-                    .background(if (f) Color.White.copy(alpha = .14f) else Color.Transparent, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 9.dp, vertical = 8.dp)
-            ) {
-                Text("EPISODIO ${e.number}", style = ts(8.5f, color = Color.White.copy(alpha = .6f)).copy(letterSpacing = .6.sp))
-                Spacer(Modifier.height(2.dp))
+            Column(Modifier.padding(top = 7.dp, start = 2.dp, end = 2.dp)) {
                 Text(e.title.ifBlank { "Episodio ${e.number}" }, style = ts(12, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (e.description.isNotBlank()) {
-                    Spacer(Modifier.height(3.dp))
-                    Text(e.description, style = ts(10, FontWeight.Light, Color.White.copy(alpha = .75f)), maxLines = 3, overflow = TextOverflow.Ellipsis, lineHeight = 13.sp)
-                }
+                Spacer(Modifier.height(2.dp))
+                Text(e.duration.ifBlank { " " }, style = ts(10, color = Color.White.copy(alpha = .55f)))
             }
         }
     }
