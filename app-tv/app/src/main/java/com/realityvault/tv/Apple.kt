@@ -7,6 +7,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -628,6 +629,23 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
 }
 
 /**
+ * Devuelve el foco a la tarjeta donde estabas (al volver de una ficha, por ejemplo) — pero
+ * SOLO si sigue siendo la última que tuvo el foco. Antes, si la fila se volvía a dibujar
+ * mientras ibas pasando de costado (o una tarjeta vieja volvía a entrar en pantalla), esa
+ * tarjeta vieja "se robaba" el foco y saltabas de la nada a una más atrás.
+ */
+@Composable
+fun RestoreFocus(req: FocusRequester, key: String, nav: Nav, screenKey: String) {
+    LaunchedEffect(key) {
+        repeat(6) {
+            if (nav.memory.focus[screenKey] != key) return@LaunchedEffect
+            if (runCatching { req.requestFocus() }.isSuccess) return@LaunchedEffect
+            delay(60)
+        }
+    }
+}
+
+/**
  * Póster que, al quedar enfocado, se ABRE A LO ANCHO en el mismo lugar como en Netflix:
  * mantiene exactamente la misma altura que tenía (no se agranda nada para arriba ni para
  * abajo, así el espaciado entre filas y el desplazamiento vertical no cambian), y solo se
@@ -638,13 +656,13 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
 @Composable
 fun ExpandPoster(t: Title, baseW: Dp, key: String, restore: String?, nav: Nav, screenKey: String, onClick: () -> Unit) {
     val req = remember { FocusRequester() }
-    if (key == restore) AutoFocus(req, key)
+    if (key == restore) RestoreFocus(req, key, nav, screenKey)
     val src = remember { MutableInteractionSource() }
     val focused by src.collectIsFocusedAsState()
     val h = baseW * 1.5f
     val openW = h * (16f / 9f)
-    val w by animateDpAsState(if (focused) openW else baseW, tween(320), label = "pw")
-    val open by animateFloatAsState(if (focused) 1f else 0f, tween(320), label = "po")
+    val w by animateDpAsState(if (focused) openW else baseW, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow), label = "pw")
+    val open by animateFloatAsState(if (focused) 1f else 0f, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow), label = "po")
     Focusable(
         onClick, Modifier.width(w).height(h), shape = RoundedCornerShape(9.dp), scale = 1f, ring = true, lift = true,
         requester = req, onFocus = { nav.memory.focus[screenKey] = key }, pivotTop = true, interactionSource = src
@@ -672,7 +690,7 @@ fun ExpandPoster(t: Title, baseW: Dp, key: String, restore: String?, nav: Nav, s
 @Composable
 fun CardA(key: String, restore: String?, nav: Nav, screenKey: String, onClick: () -> Unit, modifier: Modifier, scale: Float = 1.08f, content: @Composable (focused: Boolean) -> Unit) {
     val req = remember { FocusRequester() }
-    if (key == restore) AutoFocus(req, key)
+    if (key == restore) RestoreFocus(req, key, nav, screenKey)
     Focusable(onClick, modifier, shape = RoundedCornerShape(9.dp), scale = scale, ring = true, lift = true, requester = req, onFocus = { nav.memory.focus[screenKey] = key }, pivotTop = true) { f -> content(f) }
 }
 
