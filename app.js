@@ -284,7 +284,7 @@ function renderHero(){
           ${t?.logo && !b.headline ? `<img class="hero-logo" alt="${esc(t.title)}" data-img="${esc(t.logo)}" hidden><h1 class="logo-fallback" hidden>${esc(headline)}</h1>` : `<h1>${esc(headline)}</h1>`}
           ${tag ? `<div class="hero-tag">${esc(tag)}</div>` : ''}
           ${t ? `<div class="hero-m-info"><span class="g">${esc((t.genres||[]).slice(0,2).join(', '))}</span><span class="cnt">${i+1} <i>·</i> ${slides.length}</span></div>` : ''}
-          ${t ? `<div class="meta">${metaLine(t)}</div><div class="meta-m">${t.rating ? `<span class="rating">${esc(t.rating)}</span>` : ''}${esc([t.year, (t.genres||[])[0]].filter(Boolean).join(' • '))}</div>` : ''}
+          ${t ? `<div class="meta">${metaLine(t)}</div><div class="meta-m">${t.rating ? `<span class="rating">${esc(t.rating)}</span>` : ''}${esc([t.year, (t.genres||[])[0]].filter(Boolean).join(' • '))}${fmtBadges(t).join('')}</div>` : ''}
           ${text ? `<p>${esc(text.length>220 ? text.slice(0,217)+'…' : text)}</p>` : ''}
           <div class="hero-actions">
             ${t && isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-primary hero-play" ${t ? watchAttrs(t, target?.season, target?.episode) : 'data-watch'} href="${esc(link)}" target="_blank" rel="noopener"><span class="lbl-d">▶ ${esc(target?.cont ? target.label : (b.cta || 'Ver ahora'))}</span><span class="lbl-m">${ICONS.play} ${target?.cont ? 'Continuar' : 'Reproducir'}</span></a>` : ''}
@@ -1521,7 +1521,7 @@ function renderTitlePage(id){
     <div class="tp-bg wide" ${t.backdrop||t.bannerImage||t.poster||t.backdropMobile?`data-src="${esc(t.backdrop||t.bannerImage||t.poster||t.backdropMobile)}"`:''} ${t.backdropMobile?`data-src-m="${esc(t.backdropMobile)}"`:''}>${genBlock(t)}</div>
     <div class="tp-copy">
       ${t.logo ? `<img class="tp-logo hero-logo" alt="${esc(t.title)}" data-img="${esc(t.logo)}" hidden><h1 class="logo-fallback" hidden>${esc(t.title)}</h1>` : `<h1>${esc(t.title)}</h1>`}
-      <div class="chips-sm">${t.rating?`<span>${esc(t.rating)}</span>`:''}${isSoon(t)?'<span>Próximamente</span>':''}${(t.tags||[]).filter(x=>x.length<=6).slice(0,3).map(x=>`<span>${esc(x)}</span>`).join('')}</div>
+      <div class="chips-sm">${t.rating?`<span>${esc(t.rating)}</span>`:''}${isSoon(t)?'<span>Próximamente</span>':''}${(t.tags||[]).filter(x=>x.length<=6).slice(0,3).map(x=>`<span>${esc(x)}</span>`).join('')}${fmtBadges(t).join('')}</div>
       ${meta ? `<div class="tp-meta">${esc(meta)}</div>` : ''}
       ${isSerie && firstEp ? `<div class="tp-ep"><strong>T${esc(firstSeason.number)}:E${esc(firstEp.number)} ${esc(firstEp.title||'')}</strong>${firstEp.description?`<p>${esc(firstEp.description)}</p>`:''}</div>`
         : `<div class="tp-ep">${t.tagline?`<strong>${esc(t.tagline)}</strong>`:''}${t.description?`<p>${esc(t.description.length>180?t.description.slice(0,177)+'…':t.description)}</p>`:''}</div>`}
@@ -1945,7 +1945,7 @@ function openLandingTitle(id, seasonIdx){
   overlayRoot.innerHTML = `<div class="lp-ov${first?' still':''}" data-close-bg><article class="lp" role="dialog" aria-modal="true" aria-label="${esc(t.title)}">
     <div class="lp-hero" ${art?`data-src="${esc(art)}"`:''}><div class="lp-hv"></div><button class="lp-x" data-close aria-label="Cerrar">✕</button>
       <div class="lp-ht">${t.logo ? `<img class="lp-hlogo" alt="${esc(t.title)}" data-img="${esc(t.logo)}" hidden><h2 class="logo-fallback" hidden>${esc(t.title)}</h2>` : `<h2>${esc(t.title)}</h2>`}
-        <div class="lp-meta">${[t.type==='serie'?'Serie':'Película', t.year, t.rating, t.type==='serie' ? ((t.seasons||[]).length ? (t.seasons.length+' temporada'+(t.seasons.length>1?'s':'')) : '') : t.duration].filter(Boolean).map(x=>`<span>${esc(x)}</span>`).join('')}</div></div></div>
+        <div class="lp-meta">${[t.type==='serie'?'Serie':'Película', t.year, t.rating, t.type==='serie' ? ((t.seasons||[]).length ? (t.seasons.length+' temporada'+(t.seasons.length>1?'s':'')) : '') : t.duration].filter(Boolean).map(x=>`<span>${esc(x)}</span>`).join('')}${fmtBadges(t).join('')}</div></div></div>
     <div class="lp-body">
       ${(t.genres||[]).length ? `<div class="lp-gen">${t.genres.slice(0,4).map(g=>`<span>${esc(g)}</span>`).join('')}</div>` : ''}
       <p class="lp-desc">${esc(t.description || '')}</p>
