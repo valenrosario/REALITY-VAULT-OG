@@ -132,9 +132,14 @@ fun TopNavBar(nav: Nav, modifier: Modifier = Modifier) {
     // Píldora que se desliza y cambia de ancho para "seguir" al ítem activo del menú,
     // igual a como se mueve el foco en Netflix/Apple TV: blanca y brillante cuando el
     // control está puesto ahí, tenue cuando solo indica la sección en la que estás.
+    // El buscador (índice 0) va pegado a "Inicio", DENTRO del mismo grupo con píldora
+    // —no separado a la derecha— igual que en el video de referencia. Como es cuadrado
+    // (mismo ancho que alto), la píldora se convierte en un círculo del tamaño justo
+    // del ícono al pasar por ahí, sin agrandarse de más.
     var rowHasFocus by remember { mutableStateOf(false) }
     var focusedIdx by remember { mutableIntStateOf(-1) }
-    val selectedIdx = items.indexOfFirst { it.first == nav.top }
+    // +1: el buscador ocupa el índice 0. -1 si no hay nada seleccionado en este menú (p. ej. Cuenta).
+    val selectedIdx = if (nav.top == Screen.Search) 0 else items.indexOfFirst { it.first == nav.top }.let { if (it < 0) -1 else it + 1 }
     val bounds = remember { mutableStateMapOf<Int, Rect>() }
     val activeIdx = if (rowHasFocus && focusedIdx >= 0) focusedIdx else selectedIdx
     val target = bounds[activeIdx]
@@ -168,7 +173,17 @@ fun TopNavBar(nav: Nav, modifier: Modifier = Modifier) {
                     .background(Color.White.copy(alpha = animAlpha), RoundedCornerShape(99.dp))
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                items.forEachIndexed { i, (scr, label) ->
+                NavIcon(
+                    Ic.search, "Buscar",
+                    isActive = 0 == activeIdx,
+                    bright = bright,
+                    onBounds = { bounds[0] = it },
+                    onFocusIn = { focusedIdx = 0 },
+                    onClick = { nav.go(Screen.Search) }
+                )
+                Spacer(Modifier.width(8.dp))
+                items.forEachIndexed { i0, (scr, label) ->
+                    val i = i0 + 1
                     NavLink(
                         label,
                         isActive = i == activeIdx,
@@ -177,13 +192,11 @@ fun TopNavBar(nav: Nav, modifier: Modifier = Modifier) {
                         onFocusIn = { focusedIdx = i },
                         onClick = { if (nav.top != scr) nav.section(scr) }
                     )
-                    if (i != items.lastIndex) Spacer(Modifier.width(8.dp))
+                    if (i0 != items.lastIndex) Spacer(Modifier.width(8.dp))
                 }
             }
         }
         Spacer(Modifier.weight(1f))
-        RoundButton(Ic.search, "Buscar", { nav.go(Screen.Search) })
-        Spacer(Modifier.width(16.dp))
         Focusable({ nav.go(Screen.Account) }, Modifier.size(36.dp), shape = CircleShape, scale = 1.1f, ring = false) { f ->
             Box(
                 Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFFFFD1E6), C.accent)), CircleShape)
@@ -209,6 +222,22 @@ private fun NavLink(label: String, isActive: Boolean, bright: Boolean, onBounds:
             Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             style = ts(15, FontWeight.Bold, if (isActive && bright) Color.Black else Color.White)
         )
+    }
+}
+
+@Composable
+private fun NavIcon(icon: ImageVector, desc: String, isActive: Boolean, bright: Boolean, onBounds: (Rect) -> Unit, onFocusIn: () -> Unit, onClick: () -> Unit) {
+    Focusable(
+        onClick,
+        Modifier.size(38.dp).onGloballyPositioned { onBounds(Rect(it.positionInParent(), it.size.toSize())) },
+        shape = CircleShape,
+        scale = 1f,
+        ring = false,
+        onFocus = onFocusIn
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(icon, desc, tint = if (isActive && bright) Color.Black else Color.White, modifier = Modifier.size(17.dp))
+        }
     }
 }
 
