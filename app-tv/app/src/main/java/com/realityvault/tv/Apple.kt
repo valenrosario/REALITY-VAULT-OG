@@ -773,10 +773,14 @@ fun EpisodeA(t: Title, s: Season, e: Episode, prog: Progress?, onClick: () -> Un
     val seen = prog?.watched?.contains("${s.number}:${e.number}") == true
     val current = prog?.season == s.number && prog?.episode == e.number
     val hasVideo = isHttp(e.url)
-    Focusable(onClick, Modifier.width(220.dp), shape = RoundedCornerShape(10.dp), scale = 1.06f, ring = true, lift = true, clipContent = false, pivotTop = true) { f ->
-        Column {
+    // El anillo/sombra/agrandado de foco van SOLO sobre la miniatura, no sobre todo
+    // el bloque (miniatura + título). Antes el Focusable envolvía las dos cosas juntas,
+    // así que al enfocar un episodio el título también se escalaba y el aro blanco de
+    // foco se dibujaba alrededor del texto — se veía roto justo donde está el título.
+    Column(Modifier.width(220.dp)) {
+        Focusable(onClick, Modifier.fillMaxWidth().aspectRatio(16f / 9f), shape = RoundedCornerShape(10.dp), scale = 1.06f, ring = true, lift = true, clipContent = false, pivotTop = true) { f ->
             Box(
-                Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                Modifier.fillMaxSize()
                     .clip(RoundedCornerShape(10.dp)).background(C.surface)
             ) {
                 val img = e.thumb.ifBlank { t.wide }
@@ -792,11 +796,11 @@ fun EpisodeA(t: Title, s: Season, e: Episode, prog: Progress?, onClick: () -> Un
                     Box(Modifier.fillMaxHeight().fillMaxWidth(if (current && !seen) .48f else 1f).background(C.accent))
                 }
             }
-            Column(Modifier.padding(top = 7.dp, start = 2.dp, end = 2.dp)) {
-                Text(e.title.ifBlank { "Episodio ${e.number}" }, style = ts(12, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(2.dp))
-                Text(e.duration.ifBlank { " " }, style = ts(10, color = Color.White.copy(alpha = .55f)))
-            }
+        }
+        Column(Modifier.padding(top = 7.dp, start = 2.dp, end = 2.dp)) {
+            Text(e.title.ifBlank { "Episodio ${e.number}" }, style = ts(12, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(2.dp))
+            Text(e.duration.ifBlank { " " }, style = ts(10, color = Color.White.copy(alpha = .55f)))
         }
     }
 }
