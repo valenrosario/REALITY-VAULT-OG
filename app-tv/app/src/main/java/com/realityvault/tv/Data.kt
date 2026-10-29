@@ -37,7 +37,11 @@ data class Title(
     val trailer: String, val featured: Boolean, val status: String, val availability: String,
     val releaseDate: String, val createdAt: Long, val seasons: List<Season>,
     val cast: List<CastMember> = emptyList(), val bannerTv: String = "", val backdropTv: String = "", val subs: String = "",
-    val formats: Formats = Formats()
+    val formats: Formats = Formats(),
+    // El mismo video silencioso que se reproduce en los banners de la versión web al
+    // quedarse encima de un título (campo "previewVideo" del panel) — NO es el tráiler
+    // (ese puede ser un link de YouTube y se abre aparte, en una ventana).
+    val previewVideo: String = ""
 ) {
     val isSerie get() = type == "serie"
     val isSoon get() = availability == "proximamente"
@@ -104,7 +108,8 @@ fun parseTitle(o: JSONObject): Title {
         seasons = seasons.sortedBy { it.number },
         cast = o.optJSONArray("cast")?.let { a -> (0 until a.length()).mapNotNull { k -> a.optJSONObject(k)?.let { c -> CastMember(c.s("name"), c.s("role"), c.s("photo")).takeIf { it.name.isNotBlank() } } } } ?: emptyList(),
         bannerTv = o.s("bannerImageTv"), backdropTv = o.s("backdropTv"), subs = o.s("subs").trim(),
-        formats = o.optJSONObject("formats")?.let { f -> Formats(f.optBoolean("uhd4k"), f.optBoolean("hdr"), f.optBoolean("atmos"), f.optBoolean("surround51")) } ?: Formats()
+        formats = o.optJSONObject("formats")?.let { f -> Formats(f.optBoolean("uhd4k"), f.optBoolean("hdr"), f.optBoolean("atmos"), f.optBoolean("surround51")) } ?: Formats(),
+        previewVideo = o.s("previewVideo").trim()
     )
 }
 
