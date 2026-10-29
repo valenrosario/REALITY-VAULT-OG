@@ -124,7 +124,11 @@ fun Unavailable(nav: Nav) {
 @Composable
 fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player, next: Pair<Season, Episode>?, nav: Nav) {
     val ctx = LocalContext.current
-    var playing by remember { mutableStateOf(true) }
+    // Solo cambia cuando el usuario realmente pausa o reanuda — no mientras bufferea o adelanta
+    // (eso también pone en falso el "isPlaying" real del reproductor un instante). Todo lo visual
+    // que debería reaccionar a "está en pausa de verdad" (el oscurecimiento, la tarjeta de pausa,
+    // a qué botón vuelve el foco) usa esto.
+    var userPaused by remember { mutableStateOf(false) }
     var ended by remember { mutableStateOf(false) }
     var buffering by remember { mutableStateOf(true) }
     var posMs by remember { mutableLongStateOf(0L) }
@@ -150,7 +154,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     var cueText by remember { mutableStateOf("") }
     DisposableEffect(player) {
         val l = object : M3Player.Listener {
-            override fun onIsPlayingChanged(p: Boolean) { playing = p }
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { userPaused = !playWhenReady }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == M3Player.STATE_BUFFERING
                 if (state == M3Player.STATE_READY) durMs = player.duration.coerceAtLeast(0)
@@ -169,9 +173,9 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     LaunchedEffect(player) {
         while (true) { posMs = player.currentPosition.coerceAtLeast(0); durMs = player.duration.coerceAtLeast(0); delay(400) }
     }
-    // oculta los controles solos si está reproduciendo
-    LaunchedEffect(lastTouch, playing, controlsVisible) {
-        if (controlsVisible && playing) { delay(4000); if (System.currentTimeMillis() - lastTouch >= 3900) controlsVisible = false }
+    // oculta los controles solos si está reproduciendo de verdad (no mientras bufferea o adelanta)
+    LaunchedEffect(lastTouch, userPaused, controlsVisible) {
+        if (controlsVisible && !userPaused) { delay(4000); if (System.currentTimeMillis() - lastTouch >= 3900) controlsVisible = false }
     }
     fun bump() { lastTouch = System.currentTimeMillis(); controlsVisible = true }
     // pasa sola al próximo capítulo al terminar
@@ -186,8 +190,8 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     // vuelve siempre a Reproducir/Pausar — nunca se queda en Subtítulos ni en otro botón por defecto.
     // El bloque "if (controlsVisible)" se desmonta por completo cuando se ocultan, así que el foco
     // hay que volver a pedirlo cada vez que se vuelven a mostrar, no solo una vez al entrar.
-    LaunchedEffect(controlsVisible, playing) {
-        if (controlsVisible) AutoFocusOnce(if (playing) playReq else contReq)
+    LaunchedEffect(controlsVisible, userPaused) {
+        if (controlsVisible) AutoFocusOnce(if (!userPaused) playReq else contReq)
     }
 
     // -- avisos de "-10 / +10" cuando se adelanta/atrasa con el control, sin tocar los botones --
@@ -200,7 +204,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
 
     fun doSeekBack() { player.seekBack(); backPulse++; bump() }
     fun doSeekForward() { player.seekForward(); fwdPulse++; bump() }
-    fun doToggle() { if (player.isPlaying) player.pause() else player.play(); bump() }
+    fun doToggle() { if (player.playWhenReady) player.pause() else player.play(); bump() }
 
     // "Atrás" del control: si los botones están en pantalla, lo primero es ocultarlos — recién
     // si ya estaban ocultos, "atrás" sale de verdad del reproductor (vuelve al detalle).
@@ -267,11 +271,11 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         if (controlsVisible) {
             // en pausa se oscurece más el fondo, para que se note bien que está pausado — con un
             // fundido suave, no de golpe apenas se aprieta pausa.
-            val pauseDim by animateFloatAsState(if (!playing) .5f else 0f, tween(420), label = "pauseDim")
+            val pauseDim by animateFloatAsState(if (userPaused) .5f else 0f, tween(420), label = "pauseDim")
             if (pauseDim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = pauseDim)))
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .6f), .22f to Color.Transparent, .62f to Color.Transparent, 1f to Color.Black.copy(alpha = .85f))))
 
-            if (playing) {
+            if (!userPaused) {
                 // ---- reproduciendo: info arriba, pausa al medio, barra abajo ----
                 Box(Modifier.align(Alignment.TopStart).padding(start = 64.dp, top = 44.dp).width(760.dp)) {
                     TopInfo(t, episode, s.season)
@@ -345,12 +349,14 @@ private fun SeekFlash(back: Boolean) {
 
 @Composable
 private fun TopInfo(t: Title?, episode: Episode?, season: Int?) {
+    // El logo de la serie/película en vez del nombre escrito — igual que la tarjeta de pausa.
+    if (t != null) TitleLogo(t, 300.dp, 56.dp, 26)
     if (episode != null) {
-        Text("T$season · E${episode.number}", style = ts(14, FontWeight.Bold, Color.White.copy(alpha = .62f)))
-        Spacer(Modifier.height(3.dp))
-        Text(episode.title.ifBlank { "Episodio ${episode.number}" }, style = ts(22, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    } else if (t != null) {
-        Text(t.title, style = ts(22, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "T$season · E${episode.number} · ${episode.title.ifBlank { "Episodio ${episode.number}" }}",
+            style = ts(14, FontWeight.Bold, Color.White.copy(alpha = .7f)), maxLines = 1, overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -434,8 +440,13 @@ private fun WakeLayer(modifier: Modifier = Modifier, onWake: () -> Unit) {
         modifier
             .focusRequester(req)
             .focusable()
-            .onKeyEvent {
-                if (it.type == KeyEventType.KeyDown) { onWake(); true } else false
+            .onKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
+                // "Atrás" NO se consume acá: tiene que seguir de largo para que pueda cerrar el
+                // reproductor de verdad. Si lo tragamos como cualquier otra tecla, la primera vez
+                // que aparecen los controles ocultos, "atrás" nunca llega a salir del reproductor.
+                if (e.key == Key.Back) return@onKeyEvent false
+                onWake(); true
             }
     )
 }

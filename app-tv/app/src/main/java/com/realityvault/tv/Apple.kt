@@ -54,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
@@ -64,6 +65,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
@@ -105,8 +111,12 @@ fun App(nav: Nav, onExit: () -> Unit) {
             is Screen.Login -> LoginScreen(s, nav)
             is Screen.Person -> PersonScreen(s.name, nav)
             else -> Box(Modifier.fillMaxSize()) {
+                // El banner de inicio necesita su propio FocusRequester acá arriba para que el
+                // menú de arriba (Series/Películas/Mi lista) pueda mandar el foco directo para
+                // abajo, directo al banner — ver "downTarget" de TopNavBar.
+                val heroReq = remember { FocusRequester() }
                 when (s) {
-                    Screen.Home -> HomeScreen(nav)
+                    Screen.Home -> HomeScreen(nav, heroReq)
                     Screen.Series -> GridScreen(nav, "series")
                     Screen.Movies -> GridScreen(nav, "peliculas")
                     Screen.MyList -> GridScreen(nav, "milista")
@@ -114,7 +124,7 @@ fun App(nav: Nav, onExit: () -> Unit) {
                     Screen.Account -> AccountScreen(nav)
                     else -> {}
                 }
-                TopNavBar(nav, Modifier.align(Alignment.TopStart))
+                TopNavBar(nav, Modifier.align(Alignment.TopStart), downTarget = if (s == Screen.Home) heroReq else null)
             }
         }
         // Aviso de actualización: se dibuja último para quedar siempre arriba de todo, pero
@@ -127,7 +137,7 @@ fun App(nav: Nav, onExit: () -> Unit) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun TopNavBar(nav: Nav, modifier: Modifier = Modifier) {
+fun TopNavBar(nav: Nav, modifier: Modifier = Modifier, downTarget: FocusRequester? = null) {
     val items = listOf(Screen.Home to "Inicio", Screen.Series to "Series", Screen.Movies to "Películas", Screen.MyList to "Mi lista")
     // Píldora que se desliza y cambia de ancho para "seguir" al ítem activo del menú,
     // igual a como se mueve el foco en Netflix/Apple TV: blanca y brillante cuando el
@@ -154,7 +164,11 @@ fun TopNavBar(nav: Nav, modifier: Modifier = Modifier) {
         modifier
             .fillMaxWidth()
             .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .85f), Color.Black.copy(alpha = .35f), Color.Transparent)))
-            .padding(start = 48.dp, end = 48.dp, top = 24.dp, bottom = 46.dp),
+            .padding(start = 48.dp, end = 48.dp, top = 24.dp, bottom = 46.dp)
+            // Para abajo, directo a lo que esté más abajo en la pantalla (el banner de inicio) —
+            // sin esto, la búsqueda por posición de Compose a veces no encontraba nada y "abajo"
+            // no hacía nada parado en Series/Películas/Mi lista.
+            .then(if (downTarget != null) Modifier.focusProperties { down = downTarget } else Modifier),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (Store.siteLogo.isNotBlank()) Img(Store.siteLogo, Modifier.height(24.dp).width(140.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
@@ -325,14 +339,13 @@ fun homeRows(): List<RowSpec> {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun HomeScreen(nav: Nav) {
+fun HomeScreen(nav: Nav, heroReq: FocusRequester) {
     val all = slides()
     val rows = homeRows()
     val mem = nav.memory
     val listState = mem.list("home")
     var heroIdx by remember { mutableIntStateOf(0) }
     var heroFocused by remember { mutableStateOf(mem.focus["home"] == null) }
-    val heroReq = remember { FocusRequester() }
     val density = LocalDensity.current
     val defaultSpec = LocalBringIntoViewSpec.current
     val spec = remember { PivotSpec(with(density) { 66.dp.toPx() }) { heroFocused } }
@@ -357,7 +370,11 @@ fun HomeScreen(nav: Nav) {
         CompositionLocalProvider(LocalBringIntoViewSpec provides spec) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 220.dp)) {
                 item(key = "hero") {
-                    if (all.isNotEmpty()) HeroA(all, heroIdx % all.size, screenH - 74.dp, nav, heroReq, { heroIdx = (heroIdx + 1) % all.size }) { heroFocused = it }
+                    if (all.isNotEmpty()) HeroA(
+                        all, heroIdx % all.size, screenH - 74.dp, nav, heroReq,
+                        prev = { heroIdx = (heroIdx - 1 + all.size) % all.size },
+                        next = { heroIdx = (heroIdx + 1) % all.size }
+                    ) { heroFocused = it }
                     else Spacer(Modifier.height(80.dp))
                 }
                 items(rows, key = { it.key }) { r ->
@@ -377,12 +394,27 @@ fun HomeScreen(nav: Nav) {
 }
 
 @Composable
-fun HeroA(all: List<Slide>, idx: Int, height: Dp, nav: Nav, req: FocusRequester, next: () -> Unit, onFocus: (Boolean) -> Unit) {
+fun HeroA(all: List<Slide>, idx: Int, height: Dp, nav: Nav, req: FocusRequester, prev: () -> Unit, next: () -> Unit, onFocus: (Boolean) -> Unit) {
     val slide = all[idx]
     val t = slide.t
     val target = Store.playTarget(t)
     val scope = rememberCoroutineScope()
-    Box(Modifier.fillMaxWidth().height(height).onFocusChanged { onFocus(it.hasFocus) }) {
+    // Qué botón de la fila de acciones tiene el foco ahora mismo: 0 reproducir, 1 lista,
+    // 2 info, 3 siguiente (si hay más de un banner). Para el costado, en el primero o el
+    // último botón, en vez de no hacer nada, cambia directamente de banner.
+    var edge by remember { mutableIntStateOf(0) }
+    val lastEdge = if (all.size > 1) 3 else 2
+    Box(
+        Modifier.fillMaxWidth().height(height).onFocusChanged { onFocus(it.hasFocus) }
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown || all.size <= 1) return@onPreviewKeyEvent false
+                when {
+                    e.key == Key.DirectionLeft && edge == 0 -> { prev(); true }
+                    e.key == Key.DirectionRight && edge == lastEdge -> { next(); true }
+                    else -> false
+                }
+            }
+    ) {
         Crossfade(slide.image, animationSpec = tween(450), label = "hero") { u ->
             Box(Modifier.fillMaxSize()) { if (u.isNotBlank()) Img(u, Modifier.fillMaxSize(), alignment = Alignment.TopCenter, crossfade = false) }
         }
@@ -400,15 +432,15 @@ fun HeroA(all: List<Slide>, idx: Int, height: Dp, nav: Nav, req: FocusRequester,
             Spacer(Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 when {
-                    t.isSoon -> PlayPill(if (t.releaseDate.isNotBlank()) "Próximamente · ${t.releaseDate}" else "Próximamente", null, req) { nav.go(Screen.Detail(t.id)) }
-                    target != null -> PlayPill(if (target.cont) target.label else "Reproducir", Ic.play, req) { nav.play(t, target.url, target.season, target.episode) }
-                    else -> PlayPill("Ver detalles", null, req) { nav.go(Screen.Detail(t.id)) }
+                    t.isSoon -> PlayPill(if (t.releaseDate.isNotBlank()) "Próximamente · ${t.releaseDate}" else "Próximamente", null, req, onFocus = { edge = 0 }) { nav.go(Screen.Detail(t.id)) }
+                    target != null -> PlayPill(if (target.cont) target.label else "Reproducir", Ic.play, req, onFocus = { edge = 0 }) { nav.play(t, target.url, target.season, target.episode) }
+                    else -> PlayPill("Ver detalles", null, req, onFocus = { edge = 0 }) { nav.go(Screen.Detail(t.id)) }
                 }
-                GlassButton(if (t.id in Store.myList) Ic.check else Ic.plus) {
+                GlassButton(if (t.id in Store.myList) Ic.check else Ic.plus, onFocus = { edge = 1 }) {
                     if (Store.session == null) nav.go(Screen.Login()) else scope.launch { Store.toggleList(t.id) }
                 }
-                GlassButton(Ic.info) { nav.go(Screen.Detail(t.id)) }
-                if (all.size > 1) Focusable(next, Modifier.size(26.dp, 31.dp), shape = RoundedCornerShape(8.dp), scale = 1.15f, ring = false) { f ->
+                GlassButton(Ic.info, onFocus = { edge = 2 }) { nav.go(Screen.Detail(t.id)) }
+                if (all.size > 1) Focusable(next, Modifier.size(26.dp, 31.dp), shape = RoundedCornerShape(8.dp), scale = 1.15f, ring = false, onFocus = { edge = 3 }) { f ->
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Ic.chevron, "Siguiente", tint = if (f) Color.White else Color.White.copy(alpha = .8f), modifier = Modifier.size(17.dp)) }
                 }
             }
@@ -492,8 +524,8 @@ fun FmtBadges(f: Formats) {
 }
 
 @Composable
-fun PlayPill(text: String, icon: ImageVector?, req: FocusRequester? = null, onClick: () -> Unit) {
-    Focusable(onClick, Modifier.height(46.dp), shape = RoundedCornerShape(99.dp), scale = 1.06f, ring = false, lift = true, requester = req) {
+fun PlayPill(text: String, icon: ImageVector?, req: FocusRequester? = null, onFocus: (() -> Unit)? = null, onClick: () -> Unit) {
+    Focusable(onClick, Modifier.height(46.dp), shape = RoundedCornerShape(99.dp), scale = 1.06f, ring = false, lift = true, requester = req, onFocus = onFocus) {
         Row(Modifier.background(Color.White).padding(horizontal = 28.dp).height(46.dp), verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) { Icon(icon, null, tint = Color.Black, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(8.dp)) }
             Text(text, style = ts(15, FontWeight.Bold, Color.Black), maxLines = 1)
@@ -502,8 +534,8 @@ fun PlayPill(text: String, icon: ImageVector?, req: FocusRequester? = null, onCl
 }
 
 @Composable
-fun GlassButton(icon: ImageVector, onClick: () -> Unit) {
-    Focusable(onClick, Modifier.size(42.dp), shape = CircleShape, scale = 1.1f, ring = false, lift = true) { f ->
+fun GlassButton(icon: ImageVector, onFocus: (() -> Unit)? = null, onClick: () -> Unit) {
+    Focusable(onClick, Modifier.size(42.dp), shape = CircleShape, scale = 1.1f, ring = false, lift = true, onFocus = onFocus) { f ->
         Box(Modifier.fillMaxSize().background(if (f) Color.White else Color(0x9C3C3C42)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = if (f) Color.Black else Color.White, modifier = Modifier.size(18.dp))
         }
