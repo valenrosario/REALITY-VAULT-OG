@@ -797,7 +797,10 @@ fun EpisodeA(t: Title, s: Season, e: Episode, prog: Progress?, onClick: () -> Un
                 }
             }
         }
-        Column(Modifier.padding(top = 7.dp, start = 2.dp, end = 2.dp)) {
+        // La miniatura de arriba crece hacia abajo al enfocarse (escala visual, no de
+        // layout), así que necesita más separación que un simple padding chico o el
+        // título queda tapado por el borde/sombra del foco.
+        Column(Modifier.padding(top = 16.dp, start = 2.dp, end = 2.dp)) {
             Text(e.title.ifBlank { "Episodio ${e.number}" }, style = ts(12, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(2.dp))
             Text(e.duration.ifBlank { " " }, style = ts(10, color = Color.White.copy(alpha = .55f)))
