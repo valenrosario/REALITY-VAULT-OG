@@ -152,6 +152,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         }
     }
     var cueText by remember { mutableStateOf("") }
+    PauseInBackground(player)
     DisposableEffect(player) {
         val l = object : M3Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { userPaused = !playWhenReady }

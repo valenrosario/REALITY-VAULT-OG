@@ -749,6 +749,7 @@ private fun PreviewLayer(media: Media.Native, modifier: Modifier = Modifier, onR
     // TextureView (no PlayerView/SurfaceView): una SurfaceView se dibuja en una capa aparte,
     // por encima de todo, sin respetar las esquinas redondeadas, la opacidad del crossfade
     // ni el tamaño de la tarjeta. La TextureView sí se comporta como cualquier otra vista.
+    PauseInBackground(player)
     val vsize = remember { IntArray(2) }
     val tvRef = remember { arrayOfNulls<TextureView>(1) }
     DisposableEffect(player) {
@@ -773,6 +774,25 @@ private fun PreviewLayer(media: Media.Native, modifier: Modifier = Modifier, onR
             }
         }
     )
+}
+
+/** Pausa el reproductor cuando la app sale de pantalla (Home, apagar TV, otra app) y lo
+ * retoma al volver solo si estaba reproduciendo. Sin esto el audio/video seguía sonando. */
+@Composable
+fun PauseInBackground(player: M3Player) {
+    val owner = LocalContext.current as? androidx.lifecycle.LifecycleOwner ?: return
+    DisposableEffect(owner, player) {
+        var was = false
+        val ob = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            when (e) {
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> { was = player.playWhenReady; player.playWhenReady = false }
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> if (was) { player.playWhenReady = true; was = false }
+                else -> {}
+            }
+        }
+        owner.lifecycle.addObserver(ob)
+        onDispose { owner.lifecycle.removeObserver(ob) }
+    }
 }
 
 /** Escala el video para que LLENE la vista recortando lo que sobra (centrado), sin estirarlo. */
