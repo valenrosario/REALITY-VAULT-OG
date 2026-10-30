@@ -761,7 +761,7 @@ function renderEditor(){
         ${vidField(E, 'previewVideo', 'Computadora', '1920 × 1080 px (horizontal 16:9)', 'Se recorta arriba y abajo para llenar el banner: dejá lo importante en la franja del medio.')}
         ${vidField(E, 'previewVideoMobile', 'Celular (opcional)', '1080 × 1350 px (vertical 4:5)', 'Si no cargás uno, en el celular se usa el de computadora recortado al centro.')}
       </div>
-      <span class="hint">Formato MP4 (H.264) o WebM · entre 15 y 40 segundos · hasta 50 MB (ideal menos de 20 MB para que cargue rápido).</span>
+      <span class="hint">Formato MP4 (H.264) o WebM · entre 15 y 40 segundos · hasta 200 MB (ideal menos de 20 MB para que cargue rápido).</span>
     </div>
     <div class="fs"><h3>Disponibilidad</h3>
       <div class="seg" role="group" aria-label="Disponibilidad"><button data-avail="disponible" aria-pressed="${!isSoon(E)}">Disponible para ver</button><button data-avail="proximamente" aria-pressed="${isSoon(E)}">Próximamente</button></div>
@@ -803,7 +803,7 @@ function vidField(E, key, label, size, note){
     <span class="hint">${esc(note)}</span>
   </div>`;
 }
-const VIDEO_MAX_MB = 50;
+const VIDEO_MAX_MB = 200;
 async function uploadVideo(file){
   if (!/^video\/(mp4|webm|quicktime)$/.test(file.type) && !/\.(mp4|webm|mov|m4v)$/i.test(file.name)) throw new Error('Elegí un archivo MP4 o WebM.');
   if (file.size > VIDEO_MAX_MB * 1024 * 1024) throw new Error(`El video pesa ${(file.size/1048576).toFixed(0)} MB. El máximo es ${VIDEO_MAX_MB} MB: achicalo o recortalo antes de subirlo.`);
