@@ -804,12 +804,29 @@ function vidField(E, key, label, size, note){
   </div>`;
 }
 const VIDEO_MAX_MB = 200;
-async function uploadVideo(file){
+async function uploadVideo(file, onProgress){
   if (!/^video\/(mp4|webm|quicktime)$/.test(file.type) && !/\.(mp4|webm|mov|m4v)$/i.test(file.name)) throw new Error('Elegí un archivo MP4 o WebM.');
   if (file.size > VIDEO_MAX_MB * 1024 * 1024) throw new Error(`El video pesa ${(file.size/1048576).toFixed(0)} MB. El máximo es ${VIDEO_MAX_MB} MB: achicalo o recortalo antes de subirlo.`);
   const ext = (file.name.match(/\.(mp4|webm|mov|m4v)$/i)?.[1] || (file.type.split('/')[1]) || 'mp4').toLowerCase().replace('quicktime','mov');
+  const ctype = file.type || 'video/mp4';
+  // 1) Cloudflare R2 (sin límite de 50 MB): enlace firmado que da la función "r2-upload"
+  let r2 = null;
+  try { const r = await S.sb.functions.invoke('r2-upload', { body: { ext, type: ctype } }); if (!r.error && r.data?.uploadUrl) r2 = r.data; } catch(_){}
+  if (r2){
+    await new Promise((ok, ko) => {
+      const x = new XMLHttpRequest();
+      x.open('PUT', r2.uploadUrl); x.setRequestHeader('Content-Type', ctype);
+      x.upload.onprogress = ev => { if (ev.lengthComputable && onProgress) onProgress(Math.round(ev.loaded / ev.total * 100)); };
+      x.onload = () => x.status >= 200 && x.status < 300 ? ok() : ko(new Error('No se pudo subir el video a Cloudflare (' + x.status + ').'));
+      x.onerror = () => ko(new Error('No se pudo subir a Cloudflare: revisá el CORS del bucket R2.'));
+      x.send(file);
+    });
+    return r2.publicUrl;
+  }
+  // 2) Si R2 todavía no está configurado, se usa Supabase (tope de 50 MB del plan)
+  if (file.size > 50 * 1048576) throw new Error('Cloudflare R2 todavía no está configurado y Supabase no acepta más de 50 MB.');
   const path = `video/${uid('v')}.${ext}`;
-  const { error } = await S.sb.storage.from(BUCKET).upload(path, file, { contentType: file.type || 'video/mp4', cacheControl: '31536000', upsert:false });
+  const { error } = await S.sb.storage.from(BUCKET).upload(path, file, { contentType: ctype, cacheControl: '31536000', upsert:false });
   if (error) throw new Error('No se pudo subir el video: ' + error.message);
   return S.sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
@@ -822,7 +839,7 @@ app.addEventListener('click', async e => {
   const file = await pickFile('video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov,.m4v'); if (!file) return;
   const label = up.textContent; up.disabled = true; up.textContent = 'Subiendo…';
   try {
-    const url = await uploadVideo(file);
+    const url = await uploadVideo(file, p => { up.textContent = 'Subiendo… ' + p + '%'; });
     S.editing[key] = url; markDirty(); rerenderPanel();
     toast('Video subido. Tocá Guardar para publicarlo.');
   } catch(err){ toast(err.message || 'No se pudo subir el video', true); up.disabled = false; up.textContent = label; }
