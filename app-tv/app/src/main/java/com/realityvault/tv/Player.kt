@@ -74,6 +74,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /* ---------------- pantalla del reproductor ---------------- */
 
@@ -153,13 +154,32 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     }
     var cueText by remember { mutableStateOf("") }
     PauseInBackground(player)
+    // --- seguir desde donde te quedaste (igual que la web) ---
+    val track = t != null && !s.trailer
+    fun savePos() {
+        if (!track) return
+        val d = player.duration; val c = player.currentPosition
+        if (d <= 0 || d == androidx.media3.common.C.TIME_UNSET) return
+        val id = t!!.id; val se = s.season; val ep = s.episode
+        Store.bg.launch { Store.savePos(id, se, ep, c / 1000, d / 1000) }
+    }
+    var resumed by remember(player) { mutableStateOf(false) }
     DisposableEffect(player) {
         val l = object : M3Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) { if (!isPlaying && resumed) savePos() }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { userPaused = !playWhenReady }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == M3Player.STATE_BUFFERING
-                if (state == M3Player.STATE_READY) durMs = player.duration.coerceAtLeast(0)
+                if (state == M3Player.STATE_READY) {
+                    durMs = player.duration.coerceAtLeast(0)
+                    if (!resumed) {
+                        resumed = true
+                        val saved = if (track) Store.getPos(t!!.id, s.season, s.episode) else null
+                        if (posResumable(saved) && saved!!.first * 1000 < player.duration - 45_000) player.seekTo(saved.first * 1000)
+                    }
+                }
                 ended = state == M3Player.STATE_ENDED
+                if (ended) savePos()
             }
             // subtítulos propios: no usamos la vista nativa (queda pegada abajo del todo y
             // no respeta nuestra tipografía); tomamos el texto del cue y lo dibujamos nosotros.
@@ -168,8 +188,10 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
             }
         }
         player.addListener(l)
-        onDispose { player.removeListener(l); player.release() }
+        onDispose { if (resumed) savePos(); player.removeListener(l); player.release() }
     }
+    // guarda cada 15 segundos mientras se reproduce (por si se corta la luz o se cierra la app)
+    LaunchedEffect(player) { while (true) { delay(15_000); if (resumed && player.isPlaying) savePos() } }
     // reloj de progreso
     LaunchedEffect(player) {
         while (true) { posMs = player.currentPosition.coerceAtLeast(0); durMs = player.duration.coerceAtLeast(0); delay(400) }

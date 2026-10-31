@@ -70,7 +70,14 @@ data class Banner(
 data class FeatItem(val titleId: String, val label: String, val image: String)
 data class FeatRow(val id: String, val title: String, val items: List<FeatItem>)
 
-data class Progress(val titleId: String, val season: Int?, val episode: Int?, val watched: List<String>, val updated: String)
+data class Progress(val titleId: String, val season: Int?, val episode: Int?, val watched: List<String>, val updated: String,
+    /** Minuto por el que vas en cada capítulo/película (mismo formato que la web): clave "m" o "T-E" → (segundo, duración). */
+    val positions: Map<String, Pair<Long, Long>> = emptyMap())
+
+/** Posición guardada: clave igual a la de la web — "m" para película, "temporada-episodio" para series. */
+fun posKey(season: Int?, episode: Int?) = if (season == null || episode == null) "m" else "$season-$episode"
+fun posDone(t: Long, d: Long) = d > 0 && (d - t <= 45 || t.toDouble() / d >= 0.95)
+fun posResumable(p: Pair<Long, Long>?) = p != null && p.second > 0 && p.first >= 10 && !posDone(p.first, p.second)
 
 data class Session(val access: String, val refresh: String, val userId: String, val email: String, val expiresAt: Long)
 
@@ -334,8 +341,11 @@ object Store {
             progress = (0 until a.length()).mapNotNull { k ->
                 val o = a.optJSONObject(k) ?: return@mapNotNull null
                 val w = o.optJSONArray("watched")
+                val po = o.optJSONObject("positions")
+                val pos = HashMap<String, Pair<Long, Long>>()
+                po?.keys()?.forEach { kk -> po.optJSONObject(kk)?.let { v -> pos[kk] = v.optLong("t") to v.optLong("d") } }
                 Progress(o.s("title_id"), o.s("last_season").toIntOrNull(), o.s("last_episode").toIntOrNull(),
-                    if (w == null) emptyList() else (0 until w.length()).map { w.optString(it) }, o.s("updated_at"))
+                    if (w == null) emptyList() else (0 until w.length()).map { w.optString(it) }, o.s("updated_at"), pos)
             }
         }
     }
@@ -356,15 +366,39 @@ object Store {
         val uid = session?.userId ?: return
         val prev = progress.firstOrNull { it.titleId == id }
         val watched = LinkedHashSet(prev?.watched ?: emptyList())
-        if (season != null && episode != null) watched += "$season:$episode"
+        // misma clave que la web ("T-E"), así lo visto en la tele también figura como visto en la web
+        if (season != null && episode != null) watched += "$season-$episode"
         val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date())
-        val p = Progress(id, season, episode, watched.toList(), now)
+        val p = Progress(id, season, episode, watched.toList(), now, prev?.positions ?: emptyMap())
         progress = listOf(p) + progress.filter { it.titleId != id }
         val row = JSONObject().put("user_id", uid).put("title_id", id)
             .put("last_season", season ?: JSONObject.NULL).put("last_episode", episode ?: JSONObject.NULL)
             .put("watched", JSONArray(watched.toList())).put("updated_at", now)
         runCatching { Api.call("POST", "/rest/v1/watch_progress", row.toString(), tk, "resolution=merge-duplicates,return=minimal") }
     }
+
+    /** Segundo guardado (y duración) de esa película o capítulo, si hay. */
+    fun getPos(id: String, season: Int?, episode: Int?): Pair<Long, Long>? =
+        progress.firstOrNull { it.titleId == id }?.positions?.get(posKey(season, episode))
+
+    /** Guarda el minuto por el que vas (lo mismo que hace la web) para poder seguir desde ahí. */
+    suspend fun savePos(id: String, season: Int?, episode: Int?, tSec: Long, dSec: Long) {
+        if (dSec <= 0) return
+        val tk = token() ?: return
+        val uid = session?.userId ?: return
+        val row = progress.firstOrNull { it.titleId == id } ?: return
+        val k = posKey(season, episode)
+        val pos = HashMap(row.positions)
+        if (posDone(tSec, dSec)) pos.remove(k) else pos[k] = tSec to dSec
+        progress = progress.map { if (it.titleId == id) it.copy(positions = pos) else it }
+        val jo = JSONObject(); pos.forEach { (kk, v) -> jo.put(kk, JSONObject().put("t", v.first).put("d", v.second)) }
+        // upsert solo con "positions": no toca el resto de la fila (temporada, vistos, fecha)
+        val body = JSONObject().put("user_id", uid).put("title_id", id).put("positions", jo)
+        runCatching { Api.call("POST", "/rest/v1/watch_progress", body.toString(), tk, "resolution=merge-duplicates,return=minimal") }
+    }
+
+    /** Para guardar aunque la pantalla del reproductor ya se haya cerrado. */
+    val bg = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
 
     suspend fun removeProgress(id: String) {
         val tk = token() ?: return
@@ -391,13 +425,17 @@ object Store {
     fun playTarget(t: Title): Target? {
         if (t.isSoon) return null
         val p = progress.firstOrNull { it.titleId == t.id }
-        if (!t.isSerie) return if (isHttp(t.url)) Target(t.url, null, null, if (p != null) "Volver a ver" else "Ver", false) else null
+        if (!t.isSerie) return if (isHttp(t.url)) {
+            val res = posResumable(p?.positions?.get("m"))
+            Target(t.url, null, null, if (res) "Continuar" else if (p != null) "Volver a ver" else "Ver", res)
+        } else null
         val eps = t.seasons.flatMap { s -> s.episodes.filter { isHttp(it.url) }.map { s to it } }
         if (eps.isEmpty()) return null
         var i = 0; var cont = false
         if (p != null) {
             val j = eps.indexOfFirst { it.first.number == p.season && it.second.number == p.episode }
-            if (j >= 0) { i = if (j + 1 < eps.size) j + 1 else j; cont = true }
+            // si el último capítulo quedó a medias, se sigue en ese mismo; si no, el siguiente
+            if (j >= 0) { i = if (posResumable(p.positions[posKey(p.season, p.episode)]) || j + 1 >= eps.size) j else j + 1; cont = true }
         }
         val (s, e) = eps[i]
         return Target(e.url, s.number, e.number, "${if (cont) "Continuar" else "Ver"} T${s.number}:E${e.number}", cont)
