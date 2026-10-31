@@ -358,14 +358,14 @@ private fun TopInfo(t: Title?, episode: Episode?, season: Int?) {
  * adentro. Activado = recuadro lleno con las letras recortadas; apagado = solo contorno. */
 @Composable
 private fun CcButton(on: Boolean, onClick: () -> Unit) {
-    Focusable(onClick, Modifier.size(width = 62.dp, height = 48.dp), shape = RoundedCornerShape(11.dp), scale = 1.1f, ring = true, lift = true) { f ->
+    Focusable(onClick, Modifier.size(width = 50.dp, height = 38.dp), shape = RoundedCornerShape(9.dp), scale = 1.1f, ring = true, lift = true) { f ->
         Box(
             Modifier.fillMaxSize()
-                .background(if (on) Color.White else Color.Black.copy(alpha = .55f), RoundedCornerShape(11.dp))
-                .border(3.dp, Color.White, RoundedCornerShape(11.dp)),
+                .background(if (on) Color.White else Color.Black.copy(alpha = .55f), RoundedCornerShape(9.dp))
+                .border(2.5.dp, Color.White, RoundedCornerShape(9.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Text("CC", style = ts(21, FontWeight.Black, if (on) Color(0xFF111111) else Color.White))
+            Text("CC", style = ts(16, FontWeight.Black, if (on) Color(0xFF111111) else Color.White))
         }
     }
 }
