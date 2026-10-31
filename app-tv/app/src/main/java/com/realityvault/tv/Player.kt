@@ -354,22 +354,18 @@ private fun TopInfo(t: Title?, episode: Episode?, season: Int?) {
     if (t != null) TitleLogo(t, 300.dp, 56.dp, 26)
 }
 
-/** Botón de subtítulos: siempre con fondo sólido para que se vea sobre cualquier video. */
+/** Botón de subtítulos con el ícono "CC" clásico: recuadro de esquinas redondeadas con las letras
+ * adentro. Activado = recuadro lleno con las letras recortadas; apagado = solo contorno. */
 @Composable
 private fun CcButton(on: Boolean, onClick: () -> Unit) {
-    Focusable(onClick, Modifier.height(44.dp), shape = RoundedCornerShape(99.dp), scale = 1.08f, ring = false, lift = true) { f ->
-        Row(
-            Modifier
-                .background(if (f) Color.White else Color.Black.copy(alpha = .6f), RoundedCornerShape(99.dp))
-                .border(1.3.dp, if (f) Color.White else if (on) C.accent.copy(alpha = .85f) else Color.White.copy(alpha = .4f), RoundedCornerShape(99.dp))
-                .padding(horizontal = 16.dp).height(44.dp),
-            verticalAlignment = Alignment.CenterVertically
+    Focusable(onClick, Modifier.size(width = 62.dp, height = 48.dp), shape = RoundedCornerShape(11.dp), scale = 1.1f, ring = true, lift = true) { f ->
+        Box(
+            Modifier.fillMaxSize()
+                .background(if (on) Color.White else Color.Black.copy(alpha = .55f), RoundedCornerShape(11.dp))
+                .border(3.dp, Color.White, RoundedCornerShape(11.dp)),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                Modifier.size(9.dp).background(if (f) Color.Black else if (on) C.accent else Color.White.copy(alpha = .4f), CircleShape)
-            )
-            Spacer(Modifier.width(9.dp))
-            Text("CC", style = ts(13, FontWeight.Bold, if (f) Color.Black else Color.White))
+            Text("CC", style = ts(21, FontWeight.Black, if (on) Color(0xFF111111) else Color.White))
         }
     }
 }
