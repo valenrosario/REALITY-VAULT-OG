@@ -67,4 +67,7 @@ jobs:
           open('update.json', 'w').write(json.dumps(data, indent=2))
           "
           gh release delete tv --yes --cleanup-tag || true
+          sleep 3
           gh release create tv reality-vault-tv.apk update.json --title "REALITY VAULT · TV" --notes "App para Android TV / Google TV generada automáticamente. Descargá reality-vault-tv.apk e instalala en la tele." --target "$GITHUB_SHA"
+          # a veces GitHub la deja como borrador (y el enlace de descarga da 404): se publica sí o sí
+          gh release edit tv --draft=false || true
