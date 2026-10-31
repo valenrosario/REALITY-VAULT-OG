@@ -661,10 +661,13 @@ fun ExpandPoster(t: Title, baseW: Dp, key: String, restore: String?, nav: Nav, s
     val focused by src.collectIsFocusedAsState()
     val h = baseW * 1.5f
     val openW = h * (16f / 9f)
-    val w by animateDpAsState(if (focused) openW else baseW, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow), label = "pw")
+    // resorte "líquido": casi crítico, con apenas un rebote al llegar (no alcanza para mover a las vecinas de forma visible)
+    val w by animateDpAsState(if (focused) openW else baseW, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow), label = "pw")
     val open by animateFloatAsState(if (focused) 1f else 0f, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow), label = "po")
+    // las esquinas también "se funden": de póster (9dp) a tarjeta abierta (16dp)
+    val corner = (9f + 7f * open.coerceIn(0f, 1f)).dp
     Focusable(
-        onClick, Modifier.width(w).height(h), shape = RoundedCornerShape(9.dp), scale = 1f, ring = true, lift = true,
+        onClick, Modifier.width(w).height(h), shape = RoundedCornerShape(corner), scale = 1f, ring = true, lift = true,
         requester = req, onFocus = { nav.memory.focus[screenKey] = key }, pivotTop = true, interactionSource = src
     ) { f ->
         Box(Modifier.fillMaxSize().background(C.surface)) {
@@ -678,6 +681,10 @@ fun ExpandPoster(t: Title, baseW: Dp, key: String, restore: String?, nav: Nav, s
                 Box(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp).graphicsLayer { alpha = open }) {
                     TitleLogo(t, 150.dp, 42.dp, 15)
                 }
+                // vidrio: brillo diagonal suave y borde interior claro, solo mientras está abierta
+                Box(Modifier.fillMaxSize().graphicsLayer { alpha = open }
+                    .background(Brush.linearGradient(0f to Color.White.copy(alpha = .20f), .38f to Color.Transparent, 1f to Color.Transparent))
+                    .border(1.dp, Color.White.copy(alpha = .30f), RoundedCornerShape(corner)))
             }
             if (t.isSoon) Text(
                 "Próximamente", style = ts(8, FontWeight.Bold, Color.Black),
