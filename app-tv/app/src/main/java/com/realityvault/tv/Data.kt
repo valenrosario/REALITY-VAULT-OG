@@ -79,7 +79,7 @@ fun posKey(season: Int?, episode: Int?) = if (season == null || episode == null)
 fun posDone(t: Long, d: Long) = d > 0 && (d - t <= 45 || t.toDouble() / d >= 0.95)
 fun posResumable(p: Pair<Long, Long>?) = p != null && p.second > 0 && p.first >= 10 && !posDone(p.first, p.second)
 
-data class Session(val access: String, val refresh: String, val userId: String, val email: String, val expiresAt: Long)
+data class Session(val access: String, val refresh: String, val userId: String, val email: String, val expiresAt: Long, val avatar: String = "")
 
 /* ---------------- lectura de JSON ---------------- */
 
@@ -193,7 +193,7 @@ object Store {
         prefs.getString("session", null)?.let { s ->
             runCatching {
                 val j = JSONObject(s)
-                session = Session(j.s("access"), j.s("refresh"), j.s("userId"), j.s("email"), j.optLong("expiresAt"))
+                session = Session(j.s("access"), j.s("refresh"), j.s("userId"), j.s("email"), j.optLong("expiresAt"), j.s("avatar"))
             }
         }
         // arranque instantáneo con lo último que se descargó
@@ -270,12 +270,14 @@ object Store {
         val s = Session(
             j.s("access_token"), j.s("refresh_token"), user?.s("id") ?: session?.userId ?: "",
             user?.s("email") ?: session?.email ?: "",
-            System.currentTimeMillis() / 1000 + j.optLong("expires_in", 3600)
+            System.currentTimeMillis() / 1000 + j.optLong("expires_in", 3600),
+            // la foto de perfil que eligió en la web (a1 / a2) viene en los datos del usuario
+            user?.optJSONObject("user_metadata")?.s("avatar") ?: session?.avatar ?: ""
         )
         session = s
         prefs.edit().putString("session", JSONObject()
             .put("access", s.access).put("refresh", s.refresh).put("userId", s.userId)
-            .put("email", s.email).put("expiresAt", s.expiresAt).toString()).apply()
+            .put("email", s.email).put("expiresAt", s.expiresAt).put("avatar", s.avatar).toString()).apply()
     }
 
     suspend fun login(email: String, pass: String) {
@@ -332,6 +334,16 @@ object Store {
 
     suspend fun refreshUser() {
         val tk = token() ?: return
+        // sesiones ya iniciadas antes de esta versión: trae la foto de perfil elegida en la web
+        runCatching {
+            val u = JSONObject(Api.call("GET", "/auth/v1/user", token = tk))
+            val av = u.optJSONObject("user_metadata")?.s("avatar") ?: ""
+            val cur = session
+            if (cur != null && cur.avatar != av) {
+                session = cur.copy(avatar = av)
+                prefs.edit().putString("session", JSONObject(prefs.getString("session", "{}") ?: "{}").put("avatar", av).toString()).apply()
+            }
+        }
         runCatching {
             val a = JSONArray(Api.call("GET", "/rest/v1/user_lists?select=title_id&order=created_at.desc", token = tk))
             myList = (0 until a.length()).mapNotNull { a.optJSONObject(it)?.s("title_id") }

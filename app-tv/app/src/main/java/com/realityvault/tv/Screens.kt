@@ -286,7 +286,9 @@ fun AccountScreen(nav: Nav) {
         if (s != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(56.dp).clip(CircleShape).background(Brush.radialGradient(listOf(Color(0xFFFFD1E6), C.accent, Color(0xFFB04C86)))), contentAlignment = Alignment.Center) {
-                    Text("★", style = ts(26, color = Color.White))
+                    val ph = avatarRes(s.avatar)
+                    if (ph != null) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(ph), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    else Text("★", style = ts(26, color = Color.White))
                 }
                 Spacer(Modifier.width(16.dp))
                 Text(s.email, style = ts(16, FontWeight.Bold))

@@ -227,11 +227,15 @@ fun TopNavBar(nav: Nav, modifier: Modifier = Modifier, downTarget: FocusRequeste
         }
         Spacer(Modifier.weight(1f))
         Focusable({ nav.go(Screen.Account) }, Modifier.size(36.dp), shape = CircleShape, scale = 1.1f, ring = false) { f ->
+            val photo = avatarRes(Store.session?.avatar)
             Box(
-                Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFFFFD1E6), C.accent)), CircleShape)
+                Modifier.fillMaxSize().clip(CircleShape).background(Brush.radialGradient(listOf(Color(0xFFFFD1E6), C.accent)), CircleShape)
                     .border(if (f) 2.5.dp else 0.dp, Color.White, CircleShape),
                 contentAlignment = Alignment.Center
-            ) { Text(Store.session?.email?.take(1)?.uppercase() ?: "?", style = ts(14, FontWeight.Bold, Color.White)) }
+            ) {
+                if (photo != null) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(photo), null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                else Text(Store.session?.email?.take(1)?.uppercase() ?: "?", style = ts(14, FontWeight.Bold, Color.White))
+            }
         }
     }
 }
@@ -1074,3 +1078,6 @@ fun PersonScreen(name: String, nav: Nav) {
 
 fun Color.darken(f: Float) = Color(red * (1 - f), green * (1 - f), blue * (1 - f), alpha)
 fun Color.lighten(f: Float) = Color(red + (1 - red) * f, green + (1 - green) * f, blue + (1 - blue) * f, alpha)
+
+/** Foto de perfil elegida en la web ("a1" / "a2") → imagen incluida en la app. */
+fun avatarRes(key: String?): Int? = when (key) { "a1" -> R.drawable.avatar_a1; "a2" -> R.drawable.avatar_a2; else -> null }

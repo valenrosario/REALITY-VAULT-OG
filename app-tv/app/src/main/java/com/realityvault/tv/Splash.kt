@@ -54,7 +54,7 @@ import kotlin.math.sin
  */
 
 private const val COLS = 9
-private const val END_MS = 3700L
+private const val END_MS = 4200L
 private val easeOut = CubicBezierEasing(.2f, .7f, .2f, 1f)
 private val easeIn = CubicBezierEasing(.5f, 0f, .75f, 0f)
 private val easeInOut = CubicBezierEasing(.6f, 0f, .2f, 1f)
@@ -109,7 +109,7 @@ fun SplashScreen(nav: Nav) {
                 val y = gap + (ph + gap) * r - ph * 0.35f
                 val d = hypot((x + pw / 2 - sx).value, (y + ph / 2 - sy).value) / W.value
                 val inDelay = ((i * 7919) % 300).toFloat()
-                val outAt = 900f + d * 1100f
+                val outAt = 1000f + d * 1250f
                 Box(
                     Modifier.offset(x, y).size(pw, ph)
                         .graphicsLayer {
@@ -139,7 +139,7 @@ fun SplashScreen(nav: Nav) {
             Modifier.offset(W / 2 - LOGO_W / 2, H / 2 - LOGO_H / 2).size(LOGO_W, LOGO_H)
                 .drawWithContent {
                     val e = clock.longValue.toFloat()
-                    val p = easeInOut.transform(clamp01((e - 1550f) / 1100f))
+                    val p = easeInOut.transform(clamp01((e - 1800f) / 1250f))
                     if (p <= 0f) return@drawWithContent
                     val cx = size.width * 0.658f; val cy = size.height * 0.438f
                     val maxR = hypot(max(cx, size.width - cx), max(cy, size.height - cy)) * 1.05f
@@ -155,8 +155,8 @@ fun SplashScreen(nav: Nav) {
                 .graphicsLayer {
                     val e = clock.longValue.toFloat()
                     val e1 = e - 600f
-                    val p = easeOut.transform(clamp01(e1 / 900f))
-                    val q = clamp01((e - 1650f) / 500f)
+                    val p = easeOut.transform(clamp01(e1 / 1000f))
+                    val q = clamp01((e - 1900f) / 550f)
                     alpha = clamp01(e1 / 225f) * (1f - q)
                     val s = (0.1f + 0.9f * p) * (1f - 0.52f * q)
                     scaleX = s; scaleY = s
@@ -173,7 +173,7 @@ fun SplashScreen(nav: Nav) {
             "TU UNIVERSO DE SERIES Y PELÍCULAS",
             style = ts(15, FontWeight.Light, C.muted).copy(textAlign = TextAlign.Center, letterSpacing = androidx.compose.ui.unit.TextUnit(4f, androidx.compose.ui.unit.TextUnitType.Sp)),
             modifier = Modifier.offset(0.dp, H / 2 + LOGO_H / 2 + 26.dp).size(W, 30.dp)
-                .graphicsLayer { alpha = clamp01((clock.longValue - 2300f) / 700f) }
+                .graphicsLayer { alpha = clamp01((clock.longValue - 2650f) / 750f) }
         )
     }
 }
