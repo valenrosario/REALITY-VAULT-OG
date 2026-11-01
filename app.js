@@ -2240,7 +2240,7 @@ function embedFor(url){
   }
   if (h === 'ok.ru'){ const m = u.pathname.match(/video(?:embed)?\/(\d+)/); if (m) return { type:'iframe', provider:'OK', src:`https://ok.ru/videoembed/${m[1]}` }; }
   if (h === 'archive.org'){ const m = u.pathname.match(/\/(?:details|embed)\/(.+)/); if (m) return { type:'iframe', provider:'Internet Archive', src:`https://archive.org/embed/${m[1]}` }; }
-  if (/\.(mp4|webm|ogv|ogg|mov|m4v)$/i.test(u.pathname)) return { type:'video', src:url };
+  if (/\.(mp4|webm|ogv|ogg|mov|m4v|mkv)$/i.test(u.pathname)) return { type:'video', src:url, mkv:/\.mkv$/i.test(u.pathname) };
   if (/\.m3u8$/i.test(u.pathname)) return { type:'hls', src:url };
   return { type:'iframe', src:url, generic:true };
 }
@@ -2448,7 +2448,7 @@ function rvPlayer(video){
   const busy=v=>{clearTimeout(busyT);if(v)busyT=setTimeout(()=>rvp.classList.add('busy'),350);else rvp.classList.remove('busy')};
   on(video,'waiting',()=>busy(true));on(video,'seeking',()=>busy(true));
   ['playing','canplay','seeked','pause','loadeddata'].forEach(ev=>on(video,ev,()=>busy(false)));
-  on(video,'error',()=>{busy(false);err.hidden=false});
+  on(video,'error',()=>{busy(false);err.textContent = /\.mkv(\?|#|$)/i.test(video.currentSrc||video.src||'') ? 'Este navegador no puede reproducir este archivo MKV (o su códec de video o audio). Probá con Chrome o Edge en la compu, o mirá en la app de la TV.' : 'No se pudo cargar el video.'; err.hidden=false});
   on(video,'loadeddata',()=>{err.hidden=true});
 
   syncVol();sync();bFull.innerHTML=I.fs;loadTracks();wake();
