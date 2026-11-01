@@ -179,8 +179,10 @@ const DOLBY_ATMOS_LOGO = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://
 const DOLBY_VISION_LOGO = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='52' height='22' viewBox='0 0 52 22'%3E%3Cpath fill='%23ebebf5' d='m9.72 14.87 1.927 5.454h.04l1.946-5.453h1.344l-2.806 7.084h-1.077l-2.767-7.084zm7.839 0v7.085h-1.245v-7.084zm9.369 0v7.085h-1.245v-7.084zm5.227 0q.78 0 1.438.248.658.247 1.138.705t.748 1.11.268 1.46q0 .792-.268 1.444a3.3 3.3 0 0 1-.748 1.123q-.48.471-1.138.733a3.9 3.9 0 0 1-1.438.262q-.773 0-1.425-.262a3.35 3.35 0 0 1-1.128-.733 3.4 3.4 0 0 1-.743-1.123 3.8 3.8 0 0 1-.268-1.443q0-.81.268-1.462.267-.651.743-1.109.474-.458 1.128-.705.652-.247 1.425-.247zm6.985 0 3.25 5.304h.02v-5.303h1.245v7.084h-1.58l-3.32-5.473h-.02v5.473h-1.246v-7.084zm-17.28.002q.506 0 1.026.18.416.145.746.405l.159.137-.769.854a1.44 1.44 0 0 0-.53-.413 1.57 1.57 0 0 0-1.1-.114 1.3 1.3 0 0 0-.376.162.9.9 0 0 0-.276.284.8.8 0 0 0-.108.423.76.76 0 0 0 .351.664q.164.114.399.2.234.085.515.17.32.105.661.238.343.133.628.351c.285.218.347.33.469.55q.183.333.183.826 0 .541-.197.945a1.94 1.94 0 0 1-.525.67 2.2 2.2 0 0 1-.769.398 3.2 3.2 0 0 1-.928.133 3.4 3.4 0 0 1-1.265-.242 2.5 2.5 0 0 1-.875-.565l-.138-.152.844-.797q.243.342.652.54.407.2.801.2.206 0 .422-.052a1.1 1.1 0 0 0 .389-.176 1 1 0 0 0 .281-.308.9.9 0 0 0 .108-.46.76.76 0 0 0-.122-.442 1.1 1.1 0 0 0-.328-.304q-.207-.128-.488-.223l-.59-.2q-.3-.093-.6-.227-.3-.133-.54-.351a1.7 1.7 0 0 1-.388-.537q-.15-.318-.15-.792 0-.513.21-.883.212-.37.554-.612.342-.243.778-.361.435-.12.886-.119m10.304 1.15q-.498 0-.9.183-.402.184-.692.504a2.3 2.3 0 0 0-.447.751 2.7 2.7 0 0 0-.159.934q0 .523.159.957.158.435.452.756.294.32.696.5c.402.18.566.178.891.178q.489 0 .895-.179c.406-.179.505-.285.701-.499q.294-.321.453-.756.158-.435.158-.957a2.7 2.7 0 0 0-.158-.934 2.3 2.3 0 0 0-.448-.75 2.1 2.1 0 0 0-.697-.505 2.2 2.2 0 0 0-.904-.183M46.325 3.15l1.993 4.536 1.993-4.536h1.671l-3.962 8.966a1.975 1.975 0 0 1-2.47 1.075l-.142-.058-.53-.24h-.003l.19-.431.428-.973.219.1a.81.81 0 0 0 1.025-.32l.052-.1.004-.01.613-1.402.02-.044.057-.125-2.829-6.438zM39.21.002v3.784a3.45 3.45 0 0 1 2-.638c1.928 0 3.496 1.588 3.496 3.541s-1.568 3.54-3.496 3.54a3.45 3.45 0 0 1-2-.638v.64h-1.532V.002zm-2.818 0v10.23h-1.53V.002zm-6.016 3.146c1.928 0 3.496 1.588 3.496 3.54 0 1.953-1.568 3.541-3.496 3.541-1.929 0-3.497-1.588-3.497-3.54 0-1.953 1.568-3.541 3.497-3.541M21.057 0c2.782 0 5.046 2.292 5.046 5.11s-2.264 5.11-5.046 5.11h-3.645V0zm-6.7 0v10.22h-1.49c-2.78 0-5.045-2.295-5.045-5.11 0-2.743 2.151-4.992 4.833-5.105L12.868 0zM1.488 0c2.78 0 5.046 2.295 5.046 5.11 0 2.743-2.152 4.991-4.833 5.105l-.213.004h-1.49V0zm39.72 4.541c-.926 0-1.719.61-1.999 1.461a2.15 2.15 0 0 0 0 1.346 2.11 2.11 0 0 0 2 1.463c1.157 0 2.108-.95 2.108-2.135 0-1.172-.951-2.135-2.108-2.135zm-10.833 0c-1.157 0-2.109.95-2.109 2.134 0 1.172.939 2.135 2.109 2.135 1.157 0 2.108-.95 2.108-2.135 0-1.171-.951-2.135-2.108-2.135zm-9.32-2.992h-2.114V8.67h2.115c1.937 0 3.516-1.599 3.516-3.56s-1.58-3.56-3.516-3.56z'/%3E%3C/svg%3E";
 const FOURK_LOGO = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='15' viewBox='0 0 26 15'%3E%3Cpath fill='%23ebebf5' fill-rule='evenodd' d='M2.737 0h20.528A2.73 2.73 0 0 1 26 2.727v9.545A2.73 2.73 0 0 1 23.265 15H2.737A2.73 2.73 0 0 1 0 12.272V2.727A2.73 2.73 0 0 1 2.737 0m7.078 11.6H11.5v-1.5h1.1V8.681h-1.1v-5.53H9a56 56 0 0 0-3.39 5.442V10.1h4.205zM7.162 8.686A40 40 0 0 1 9.815 4.4h.035v4.333H7.162zm8.273 2.914V9.02l.791-.949 2.507 3.529h2.114L17.5 6.9l3.13-3.749h-1.968l-3.174 3.854h-.053V3.151h-1.769V11.6z'/%3E%3C/svg%3E";
 function fmtBadges(t){
-  const f = t.formats || {};
+  // en la web se muestran SOLO las insignias marcadas en "Formato y calidad · en la web" (las de la TV son aparte)
+  const f = t.formatsWeb || {};
   const out = [];
+  if (f.hd) out.push('<span class="fmt-badge">HD</span>');
   if (f.uhd4k) out.push(`<img class="fmt-logo" src="${FOURK_LOGO}" alt="4K Ultra HD">`);
   if (f.hdr) out.push(`<img class="fmt-logo" src="${DOLBY_VISION_LOGO}" alt="Dolby Vision">`);
   if (f.atmos) out.push(`<img class="fmt-logo" src="${DOLBY_ATMOS_LOGO}" alt="Dolby Atmos">`);
@@ -769,14 +771,25 @@ function renderEditor(){
       ${isSoon(E) ? `<label class="field" style="max-width:320px"><span>Fecha de estreno (opcional)</span><input class="input" id="f-release" data-k="releaseDate" value="${esc(E.releaseDate||'')}" placeholder="15 de noviembre"><span class="hint">Se muestra junto a “Próximamente”. Los enlaces para ver quedan ocultos hasta que lo cambies a disponible.</span></label>`
         : `<span class="hint">El botón “Ver ahora” abre ${E.type==='serie'?'el enlace del primer capítulo que lo tenga':'el enlace de la película'}.</span>`}
     </div>
-    <div class="fs"><h3>Formato y calidad</h3>
+    <div class="fs"><h3>Formato y calidad · en la TV</h3>
       <div class="fmt-check-grid">
+        <label class="check"><input type="checkbox" data-fmt="hd" ${E.formats?.hd?'checked':''}> HD</label>
         <label class="check"><input type="checkbox" data-fmt="uhd4k" ${E.formats?.uhd4k?'checked':''}> 4K Ultra HD</label>
         <label class="check"><input type="checkbox" data-fmt="hdr" ${E.formats?.hdr?'checked':''}> HDR</label>
         <label class="check"><input type="checkbox" data-fmt="atmos" ${E.formats?.atmos?'checked':''}> Dolby Atmos</label>
         <label class="check"><input type="checkbox" data-fmt="surround51" ${E.formats?.surround51?'checked':''}> Audio 5.1</label>
       </div>
-      <span class="hint">Marcá los que apliquen de verdad al archivo que subiste — esto es solo informativo, no cambia la calidad del video. Aparecen como insignias en la portada y en la ficha, igual que en Netflix.</span>
+      <span class="hint">Marcá los que apliquen de verdad al archivo de 4K que usa la TV — es solo informativo, no cambia la calidad del video. Aparecen como insignias solo en la app de la TV.</span>
+    </div>
+    <div class="fs"><h3>Formato y calidad · en la web</h3>
+      <div class="fmt-check-grid">
+        <label class="check"><input type="checkbox" data-fmtw="hd" ${E.formatsWeb?.hd?'checked':''}> HD</label>
+        <label class="check"><input type="checkbox" data-fmtw="uhd4k" ${E.formatsWeb?.uhd4k?'checked':''}> 4K Ultra HD</label>
+        <label class="check"><input type="checkbox" data-fmtw="hdr" ${E.formatsWeb?.hdr?'checked':''}> HDR</label>
+        <label class="check"><input type="checkbox" data-fmtw="atmos" ${E.formatsWeb?.atmos?'checked':''}> Dolby Atmos</label>
+        <label class="check"><input type="checkbox" data-fmtw="surround51" ${E.formatsWeb?.surround51?'checked':''}> Audio 5.1</label>
+      </div>
+      <span class="hint">Marcá los que apliquen al archivo que se ve en la web (por ejemplo HD). Aparecen como insignias solo en la web, en la portada y en la ficha. Son independientes de las de la TV.</span>
     </div>
     </div>
     <div data-epanel="extra" ${et==='extra'?'':'hidden'}>
@@ -1389,6 +1402,11 @@ app.addEventListener('change', async e => {
     if (el.dataset.k==='published') S.editing.status = el.checked ? 'publicado' : 'borrador';
     markDirty();
   }
+  if (S.editing && el.type==='checkbox' && el.dataset.fmtw){
+    S.editing.formatsWeb = S.editing.formatsWeb || {};
+    S.editing.formatsWeb[el.dataset.fmtw] = el.checked;
+    markDirty();
+  }
   if (S.editing && el.type==='checkbox' && el.dataset.fmt){
     S.editing.formats = S.editing.formats || {};
     S.editing.formats[el.dataset.fmt] = el.checked;
@@ -1435,7 +1453,7 @@ app.addEventListener('click', async e => {
   if (d.qtPick !== undefined){ tmdbQuickPick(d.qtPick); return; }
   if (d.qtConfirm !== undefined){ const id = d.qtConfirm; const sel = S.qt.sel.slice(); S.qt = null; S.quick = false; S.catalogPicker = false; S.tmdb = { open:true, specials:false, sel }; S.editorTab = 'info'; S.openSeasons = new Set(); rerenderPanel(true); tmdbImport(+id); return; }
   if (d.new){ S.tmdb = { open:false }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.quick = true; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(); rerenderPanel(); setTimeout(()=>document.getElementById('f-title')?.focus(), 120); return; }
-  if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.editing.formats ||= {}; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(S.editing.seasons.length===1 ? [0] : []); rerenderPanel(true); window.scrollTo(0,0); return; }
+  if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.editing.formats ||= {}; S.editing.formatsWeb ||= {}; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(S.editing.seasons.length===1 ? [0] : []); rerenderPanel(true); window.scrollTo(0,0); return; }
   if (d.del !== undefined && d.del){ inlineConfirm(t.closest('[data-row]'), '¿Eliminar?', () => deleteTitle(d.del)); return; }
   if (d.back !== undefined){ S.editing=null; S.dirty=false; rerenderPanel(true); return; }
   if (d.save !== undefined){ saveTitle(); return; }

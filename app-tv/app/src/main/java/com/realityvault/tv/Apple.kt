@@ -549,6 +549,9 @@ private fun FmtLogo(icon: ImageVector, heightDp: Dp, vwVh: Float, desc: String) 
 @Composable
 fun FmtBadges(f: Formats) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (f.hd) Box(Modifier.border(1.dp, Color.White.copy(alpha = .75f), RoundedCornerShape(3.dp)).padding(horizontal = 4.dp)) {
+            Text("HD", style = ts(10, FontWeight.Bold, Color.White))
+        }
         if (f.uhd4k) FmtLogo(FourKLogo, 15.dp, 26f / 15f, "4K Ultra HD")
         if (f.hdr) FmtLogo(DolbyVisionLogo, 13.dp, 52f / 22f, "Dolby Vision")
         if (f.atmos) FmtLogo(DolbyAtmosLogo, 13.dp, 52f / 22f, "Dolby Atmos")

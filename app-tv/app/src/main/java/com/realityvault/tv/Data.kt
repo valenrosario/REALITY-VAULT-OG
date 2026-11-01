@@ -25,8 +25,8 @@ data class Season(val number: Int, val name: String, val episodes: List<Episode>
 data class CastMember(val name: String, val role: String, val photo: String)
 
 /** 4K / HDR / Dolby Atmos / 5.1, marcados desde el panel de web (campo "formats" del título). */
-data class Formats(val uhd4k: Boolean = false, val hdr: Boolean = false, val atmos: Boolean = false, val surround51: Boolean = false) {
-    val any get() = uhd4k || hdr || atmos || surround51
+data class Formats(val uhd4k: Boolean = false, val hdr: Boolean = false, val atmos: Boolean = false, val surround51: Boolean = false, val hd: Boolean = false) {
+    val any get() = uhd4k || hdr || atmos || surround51 || hd
 }
 
 data class Title(
@@ -121,7 +121,7 @@ fun parseTitle(o: JSONObject): Title {
         seasons = seasons.sortedBy { it.number },
         cast = o.optJSONArray("cast")?.let { a -> (0 until a.length()).mapNotNull { k -> a.optJSONObject(k)?.let { c -> CastMember(c.s("name"), c.s("role"), c.s("photo")).takeIf { it.name.isNotBlank() } } } } ?: emptyList(),
         bannerTv = o.s("bannerImageTv"), backdropTv = o.s("backdropTv"), subs = o.s("subs").trim(),
-        formats = o.optJSONObject("formats")?.let { f -> Formats(f.optBoolean("uhd4k"), f.optBoolean("hdr"), f.optBoolean("atmos"), f.optBoolean("surround51")) } ?: Formats(),
+        formats = o.optJSONObject("formats")?.let { f -> Formats(f.optBoolean("uhd4k"), f.optBoolean("hdr"), f.optBoolean("atmos"), f.optBoolean("surround51"), f.optBoolean("hd")) } ?: Formats(),
         previewVideo = o.s("previewVideo").trim()
     )
 }
