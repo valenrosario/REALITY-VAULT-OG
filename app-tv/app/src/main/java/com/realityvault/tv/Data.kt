@@ -90,6 +90,12 @@ private fun JSONObject.strs(k: String): List<String> {
     return (0 until a.length()).mapNotNull { a.optString(it).takeIf { s -> s.isNotBlank() } }
 }
 
+/** Enlace que usa la tele: el "Enlace para la TV" (4K) si está cargado y es válido; si no, el normal de la web. */
+private fun tvUrl(o: JSONObject): String {
+    val tv = o.s("urlTv").trim()
+    return if (tv.startsWith("http://") || tv.startsWith("https://")) tv else o.s("url").trim()
+}
+
 fun parseTitle(o: JSONObject): Title {
     val seasons = mutableListOf<Season>()
     o.optJSONArray("seasons")?.let { sa ->
@@ -99,7 +105,7 @@ fun parseTitle(o: JSONObject): Title {
             so.optJSONArray("episodes")?.let { ea ->
                 for (j in 0 until ea.length()) {
                     val eo = ea.optJSONObject(j) ?: continue
-                    eps += Episode(eo.i("number", j + 1), eo.s("title"), eo.s("description"), eo.s("duration"), eo.s("url").trim(), eo.s("thumb"), eo.s("subs").trim())
+                    eps += Episode(eo.i("number", j + 1), eo.s("title"), eo.s("description"), eo.s("duration"), tvUrl(eo), eo.s("thumb"), eo.s("subs").trim())
                 }
             }
             seasons += Season(so.i("number", i + 1), so.s("name").ifBlank { so.s("title") }, eps)
@@ -109,7 +115,7 @@ fun parseTitle(o: JSONObject): Title {
         id = o.s("id"), type = o.s("type"), title = o.s("title"), tagline = o.s("tagline"),
         description = o.s("description"), year = o.s("year"), yearEnd = o.s("yearEnd"), rating = o.s("rating"),
         duration = o.s("duration"), genres = o.strs("genres"), poster = o.s("poster"), backdrop = o.s("backdrop"),
-        logo = o.s("logo"), thumbWide = o.s("thumbWide"), bannerImage = o.s("bannerImage"), url = o.s("url").trim(),
+        logo = o.s("logo"), thumbWide = o.s("thumbWide"), bannerImage = o.s("bannerImage"), url = tvUrl(o),
         trailer = o.s("trailer").trim(), featured = o.optBoolean("featured"), status = o.s("status"),
         availability = o.s("availability"), releaseDate = o.s("releaseDate"), createdAt = o.optLong("createdAt"),
         seasons = seasons.sortedBy { it.number },

@@ -753,6 +753,7 @@ function renderEditor(){
     </div>
     ${isSerie ? renderSeasonsEd(E) : `<div class="fs"><h3>Reproducción</h3><div class="fgrid">
       <label class="field span2"><span>Enlace para ver la película</span><input class="input" id="f-url" data-k="url" value="${esc(E.url)}" placeholder="https://…"><span class="hint">Se reproduce dentro del sitio. Funciona con YouTube, Vimeo, Google Drive, Dailymotion, OK.ru, Internet Archive, archivos .mp4 o .m3u8 y servicios como StreamHG: ahí copiá el <b>Embed code</b> completo y pegalo acá (el sitio se queda solo con el enlace).</span></label>
+      <label class="field span2"><span>Enlace para la TV (4K, opcional)</span><input class="input" id="f-urltv" data-k="urlTv" value="${esc(E.urlTv)}" placeholder="https://…/pelicula-4k.mkv"><span class="hint">Solo lo usa la app de la TV (4K, Dolby, varios audios). Si lo dejás vacío, la TV usa el enlace de arriba. La web siempre usa el de arriba.</span></label>
       <label class="field span2"><span>Subtítulos en español (.vtt)</span><input class="input" id="f-subs" data-k="subs" value="${esc(E.subs)}" placeholder="https://…/pelicula.es.vtt"><span class="hint">Opcional. Enlace a un archivo .vtt. Solo se muestran con enlaces de archivo .mp4, .webm o .m3u8.</span></label>
     </div></div>`}
     <div class="fs"><h3>Video del banner principal</h3>
@@ -866,6 +867,7 @@ function renderSeasonsEd(E){
             </div>
             <label class="field"><span>Sinopsis</span><textarea class="textarea" style="min-height:64px" id="e-s-${si}-${ei}" data-ep="${si}.${ei}" data-f="description">${esc(e.description)}</textarea></label>
             <label class="field"><span>Subtítulos en español (.vtt)</span><input class="input" id="e-v-${si}-${ei}" data-ep="${si}.${ei}" data-f="subs" value="${esc(e.subs)}" placeholder="Enlace al archivo .vtt (opcional)"></label>
+            <label class="field"><span>Enlace para la TV (4K, opcional)</span><input class="input" id="e-t4-${si}-${ei}" data-ep="${si}.${ei}" data-f="urlTv" value="${esc(e.urlTv)}" placeholder="Solo para la app de la TV. Vacío = usa el enlace de abajo"></label>
             <div class="ep-ed-foot"><input class="input" id="e-u-${si}-${ei}" data-ep="${si}.${ei}" data-f="url" value="${esc(e.url)}" placeholder="Enlace o código de inserción (embed) del video" aria-label="Enlace del capítulo">
               <button class="pill-toggle btn-sm ${eSoon?'on':''}" data-ep-soon="${si}.${ei}" aria-pressed="${eSoon}">Próximamente</button>
               <button class="iconbtn" data-ep-x="${si}.${ei}" aria-label="Quitar capítulo">✕</button></div>
@@ -1370,7 +1372,7 @@ function cleanVideoLink(v){
 }
 app.addEventListener('input', e => {
   const el = e.target;
-  if ((el.dataset.k === 'url' || el.dataset.k === 'trailer' || el.dataset.f === 'url') && /<iframe/i.test(el.value)) el.value = cleanVideoLink(el.value);
+  if ((el.dataset.k === 'url' || el.dataset.k === 'trailer' || el.dataset.f === 'url' || el.dataset.k === 'urlTv' || el.dataset.f === 'urlTv') && /<iframe/i.test(el.value)) el.value = cleanVideoLink(el.value);
   if (el.id==='adminFilter'){ S.adminFilter = el.value; const pos = el.selectionStart; rerenderPanel(); const n=document.getElementById('adminFilter'); n.focus(); n.setSelectionRange(pos,pos); return; }
   const E = S.editing; if (!E) return;
   if (el.dataset.k && el.type!=='checkbox'){ E[el.dataset.k] = el.value; markDirty(); }
