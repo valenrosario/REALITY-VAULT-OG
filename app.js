@@ -2451,18 +2451,14 @@ function rvPlayer(video){
   on(video,'error',()=>{busy(false);err.textContent = /\.mkv(\?|#|$)/i.test(video.currentSrc||video.src||'') ? 'Este navegador no puede reproducir este archivo MKV (o su códec de video o audio). Probá con Chrome o Edge en la compu, o mirá en la app de la TV.' : 'No se pudo cargar el video.'; err.hidden=false});
   on(video,'loadeddata',()=>{err.hidden=true});
   // Si el video corre pero el navegador no decodifica el audio (AC3 / E-AC3 / DTS / TrueHD), avisa claro en vez de quedar mudo.
-  let silentTicks = 0;
-  const audioWatch = setInterval(()=>{
-    if (video.paused || video.ended || (video.readyState|0) < 3) { silentTicks = 0; return; }
-    const n = video.webkitAudioDecodedByteCount;
-    if (typeof n !== 'number') return clearInterval(audioWatch);
-    silentTicks = n === 0 ? silentTicks + 1 : 0;
-    if (n > 0) return clearInterval(audioWatch);
-    if (silentTicks >= 2){ clearInterval(audioWatch); video.dispatchEvent(new Event('rv-noaudio')); }
-  }, 1200);
+  let audioChecked = false;
+  on(video,'playing',()=>{ if (audioChecked) return; audioChecked = true; setTimeout(()=>{
+    if (video.paused || video.muted || video.currentTime < 1 || typeof video.webkitAudioDecodedByteCount !== 'number') return;
+    if (video.webkitAudioDecodedByteCount === 0) toast('Este archivo tiene un audio (AC3, DTS o similar) que el navegador no puede reproducir. Para la web hay que subir el video con audio AAC.', true);
+  }, 3500); });
 
   syncVol();sync();bFull.innerHTML=I.fs;loadTracks();wake();
-  return {destroy(){clearInterval(audioWatch);L.forEach(([t,e,f,o])=>t.removeEventListener(e,f,o));cancelAnimationFrame(raf);clearTimeout(idleT);clearTimeout(clickT);clearTimeout(busyT);tracks.forEach(t=>{t.oncuechange=null});root.classList.remove('idle')}};
+  return {destroy(){L.forEach(([t,e,f,o])=>t.removeEventListener(e,f,o));cancelAnimationFrame(raf);clearTimeout(idleT);clearTimeout(clickT);clearTimeout(busyT);tracks.forEach(t=>{t.oncuechange=null});root.classList.remove('idle')}};
 }
 let playerRoot = null;
 let plSess = null;
@@ -2471,74 +2467,9 @@ function endPlayerSession(){
   const { v, tid, s, e, rv, timer, off, ready } = plSess; plSess = null;
   clearInterval(timer); off();
   if (ready() && tid && v.duration) savePos(tid, s, e, v.currentTime, v.duration);
-  rv?.destroy(); v._hls?.destroy(); try { v._side?.destroy(); } catch {}
+  rv?.destroy(); v._hls?.destroy();
 }
-/* --- motor alternativo para MKV (y MP4 sin audio en el navegador): libmedia AVPlayer (LGPL, vendor/libmedia).
-   Lee el archivo por partes desde el link y decodifica en WASM el audio que el navegador no soporta
-   (DTS, AC3, E-AC3, etc.); el video va por WebCodecs con aceleración de hardware cuando se puede.
-   avVideo() devuelve un <div> que imita la API de <video>, así los controles de rvPlayer siguen igual. --- */
-let avMod = null;
-const loadAV = () => avMod || (avMod = import('./vendor/libmedia/esm/avplayer.js').then(m => m.default));
-const isMkv = u => /\.mkv(\?|#|$)/i.test(u || '');
-const AV_BASE = location.origin + '/vendor/libmedia';
-const AV_SIMD = (() => { try { return WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11])); } catch { return false; } })();
-// decodificadores incluidos en vendor/libmedia/decode (mp3.wasm también trae MP1 y MP2)
-const AV_DEC = { 27:'h264', 173:'hevc', 167:'vp9', 225:'av1', 86018:'aac', 86019:'ac3', 86056:'eac3', 86020:'dca', 86017:'mp3', 86016:'mp3', 86015:'mp3', 86076:'opus', 86028:'flac', 86021:'vorbis' };
-function avWasm(type, codecId){
-  const r = AV_SIMD ? '-simd' : '';
-  if (type === 'resampler') return `${AV_BASE}/resample/resample${r}.wasm`;
-  if (type === 'stretchpitcher') return `${AV_BASE}/stretchpitch/stretchpitch${r}.wasm`;
-  const n = AV_DEC[codecId]; return n ? `${AV_BASE}/decode/${n}${r}.wasm` : '';
-}
-function avVideo(el, url, { subs = '', at = 0 } = {}){
-  let p = null, paused = true, ended = false, dur = NaN, cur = at || 0, vol = 1, muted = false, rate = 1, started = false, startAt = at || 0, lastTu = 0, seekT = 0, dead = false;
-  const fire = n => el.dispatchEvent(new Event(n));
-  const tt = Object.assign(new EventTarget(), { length: 0, [Symbol.iterator]: [][Symbol.iterator] });
-  const applyVol = () => { try { p && p.setVolume(muted ? 0 : vol); } catch {} };
-  Object.defineProperties(el, {
-    currentTime: { get: () => cur, set: v => { v = Math.max(0, +v || 0); cur = v; if (!started){ startAt = v; return; } fire('seeking'); clearTimeout(seekT); seekT = setTimeout(() => { p.seek(BigInt(Math.floor(v * 1000))).then(() => { fire('seeked'); fire('timeupdate'); }).catch(() => fire('seeked')); }, 120); } },
-    duration: { get: () => dur }, paused: { get: () => paused }, ended: { get: () => ended },
-    readyState: { get: () => started ? 4 : 0 }, currentSrc: { get: () => url }, src: { get: () => url, set: () => {} },
-    volume: { get: () => vol, set: v => { vol = Math.min(1, Math.max(0, +v)); applyVol(); fire('volumechange'); } },
-    muted: { get: () => muted, set: v => { muted = !!v; applyVol(); fire('volumechange'); } },
-    playbackRate: { get: () => rate, set: v => { rate = +v || 1; try { p && p.setPlaybackRate(rate); } catch {} fire('ratechange'); } },
-    textTracks: { get: () => tt }, buffered: { get: () => ({ length: 1, start: () => 0, end: () => Math.min(dur || 0, cur + 30) }) },
-    controls: { get: () => false, set: () => {} },
-  });
-  el.canPlayType = () => '';
-  el.play = async () => { if (!p || dead) return; if (p.isSuspended && p.isSuspended()) await p.resume().catch(() => {}); if (!started) return; await p.play().catch(() => {}); };
-  el.pause = () => { if (p && started) p.pause().catch(() => {}); };
-  el._hls = { destroy(){ dead = true; clearTimeout(seekT); el.removeEventListener('pointerdown', wakeAudio, true); if (p) p.destroy().catch(() => {}); } };
-  // el audio del navegador queda "suspendido" hasta que hay un gesto: cualquier toque lo reactiva
-  const wakeAudio = () => { if (p && p.isSuspended && p.isSuspended()) p.resume().catch(() => {}); };
-  el.addEventListener('pointerdown', wakeAudio, true);
-  document.addEventListener('pointerdown', wakeAudio, { capture: true, once: true });
-  fire('waiting');
-  loadAV().then(async AVPlayer => {
-    if (dead) return;
-    p = new AVPlayer({ container: el, getWasm: avWasm, enableHardware: true, enableWebCodecs: true, enableWorker: true, preLoadTime: 6 });
-    p.on('played', () => { paused = false; ended = false; fire('play'); fire('playing'); });
-    p.on('playing', () => { paused = false; fire('play'); });
-    p.on('paused', () => { paused = true; fire('pause'); });
-    p.on('ended', () => { paused = true; ended = true; fire('pause'); fire('ended'); });
-    p.on('seeking', () => fire('waiting')); p.on('seeked', () => { fire('playing'); });
-    p.on('time', pts => { cur = Number(pts) / 1000; const n = performance.now(); if (n - lastTu > 240){ lastTu = n; fire('timeupdate'); fire('progress'); } });
-    p.on('error', e => { console.warn('[avplayer]', e); fire('error'); });
-    await p.load(url);
-    if (dead) return;
-    dur = Number(p.getDuration()) / 1000;
-    if (subs) p.loadExternalSubtitle({ source: subs, lang: 'es', title: 'Español' }).then(() => { try { p.setSubtitleEnable(true); } catch {} }).catch(() => {});
-    fire('loadedmetadata'); fire('durationchange'); fire('loadeddata'); fire('canplay');
-    applyVol(); try { p.setPlaybackRate(rate); } catch {}
-    await p.play();
-    started = true;
-    if (startAt > 1) { cur = startAt; await p.seek(BigInt(Math.floor(startAt * 1000))).catch(() => {}); }
-    fire('timeupdate');
-  }).catch(e => { console.warn('[avplayer]', e); if (!dead) fire('error'); });
-  return el;
-}
-
-function openPlayer({ url, tid, s: season, e: episode, forceAv = false, at = 0 }){
+function openPlayer({ url, tid, s: season, e: episode }){
   const t = tid ? byId(tid) : null;
   const emb = embedFor(url); if (!emb) return;
   endPlayerSession();
@@ -2551,8 +2482,7 @@ function openPlayer({ url, tid, s: season, e: episode, forceAv = false, at = 0 }
   } else if (t && t.type !== 'serie') subsUrl = safeUrl(t.subs);
   const nx = nextAfter(t, season, episode);
   if (!playerRoot){ playerRoot = document.createElement('div'); playerRoot.id = 'playerRoot'; document.body.appendChild(playerRoot); }
-  const useAv = native && emb.type === 'video' && forceAv;
-  const media = useAv ? `<div class="rvp"><div id="plVideo" class="rvp-av"></div></div>` : emb.type === 'iframe'
+  const media = emb.type === 'iframe'
     ? `<iframe src="${esc(emb.src)}" title="${esc(t?.title || 'Video')}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
     : `<div class="rvp"><video id="plVideo" autoplay playsinline preload="metadata" ${subsUrl ? 'crossorigin="anonymous"' : ''} ${t?.backdrop ? `poster="${esc(t.backdrop)}"` : ''}>${subsUrl ? `<track kind="subtitles" src="${esc(subsUrl)}" srclang="es" label="Español" default>` : ''}</video></div>`;
   playerRoot.innerHTML = `<div class="player${native ? ' rv' : ''}" role="dialog" aria-modal="true" aria-label="Reproductor">
@@ -2570,26 +2500,10 @@ function openPlayer({ url, tid, s: season, e: episode, forceAv = false, at = 0 }
   S.playerOpen = true;
   const v = playerRoot.querySelector('#plVideo');
   if (v){
-    if (useAv) avVideo(v, emb.src, { subs: subsUrl, at });
-    else if (emb.type === 'video') v.src = emb.src;
+    if (emb.type === 'video') v.src = emb.src;
     else if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = emb.src;
     else loadHls().then(Hls => { if (!v.isConnected) return; const hls = new Hls(); hls.loadSource(emb.src); hls.attachMedia(v); v._hls = hls; }).catch(() => toast('No se pudo cargar el video', true));
     const rv = rvPlayer(v);
-    // Si el navegador no puede con el audio (AC3, E-AC3, MP2...): primero un decodificador de audio aparte
-    // sincronizado con el video (vendor/rv-audio.js); si tampoco puede (DTS...), o si el video no carga,
-    // se reabre en el mismo minuto con el reproductor alternativo (libmedia).
-    const toAv = () => { if (!v.isConnected) return; const cur = v.currentTime || 0; openPlayer({ url, tid, s: season, e: episode, forceAv: true, at: cur }); };
-    if (!useAv){
-      v.addEventListener('rv-noaudio', async () => {
-        try {
-          const m = await import('./vendor/rv-audio.js');
-          const h = await m.playSyncedAudioFromUrl(v, v.currentSrc || v.src, location.origin + '/vendor/libav/');
-          if (h && h !== 'undecodable'){ v._side = h; return; }
-        } catch (err) { console.warn('[rv-audio]', err); }
-        toast('Activando audio compatible…'); toAv();
-      }, { once: true });
-      if (emb.type === 'video') v.addEventListener('error', () => { toast('Probando reproductor alternativo…'); toAv(); }, { once: true });
-    }
     // volver al minuto donde lo dejaste, y guardar el minuto mientras mirás
     const saved = tid ? getPos(tid, season, season === '' ? null : episode) : null;
     let isReady = false;
