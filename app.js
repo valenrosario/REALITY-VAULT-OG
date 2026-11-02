@@ -464,6 +464,7 @@ function renderHome(){
     ${recommendedRow()}
     ${listRow()}
     ${(S.frows||[]).map(featRow).join('')}
+    ${(S.colls||[]).map(c => collBanner(c)).join('')}
     ${row('Destacados', byTaste(feat, 'feat', prof))}
     ${row('Novedades', newest)}
     ${row('Series', byTaste(series, 'series', prof), '/series')}
@@ -598,6 +599,7 @@ function renderAdmin(){
     ['banners','Banners', S.banners.length],
     ['etiquetas','Géneros y etiquetas', null],
     ['filas','Filas destacadas', (S.frows||[]).length],
+    ['colecciones','Colecciones', (S.colls||[]).length],
     ['sitio','Sitio', null],
   ];
   return `<div class="admin admin-light">
@@ -607,7 +609,7 @@ function renderAdmin(){
       <nav class="adm-nav">${sections.map(([id,label,count])=>`<button data-tab="${id}" aria-pressed="${tab===id}">${esc(label)}${count!=null?`<span>${count}</span>`:''}</button>`).join('')}</nav>
       <div class="adm-top-actions"><a class="adm-ghost" href="/">← Volver al sitio</a><button class="adm-ghost" data-logout>Cerrar sesión</button></div>
     </div>
-    <section class="panel" id="panel">${tab==='catalogo' ? (S.editing && !S.quick ? renderEditor() : renderCatalog()) : tab==='banners' ? renderBanners() : tab==='sitio' ? renderSite() : tab==='filas' ? renderFrowsAdmin() : renderTaxonomy()}</section></div>`;
+    <section class="panel" id="panel">${tab==='catalogo' ? (S.editing && !S.quick ? renderEditor() : renderCatalog()) : tab==='banners' ? renderBanners() : tab==='sitio' ? renderSite() : tab==='filas' ? renderFrowsAdmin() : tab==='colecciones' ? renderCollsAdmin() : renderTaxonomy()}</section></div>`;
 }
 function catalogList(){
   const f = S.adminFilter.toLowerCase();
@@ -949,6 +951,7 @@ function renderBanners(){
 }
 /* ---------- Filas destacadas (Disney+ style feature cards) ---------- */
 S.frows = [];
+S.colls = [];
 const tintCache = new Map();
 function fallbackTint(t){ return `hsl(${hue(t.title||t.id)},55%,22%)`; }
 function computeTint(url){
@@ -985,6 +988,85 @@ function applyTints(root){
     computeTint(u).then(c => { if (c) el.style.setProperty('--tint', c); });
   });
 }
+/* ---------- colecciones (estilo HBO Max) ---------- */
+const collSlug = c => slugify(c.name || '') || c.id;
+const collItems = c => (c.items || []).map(byId).filter(t => t && t.status !== 'borrador');
+function collArt(c, items){
+  if (c.image) return `<span class="coll-img" data-src="${esc(c.image)}"></span>`;
+  const ps = items.filter(t => t.poster);
+  if (!ps.length) return '';
+  const pool = []; while (pool.length < 14) pool.push(...ps);
+  const rowH = (a) => `<span class="coll-prow">${a.map(t => `<span class="coll-p" data-src="${esc(t.poster)}"></span>`).join('')}</span>`;
+  return `<span class="coll-wall">${rowH(pool.slice(0, 7))}${rowH(pool.slice(7, 14))}</span>`;
+}
+function collBanner(c, big){
+  const items = collItems(c);
+  if (!items.length) return '';
+  const n = items.length;
+  const glow = c.image || (items.find(t => t.poster) || {}).poster || '';
+  const inner = `${glow ? `<span class="coll-blur" data-src="${esc(glow)}"></span>` : ''}<span class="coll-art">${collArt(c, items)}</span><span class="coll-fade"></span>
+    <span class="coll-txt"><span class="coll-k">Colección</span><span class="coll-name">${esc(c.name || 'Colección')}</span>${c.tagline ? `<span class="coll-tag">${esc(c.tagline)}</span>` : ''}
+    ${big ? `<span class="coll-n">${n} título${n === 1 ? '' : 's'}</span>` : `<span class="btn coll-btn">Ver colección</span>`}</span>`;
+  return big ? `<section class="coll big">${inner}</section>`
+    : `<section class="row coll-row"><a class="coll" href="/coleccion/${esc(collSlug(c))}" aria-label="Ver la colección ${esc(c.name || '')}">${inner}</a></section>`;
+}
+function renderCollection(slug){
+  const c = (S.colls || []).find(x => collSlug(x) === slug || x.id === slug);
+  const items = c ? collItems(c) : [];
+  if (!c || !items.length) return `<div class="lock"><h1>No encontramos esta colección</h1><p>Puede que ya no esté disponible.</p><a class="btn btn-line" href="/">Volver al inicio</a></div>`;
+  return `<main class="coll-page">${collBanner(c, true)}<div class="grid">${items.map(card).join('')}</div></main>`;
+}
+let collSaveT = null;
+function saveColls(now){
+  clearTimeout(collSaveT);
+  const run = async () => { try { await S.db.doc('site/collections').set({ list: S.colls, updatedAt: Date.now() }); } catch(err){ toast('No se pudieron guardar las colecciones', true); } };
+  if (now) return run();
+  collSaveT = setTimeout(run, 600);
+}
+function renderCollsAdmin(){
+  const list = S.colls || [];
+  const all = S.titles.slice().sort((a,b)=>(a.title||'').localeCompare(b.title||''));
+  return `<div class="panel-head"><h1>Colecciones</h1><button class="btn btn-primary" data-coll-add>+ Nueva colección</button></div>
+    <p style="margin:0;color:var(--muted);max-width:68ch">Grupos de títulos que elegís vos (como en HBO Max). Cada colección aparece en el inicio como un banner y tiene su propia página. Si no le ponés imagen, el banner muestra los pósters de sus títulos. Los cambios se guardan solos.</p>
+    ${list.length ? list.map((c, ci) => { const inSet = new Set(c.items || []); return `<div class="fs coll-ed" data-coll="${esc(c.id)}">
+      <div class="frow-head">
+        <input class="input" id="co-n-${esc(c.id)}" data-coll-f="name" data-coll-id="${esc(c.id)}" value="${esc(c.name||'')}" placeholder="Nombre de la colección (ej: Las chicas de los 2000)">
+        <button class="iconbtn" data-coll-move="${esc(c.id)}" data-d="-1" aria-label="Subir colección" ${ci===0?'disabled':''}>↑</button>
+        <button class="iconbtn" data-coll-move="${esc(c.id)}" data-d="1" aria-label="Bajar colección" ${ci===list.length-1?'disabled':''}>↓</button>
+        <span data-row="coll-${esc(c.id)}"><button class="btn btn-danger btn-sm" data-coll-del="${esc(c.id)}">Eliminar</button></span>
+      </div>
+      <div class="coll-ed-grid">
+        <div class="field"><span>Imagen de fondo (opcional)</span>${slot('coll', 'coll:' + c.id, c.image, 'r31', 'Subir imagen de fondo')}<span class="hint">${c.image ? 'Tocá la imagen para cambiarla.' : 'Sin imagen se muestran los pósters de sus títulos.'} Se difumina sola del lado izquierdo. <b>1800 × 600 px</b></span></div>
+        <label class="field"><span>Frase corta (opcional)</span><textarea class="textarea" rows="3" id="co-t-${esc(c.id)}" data-coll-f="tagline" data-coll-id="${esc(c.id)}" placeholder="Ej: Las herederas, las fiestas y los realities que marcaron una época.">${esc(c.tagline||'')}</textarea></label>
+      </div>
+      <div class="field"><span>Títulos de la colección (${(c.items||[]).length})</span>
+        <div class="coll-chips">${(c.items||[]).map((id, ii) => { const t = byId(id); if (!t) return ''; return `<span class="coll-chip"><span class="coll-chip-p" ${t.poster?`data-src="${esc(t.poster)}"`:''}></span><span class="coll-chip-t">${esc(t.title||'Sin título')}</span>
+          <button class="iconbtn" data-coll-imove="${esc(c.id)}" data-i="${ii}" data-d="-1" aria-label="Mover antes" ${ii===0?'disabled':''}>←</button><button class="iconbtn" data-coll-imove="${esc(c.id)}" data-i="${ii}" data-d="1" aria-label="Mover después" ${ii===(c.items.length-1)?'disabled':''}>→</button><button class="iconbtn" data-coll-idel="${esc(c.id)}" data-i="${ii}" aria-label="Quitar de la colección">✕</button></span>`; }).join('')}</div>
+        <select class="select" id="co-a-${esc(c.id)}" data-coll-addt="${esc(c.id)}" aria-label="Agregar título"><option value="">+ Agregar un título…</option>${all.filter(t => !inSet.has(t.id)).map(t => `<option value="${esc(t.id)}">${esc(t.title||'Sin título')}${t.status==='borrador'?' (borrador)':''}</option>`).join('')}</select>
+      </div>
+      <div class="field"><span>Vista previa</span><div class="coll-prev">${collBanner(c) || '<p class="empty-note" style="padding:8px 0">Agregá al menos un título publicado para verla.</p>'}</div></div>
+    </div>`; }).join('') : '<p class="empty-note" style="padding:12px 0">Todavía no hay colecciones. Tocá “+ Nueva colección”.</p>'}`;
+}
+document.addEventListener('input', e => {
+  const el = e.target; if (!S.owner || !el.dataset.collF) return;
+  const c = S.colls.find(x => x.id === el.dataset.collId); if (!c) return;
+  c[el.dataset.collF] = el.value; saveColls();
+});
+document.addEventListener('change', e => {
+  const el = e.target; if (!S.owner || !el.dataset.collAddt || !el.value) return;
+  const c = S.colls.find(x => x.id === el.dataset.collAddt); if (!c) return;
+  (c.items ||= []).push(el.value); saveColls(true); rerenderPanel();
+});
+document.addEventListener('click', e => {
+  if (!S.owner) return;
+  const b = e.target.closest('[data-coll-add],[data-coll-move],[data-coll-del],[data-coll-imove],[data-coll-idel]'); if (!b) return;
+  const d = b.dataset, find = id => S.colls.find(x => x.id === id);
+  if (d.collAdd !== undefined){ S.colls.push({ id: uid('c'), name: 'Nueva colección', tagline: '', image: '', items: [] }); saveColls(true); rerenderPanel(); return; }
+  if (d.collMove){ const i = S.colls.findIndex(x => x.id === d.collMove), j = i + +d.d; if (j < 0 || j >= S.colls.length) return; [S.colls[i], S.colls[j]] = [S.colls[j], S.colls[i]]; saveColls(true); rerenderPanel(); return; }
+  if (d.collDel){ inlineConfirm(b.closest('[data-row]'), '¿Eliminar la colección?', () => { S.colls = S.colls.filter(x => x.id !== d.collDel); saveColls(true); rerenderPanel(); toast('Colección eliminada'); }); return; }
+  if (d.collImove){ const c = find(d.collImove), i = +d.i, j = i + +d.d; if (j < 0 || j >= c.items.length) return; [c.items[i], c.items[j]] = [c.items[j], c.items[i]]; saveColls(true); rerenderPanel(); return; }
+  if (d.collIdel){ const c = find(d.collIdel); c.items.splice(+d.i, 1); saveColls(true); rerenderPanel(); return; }
+});
 function featRow(r){
   const raw = (r.items || []).map(it => ({ it, t: byId(it.titleId) })).filter(x => x.t && x.t.status !== 'borrador');
   if (!raw.length) return '';
@@ -1313,6 +1395,7 @@ async function importBackup(){
 
 /* --- admin interactions --- */
 async function applyImage(path, ref){
+  if (path.startsWith('coll:')){ const c = S.colls.find(x => x.id === path.slice(5)); if (c){ c.image = ref; await saveColls(true); rerenderPanel(); } return; }
   if (path.startsWith('frow:')){ const [, rid, idx] = path.split(':'); const r = S.frows.find(x => x.id === rid); if (r && r.items[+idx]){ r.items[+idx].image = ref; await saveFrows(true); rerenderPanel(); } return; }
   if (path.startsWith('site:')){ await S.db.doc('site/config').set({ ...S.site, [path.slice(5)]:ref, updatedAt:Date.now() }); toast('Imagen actualizada'); }
   else if (path.startsWith('bannerm:')){ await S.db.doc('banners/'+path.slice(8)).update({imageMobile:ref}); toast('Imagen para celular actualizada'); }
@@ -1351,7 +1434,7 @@ function morph(oldP, newP){
 function rerenderPanel(anim){
   const panel = document.getElementById('panel'); if (!panel) return render();
   const y = window.scrollY;
-  const html = S.adminTab==='catalogo' ? (S.editing && !S.quick ? renderEditor() : renderCatalog()) : S.adminTab==='banners' ? renderBanners() : S.adminTab==='sitio' ? renderSite() : S.adminTab==='filas' ? renderFrowsAdmin() : renderTaxonomy();
+  const html = S.adminTab==='catalogo' ? (S.editing && !S.quick ? renderEditor() : renderCatalog()) : S.adminTab==='banners' ? renderBanners() : S.adminTab==='sitio' ? renderSite() : S.adminTab==='filas' ? renderFrowsAdmin() : S.adminTab==='colecciones' ? renderCollsAdmin() : renderTaxonomy();
   if (anim === true || !panel.firstElementChild) panel.innerHTML = html;
   else { const tpl = document.createElement('div'); tpl.innerHTML = html; try { morph(panel, tpl); } catch { panel.innerHTML = html; } }
   hydrate(panel); window.scrollTo(0,y);
@@ -1507,6 +1590,7 @@ app.addEventListener('click', async e => {
   if (d.epAdd !== undefined){ const s = E.seasons[+d.epAdd]; const n = Math.max(0,...s.episodes.map(x=>+x.number||0))+1; s.episodes.push({id:uid('e'),number:n,title:'',description:'',duration:'',thumb:'',url:''}); markDirty(); rerenderPanel(); document.getElementById(`e-t-${d.epAdd}-${s.episodes.length-1}`)?.focus(); return; }
   if (d.epX){ const [si,ei]=d.epX.split('.').map(Number); E.seasons[si].episodes.splice(ei,1); markDirty(); rerenderPanel(); return; }
   if (d.clear){ e.stopPropagation();
+    if (d.clear.startsWith('coll:')){ const c = S.colls.find(x => x.id === d.clear.slice(5)); if (c){ c.image = ''; await saveColls(true); rerenderPanel(); } return; }
     if (d.clear.startsWith('frow:')){ const [, rid, idx] = d.clear.split(':'); const r = S.frows.find(x => x.id === rid); if (r && r.items[+idx]){ r.items[+idx].image = ''; await saveFrows(true); rerenderPanel(); } return; }
     if (d.clear.startsWith('site:')){ await S.db.doc('site/config').set({ ...S.site, [d.clear.slice(5)]:'' }).catch(()=>toast('No se pudo quitar',true)); return; }
     if (d.clear.startsWith('bannerm:')){ await S.db.doc('banners/'+d.clear.slice(8)).update({imageMobile:''}).catch(()=>toast('No se pudo quitar',true)); return; }
@@ -2739,6 +2823,7 @@ function routeFromPath(){
   const parts = decodeURIComponent(location.pathname).replace(/\/+$/,'').split('/').filter(Boolean);
   if (S.pendingId){ S.titleSlug = null; S.titleKind = null; return 'title'; }
   if (parts.length === 2 && parts[0] === 'persona'){ S.personSlug = parts[1]; return 'persona'; }
+  if (parts.length === 2 && parts[0] === 'coleccion'){ S.collSlug = parts[1]; return 'coleccion'; }
   if (parts.length === 2 && (parts[0] === 'serie' || parts[0] === 'pelicula')){ S.titleKind = parts[0]; S.titleSlug = parts[1]; return 'title'; }
   if (parts.length === 1 && ['series','peliculas','admin','mi-lista','activar'].includes(parts[0])) return parts[0];
   return 'home';
@@ -2796,6 +2881,7 @@ function render(){
   else if (S.route==='mi-lista') html = renderMyList();
   else if (S.route==='activar') html = renderActivate();
   else if (S.route==='persona') html = renderPerson(S.personSlug);
+  else if (S.route==='coleccion') html = renderCollection(S.collSlug);
   else if (S.route==='series' || S.route==='peliculas') html = renderBrowse(S.route);
   else html = renderHome();
   const landNow = isLanding();
@@ -2832,14 +2918,14 @@ function loadCache(){
   try {
     const c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
     if (!c) return;
-    S.titles = c.titles || []; S.banners = c.banners || []; S.site = c.site || {}; S.frows = c.frows || []; S.siteLoaded = true;
+    S.titles = c.titles || []; S.banners = c.banners || []; S.site = c.site || {}; S.frows = c.frows || []; S.colls = c.colls || []; S.siteLoaded = true;
     S.loaded.t = true; S.loaded.b = true;
   } catch {}
 }
 let cacheT;
 function saveCache(){
   clearTimeout(cacheT);
-  cacheT = setTimeout(() => { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ titles:S.titles, banners:S.banners, site:S.site, frows:S.frows, at:Date.now() })); } catch {} }, 300);
+  cacheT = setTimeout(() => { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ titles:S.titles, banners:S.banners, site:S.site, frows:S.frows, colls:S.colls, at:Date.now() })); } catch {} }, 300);
 }
 loadCache();
 S.route = routeFromPath();
@@ -2928,6 +3014,13 @@ async function checkOwner(){
     S.frows = rows; saveCache();
     if (S.route === 'admin'){ if (S.owner && S.adminTab === 'filas') rerenderPanel(); }
     else if (S.route === 'home' && S.loaded.t){ const y = window.scrollY; render(); window.scrollTo(0, y); }
+  }, () => {});
+  db.doc('site/collections').onSnapshot(snap => {
+    const list = snap.exists ? (snap.data().list || []) : [];
+    if (S.route === 'admin' && S.adminTab === 'colecciones' && document.activeElement?.closest?.('.coll-ed')) return;
+    S.colls = list; saveCache();
+    if (S.route === 'admin'){ if (S.owner && S.adminTab === 'colecciones') rerenderPanel(); }
+    else if ((S.route === 'home' || S.route === 'coleccion') && S.loaded.t){ const y = window.scrollY; render(); window.scrollTo(0, y); }
   }, () => {});
   db.doc('site/config').onSnapshot(snap => {
     S.site = snap.exists ? { ...snap.data() } : {}; S.siteLoaded = true;
