@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>App para la tele · REALITY VAULT</title>
+<meta name="description" content="Instalá REALITY VAULT en tu Android TV o Google TV y mirá todo en pantalla grande, con la misma cuenta.">
+<meta name="theme-color" content="#000000">
+<style>
+@font-face{font-family:"Gravity Grotesk";src:url(/fonts/MTVGravityGrotesk-Bold.woff) format("woff");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"Gravity Grotesk";src:url(/fonts/MTVGravityGrotesk-Book.woff) format("woff");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Gravity Grotesk";src:url(/fonts/MTVGravityGrotesk-Light.woff) format("woff");font-weight:300;font-style:normal;font-display:swap}
+:root{--bg:#000;--surface:#0d0b0c;--surface-2:#1a1518;--surface-3:#272024;--line:rgba(255,200,225,.09);--line-2:rgba(255,200,225,.18);--fg:#fdeef4;--muted:#c6a3b3;--faint:#8c6b7a;--accent:#f5a3c4;--accent-2:#ffc4da;--accent-ink:#3b0e22}
+*{box-sizing:border-box}
+html{background:var(--bg);color-scheme:dark}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--fg);font-family:"Gravity Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-weight:400;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:14px 36px;max-width:1280px;margin:0 auto;padding:22px 32px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:.14em}
+.brand svg{width:24px;height:24px;flex:none}
+.nav{display:flex;gap:26px;font-size:15px;color:var(--muted);flex-grow:1;flex-wrap:wrap}
+.nav a{padding:8px 0}.nav a:hover{color:var(--fg)}
+.back{font-size:15px;color:var(--muted);padding:8px 0}.back:hover{color:var(--fg)}
+main{max-width:1280px;margin:0 auto;padding:0 32px 80px}
+.hero{display:flex;flex-wrap:wrap;align-items:center;gap:48px;padding-top:56px}
+.hero-t{flex:1 1 400px;min-width:0}
+.eyebrow{font-size:14px;color:var(--accent);letter-spacing:.12em;text-transform:uppercase;margin-bottom:18px}
+h1{margin:0;font-size:clamp(38px,6vw,64px);line-height:1.02;letter-spacing:-.025em;font-weight:700;text-wrap:balance}
+.lead{margin:22px 0 0;font-size:19px;line-height:1.5;color:var(--muted);max-width:470px;font-weight:300}
+.cta{display:flex;flex-wrap:wrap;align-items:center;gap:16px 22px;margin-top:34px}
+.btn{display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:var(--accent-ink);font:700 17px/1 "Gravity Grotesk",system-ui,sans-serif;padding:17px 30px;border-radius:13px;min-height:52px;transition:background .15s,transform .1s}
+.btn:hover{background:var(--accent-2)}.btn:active{transform:scale(.98)}
+.btn svg{width:20px;height:20px}
+.meta{font-size:14px;color:var(--faint)}
+.tvwrap{flex:1 1 440px;min-width:0;display:flex;justify-content:center}
+.tv{width:100%;max-width:540px;aspect-ratio:16/9;border:8px solid var(--surface-3);border-radius:16px;background:#000;padding:16px 18px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+.tv-b{display:flex;align-items:center;gap:7px;font-size:9px;font-weight:700;letter-spacing:.14em}
+.tv-b svg{width:12px;height:12px}
+.tv-h{flex:1;min-height:0;border-radius:8px;background:var(--surface-2) center/cover no-repeat;position:relative;overflow:hidden}
+.tv-row{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.tv-row i{display:block;aspect-ratio:2/3;border-radius:6px;background:var(--surface-2) center/cover no-repeat}
+.tv-h,.tv-row i{transition:opacity .5s}
+.pend{opacity:0}
+.how{margin-top:80px}
+h2{font-size:26px;font-weight:700;letter-spacing:-.01em;margin:0 0 22px}
+.how-in{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}
+.steps{flex:1 1 520px;min-width:0;margin:0;padding:0;list-style:none;counter-reset:s;border-bottom:1px solid var(--line-2)}
+.steps li{display:flex;gap:20px;padding:22px 0;border-top:1px solid var(--line-2);counter-increment:s}
+.steps li::before{content:counter(s);font-size:15px;font-weight:700;color:var(--accent);width:20px;flex:none;padding-top:2px}
+.steps b{display:block;font-size:18px;font-weight:700}
+.steps p{margin:4px 0 0;font-size:15px;color:var(--muted);font-weight:300}
+.steps p em{font-style:normal;color:var(--fg);font-weight:400}
+.qr{flex:0 0 auto;display:flex;align-items:center;gap:18px;background:var(--surface-2);border-radius:18px;padding:18px}
+.qr-i{width:136px;height:136px;border-radius:8px;overflow:hidden;flex:none;background:#fff}
+.qr b{display:block;font-size:16px}
+.qr p{margin:4px 0 0;font-size:13px;color:var(--muted);max-width:150px;font-weight:300}
+.note{margin-top:26px;font-size:14px;color:var(--faint);max-width:640px}
+@media(max-width:620px){.bar,main{padding-left:20px;padding-right:20px}.hero{padding-top:32px;gap:36px}.lead{font-size:17px}.qr{display:none}.how{margin-top:56px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="/" aria-label="REALITY VAULT, ir al inicio"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,2 14.6,8.6 21.6,9.1 16.3,13.7 17.9,20.6 12,16.9 6.1,20.6 7.7,13.7 2.4,9.1 9.4,8.6" fill="#e7f409"/></svg><span>REALITY VAULT</span></a>
+  <nav class="nav" aria-label="Principal"><a href="/">Inicio</a><a href="/series">Series</a><a href="/peliculas">Películas</a><a href="/mi-lista">Mi lista</a></nav>
+  <a class="back" href="/">Volver al sitio</a>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero-t">
+      <div class="eyebrow">App para Android TV</div>
+      <h1>Mirá REALITY VAULT en tu tele</h1>
+      <p class="lead">Pantalla grande, control remoto y la misma cuenta que usás en la web. Tu lista y el punto donde dejaste cada capítulo te siguen a todos lados.</p>
+      <div class="cta">
+        <a class="btn" id="dl" href="https://github.com/valenrosario/REALITY-VAULT-OG/releases/download/tv/reality-vault-tv.apk" download>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>
+          Descargar la app
+        </a>
+        <span class="meta" id="meta">Android TV y Google TV</span>
+      </div>
+    </div>
+    <div class="tvwrap">
+      <div class="tv" aria-hidden="true">
+        <div class="tv-b"><svg viewBox="0 0 24 24"><polygon points="12,2 14.6,8.6 21.6,9.1 16.3,13.7 17.9,20.6 12,16.9 6.1,20.6 7.7,13.7 2.4,9.1 9.4,8.6" fill="#e7f409"/></svg>REALITY VAULT</div>
+        <div class="tv-h" id="tvh"></div>
+        <div class="tv-row" id="tvr"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="how">
+    <h2>Cómo instalarla</h2>
+    <div class="how-in">
+      <ol class="steps">
+        <li><div><b>Descargá el archivo</b><p>Desde la tele, abrí el navegador o la app Downloader y escribí <em>reality-vault.vercel.app/tv</em>. O escaneá el código con tu celular.</p></div></li>
+        <li><div><b>Permití la instalación</b><p>Cuando la tele lo pida, activá «instalar apps desconocidas» para ese navegador y aceptá.</p></div></li>
+        <li><div><b>Entrá con tu cuenta</b><p>Abrí REALITY VAULT e iniciá sesión con tu mail y tu contraseña.</p></div></li>
+      </ol>
+      <div class="qr">
+        <div class="qr-i"><svg viewBox="-2 -2 33 33" role="img" aria-label="Código QR para descargar la app de la tele" style="width:100%;height:100%;display:block" shape-rendering="crispEdges"><rect x="-2" y="-2" width="33" height="33" fill="#fff"/><path d="M0 0h7v1h-7zM9 0h1v1h-1zM11 0h1v1h-1zM14 0h1v1h-1zM19 0h1v1h-1zM22 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM8 1h1v1h-1zM10 1h4v1h-4zM18 1h2v1h-2zM22 1h1v1h-1zM28 1h1v1h-1zM0 2h1v1h-1zM2 2h3v1h-3zM6 2h1v1h-1zM10 2h3v1h-3zM15 2h1v1h-1zM18 2h2v1h-2zM22 2h1v1h-1zM24 2h3v1h-3zM28 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM9 3h1v1h-1zM13 3h1v1h-1zM18 3h1v1h-1zM22 3h1v1h-1zM24 3h3v1h-3zM28 3h1v1h-1zM0 4h1v1h-1zM2 4h3v1h-3zM6 4h1v1h-1zM8 4h2v1h-2zM11 4h1v1h-1zM13 4h1v1h-1zM16 4h1v1h-1zM18 4h3v1h-3zM22 4h1v1h-1zM24 4h3v1h-3zM28 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM9 5h2v1h-2zM12 5h1v1h-1zM14 5h2v1h-2zM17 5h3v1h-3zM22 5h1v1h-1zM28 5h1v1h-1zM0 6h7v1h-7zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM20 6h1v1h-1zM22 6h7v1h-7zM10 7h3v1h-3zM16 7h5v1h-5zM0 8h1v1h-1zM2 8h1v1h-1zM4 8h1v1h-1zM6 8h1v1h-1zM9 8h1v1h-1zM11 8h1v1h-1zM17 8h1v1h-1zM24 8h1v1h-1zM27 8h1v1h-1zM1 9h1v1h-1zM3 9h2v1h-2zM7 9h2v1h-2zM11 9h3v1h-3zM16 9h3v1h-3zM20 9h3v1h-3zM25 9h1v1h-1zM28 9h1v1h-1zM0 10h1v1h-1zM2 10h5v1h-5zM8 10h1v1h-1zM10 10h2v1h-2zM14 10h1v1h-1zM16 10h3v1h-3zM20 10h1v1h-1zM24 10h1v1h-1zM26 10h3v1h-3zM0 11h1v1h-1zM2 11h2v1h-2zM5 11h1v1h-1zM7 11h1v1h-1zM9 11h3v1h-3zM13 11h5v1h-5zM19 11h2v1h-2zM24 11h1v1h-1zM27 11h1v1h-1zM3 12h1v1h-1zM5 12h2v1h-2zM9 12h2v1h-2zM12 12h1v1h-1zM14 12h1v1h-1zM17 12h1v1h-1zM19 12h4v1h-4zM25 12h1v1h-1zM27 12h2v1h-2zM0 13h2v1h-2zM5 13h1v1h-1zM7 13h2v1h-2zM10 13h1v1h-1zM12 13h1v1h-1zM14 13h1v1h-1zM16 13h2v1h-2zM20 13h1v1h-1zM22 13h1v1h-1zM25 13h1v1h-1zM28 13h1v1h-1zM0 14h2v1h-2zM5 14h2v1h-2zM8 14h1v1h-1zM10 14h2v1h-2zM13 14h1v1h-1zM17 14h2v1h-2zM21 14h5v1h-5zM27 14h2v1h-2zM1 15h1v1h-1zM3 15h1v1h-1zM10 15h1v1h-1zM12 15h1v1h-1zM16 15h6v1h-6zM23 15h1v1h-1zM25 15h1v1h-1zM27 15h1v1h-1zM0 16h3v1h-3zM6 16h1v1h-1zM8 16h1v1h-1zM12 16h1v1h-1zM15 16h3v1h-3zM21 16h2v1h-2zM25 16h1v1h-1zM27 16h2v1h-2zM1 17h1v1h-1zM3 17h1v1h-1zM9 17h5v1h-5zM17 17h1v1h-1zM20 17h1v1h-1zM22 17h1v1h-1zM25 17h2v1h-2zM28 17h1v1h-1zM0 18h1v1h-1zM2 18h2v1h-2zM5 18h2v1h-2zM8 18h2v1h-2zM12 18h1v1h-1zM14 18h1v1h-1zM16 18h1v1h-1zM23 18h2v1h-2zM27 18h2v1h-2zM1 19h1v1h-1zM3 19h1v1h-1zM11 19h5v1h-5zM17 19h3v1h-3zM25 19h1v1h-1zM27 19h1v1h-1zM0 20h1v1h-1zM2 20h1v1h-1zM5 20h2v1h-2zM9 20h3v1h-3zM14 20h1v1h-1zM17 20h1v1h-1zM20 20h5v1h-5zM8 21h2v1h-2zM12 21h1v1h-1zM14 21h1v1h-1zM16 21h1v1h-1zM19 21h2v1h-2zM24 21h1v1h-1zM26 21h3v1h-3zM0 22h7v1h-7zM9 22h1v1h-1zM11 22h3v1h-3zM16 22h1v1h-1zM19 22h2v1h-2zM22 22h1v1h-1zM24 22h2v1h-2zM27 22h2v1h-2zM0 23h1v1h-1zM6 23h1v1h-1zM10 23h1v1h-1zM12 23h1v1h-1zM15 23h1v1h-1zM17 23h1v1h-1zM20 23h1v1h-1zM24 23h2v1h-2zM28 23h1v1h-1zM0 24h1v1h-1zM2 24h3v1h-3zM6 24h1v1h-1zM8 24h3v1h-3zM17 24h2v1h-2zM20 24h5v1h-5zM28 24h1v1h-1zM0 25h1v1h-1zM2 25h3v1h-3zM6 25h1v1h-1zM9 25h1v1h-1zM11 25h3v1h-3zM16 25h1v1h-1zM19 25h3v1h-3zM23 25h2v1h-2zM26 25h3v1h-3zM0 26h1v1h-1zM2 26h3v1h-3zM6 26h1v1h-1zM8 26h3v1h-3zM12 26h1v1h-1zM14 26h1v1h-1zM17 26h1v1h-1zM19 26h2v1h-2zM23 26h3v1h-3zM28 26h1v1h-1zM0 27h1v1h-1zM6 27h1v1h-1zM11 27h1v1h-1zM15 27h1v1h-1zM17 27h1v1h-1zM20 27h1v1h-1zM22 27h3v1h-3zM27 27h1v1h-1zM0 28h7v1h-7zM8 28h5v1h-5zM16 28h2v1h-2zM19 28h4v1h-4zM24 28h2v1h-2zM27 28h2v1h-2z" fill="#000"/></svg></div>
+        <div><b>Escaneá con el celular</b><p>Te lleva directo a la descarga.</p></div>
+      </div>
+    </div>
+    <p class="note">Funciona en televisores y reproductores con Android TV o Google TV.</p>
+  </section>
+</main>
+
+<script src="/config.js"></script>
+<script>
+(()=>{
+  const $=id=>document.getElementById(id);
+  // tamaño y fecha de la última versión
+  fetch('https://api.github.com/repos/valenrosario/REALITY-VAULT-OG/releases/tags/tv').then(r=>r.ok?r.json():null).then(d=>{
+    if(!d)return;const a=(d.assets||[]).find(x=>/\.apk$/i.test(x.name));if(!a)return;
+    const mb=(a.size/1048576).toFixed(1).replace('.',',');
+    const dt=new Date(a.updated_at||d.published_at);
+    const f=isNaN(dt)?'':' · actualizada el '+dt.toLocaleDateString('es-AR',{day:'numeric',month:'long'});
+    $('meta').textContent='Android TV y Google TV · '+mb+' MB'+f;
+  }).catch(()=>{});
+  // la tele de ejemplo muestra pósters reales del catálogo
+  const C=window.RV_CONFIG;if(!C)return;
+  fetch(C.supabaseUrl+'/rest/v1/titles?select=data&limit=80',{headers:{apikey:C.supabaseAnonKey,Authorization:'Bearer '+C.supabaseAnonKey}})
+   .then(r=>r.ok?r.json():[]).then(rows=>{
+    const t=rows.map(r=>r.data||{}).filter(x=>x.status!=='borrador'&&/^https?:/.test(x.poster||''));
+    if(t.length<3)return;
+    t.sort(()=>Math.random()-.5);
+    const imgs=$('tvr').children,pick=t.slice(0,6);
+    const load=(el,u)=>{const im=new Image();el.classList.add('pend');im.onload=()=>{el.style.backgroundImage='url("'+u+'")';el.classList.remove('pend')};im.src=u};
+    pick.forEach((x,i)=>imgs[i]&&load(imgs[i],x.poster));
+    const bd=(t.find(x=>/^https?:/.test(x.backdrop||''))||{}).backdrop;
+    if(bd)load($('tvh'),bd);
+  }).catch(()=>{});
+})();
+</script>
+</body>
+</html>

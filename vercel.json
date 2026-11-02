@@ -32,6 +32,10 @@
     {
       "source": "/activar",
       "destination": "/index.html"
+    },
+    {
+      "source": "/tv",
+      "destination": "/tv.html"
     }
   ]
 }
