@@ -1025,48 +1025,141 @@ function saveColls(now){
 }
 function renderCollsAdmin(){
   const list = S.colls || [];
-  const all = S.titles.slice().sort((a,b)=>(a.title||'').localeCompare(b.title||''));
+  const grip = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
+  const chev = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
   return `<div class="panel-head"><h1>Colecciones</h1><button class="btn btn-primary" data-coll-add>+ Nueva colección</button></div>
-    <p style="margin:0;color:var(--muted);max-width:68ch">Grupos de títulos que elegís vos (como en HBO Max). Cada colección aparece en el inicio como un banner y tiene su propia página. Si no le ponés imagen, el banner muestra los pósters de sus títulos. Los cambios se guardan solos.</p>
-    ${list.length ? list.map((c, ci) => { const inSet = new Set(c.items || []); return `<div class="fs coll-ed" data-coll="${esc(c.id)}">
-      <div class="frow-head">
-        <input class="input" id="co-n-${esc(c.id)}" data-coll-f="name" data-coll-id="${esc(c.id)}" value="${esc(c.name||'')}" placeholder="Nombre de la colección (ej: Las chicas de los 2000)">
-        <button class="iconbtn" data-coll-move="${esc(c.id)}" data-d="-1" aria-label="Subir colección" ${ci===0?'disabled':''}>↑</button>
-        <button class="iconbtn" data-coll-move="${esc(c.id)}" data-d="1" aria-label="Bajar colección" ${ci===list.length-1?'disabled':''}>↓</button>
-        <span data-row="coll-${esc(c.id)}"><button class="btn btn-danger btn-sm" data-coll-del="${esc(c.id)}">Eliminar</button></span>
-      </div>
-      <div class="coll-ed-grid">
-        <div class="field"><span>Imagen de fondo (opcional)</span>${slot('coll', 'coll:' + c.id, c.image, 'r31', 'Subir imagen de fondo')}<span class="hint">${c.image ? 'Tocá la imagen para cambiarla.' : 'Sin imagen se muestran los pósters de sus títulos.'} Se difumina sola del lado izquierdo. <b>1800 × 600 px</b></span></div>
-        <label class="field"><span>Frase corta (opcional)</span><textarea class="textarea" rows="3" id="co-t-${esc(c.id)}" data-coll-f="tagline" data-coll-id="${esc(c.id)}" placeholder="Ej: Las herederas, las fiestas y los realities que marcaron una época.">${esc(c.tagline||'')}</textarea></label>
-      </div>
-      <div class="field"><span>Títulos de la colección (${(c.items||[]).length})</span>
-        <div class="coll-chips">${(c.items||[]).map((id, ii) => { const t = byId(id); if (!t) return ''; return `<span class="coll-chip"><span class="coll-chip-p" ${t.poster?`data-src="${esc(t.poster)}"`:''}></span><span class="coll-chip-t">${esc(t.title||'Sin título')}</span>
-          <button class="iconbtn" data-coll-imove="${esc(c.id)}" data-i="${ii}" data-d="-1" aria-label="Mover antes" ${ii===0?'disabled':''}>←</button><button class="iconbtn" data-coll-imove="${esc(c.id)}" data-i="${ii}" data-d="1" aria-label="Mover después" ${ii===(c.items.length-1)?'disabled':''}>→</button><button class="iconbtn" data-coll-idel="${esc(c.id)}" data-i="${ii}" aria-label="Quitar de la colección">✕</button></span>`; }).join('')}</div>
-        <select class="select" id="co-a-${esc(c.id)}" data-coll-addt="${esc(c.id)}" aria-label="Agregar título"><option value="">+ Agregar un título…</option>${all.filter(t => !inSet.has(t.id)).map(t => `<option value="${esc(t.id)}">${esc(t.title||'Sin título')}${t.status==='borrador'?' (borrador)':''}</option>`).join('')}</select>
-      </div>
-      <div class="field"><span>Vista previa</span><div class="coll-prev">${collBanner(c) || '<p class="empty-note" style="padding:8px 0">Agregá al menos un título publicado para verla.</p>'}</div></div>
-    </div>`; }).join('') : '<p class="empty-note" style="padding:12px 0">Todavía no hay colecciones. Tocá “+ Nueva colección”.</p>'}`;
+    <p style="margin:0;color:var(--muted);max-width:68ch">Grupos de títulos que elegís vos. Aparecen en el inicio en este orden, como un banner, y cada una tiene su propia página. <b>Arrastrá</b> las colecciones y los pósters para cambiarlos de lugar. Los cambios se guardan solos.</p>
+    ${list.length ? `<div class="coll-list" data-sort="colls">${list.map(c => {
+      const items = (c.items || []).map(byId).filter(Boolean), open = S.collOpen === c.id;
+      const thumb = c.image ? `<span class="cth-img" data-src="${esc(c.image)}"></span>` : items.filter(t => t.poster).slice(0, 4).map(t => `<span class="cth-p" data-src="${esc(t.poster)}"></span>`).join('');
+      const inSet = new Set(c.items || []);
+      return `<div class="coll-card${open ? ' open' : ''}" data-sort-item data-id="${esc(c.id)}">
+        <div class="coll-bar">
+          <button class="drag-h" data-drag-h aria-label="Arrastrar para cambiar de lugar" title="Arrastrá para cambiar el lugar">${grip}</button>
+          <span class="cth">${thumb || '<span class="cth-empty">Sin títulos</span>'}</span>
+          <button class="coll-bar-main" data-coll-open="${esc(c.id)}" aria-expanded="${open}"><b>${esc(c.name || 'Sin nombre')}</b><span>${items.length} título${items.length === 1 ? '' : 's'} · ${c.image ? 'con imagen propia' : 'con pósters'}</span></button>
+          <span data-row="coll-${esc(c.id)}"><button class="btn btn-danger btn-sm" data-coll-del="${esc(c.id)}">Eliminar</button></span>
+          <button class="iconbtn coll-chev" data-coll-open="${esc(c.id)}" aria-label="${open ? 'Cerrar' : 'Editar'}">${chev}</button>
+        </div>
+        ${open ? `<div class="coll-body coll-ed">
+          <div class="coll-ed-grid">
+            <div class="coll-ed-l">
+              <label class="field"><span>Nombre</span><input class="input" id="co-n-${esc(c.id)}" data-coll-f="name" data-coll-id="${esc(c.id)}" value="${esc(c.name||'')}" placeholder="Ej: Las chicas de los 2000"></label>
+              <label class="field"><span>Frase corta (opcional)</span><textarea class="textarea" rows="3" id="co-t-${esc(c.id)}" data-coll-f="tagline" data-coll-id="${esc(c.id)}" placeholder="Ej: Las herederas, las fiestas y los realities que marcaron una época.">${esc(c.tagline||'')}</textarea></label>
+            </div>
+            <div class="field"><span>Imagen de fondo (opcional)</span>${slot('coll', 'coll:' + c.id, c.image, 'r31', 'Subir imagen de fondo')}<span class="hint">${c.image ? 'Tocá la imagen para cambiarla.' : 'Sin imagen, el banner muestra los pósters de sus títulos.'} <b>1800 × 600 px</b></span></div>
+          </div>
+          <div class="field"><span>Títulos · arrastralos para ordenarlos</span>
+            ${items.length ? `<div class="ctiles" data-sort="citems:${esc(c.id)}">${items.map(t => `<div class="ctile" data-sort-item data-id="${esc(t.id)}" title="${esc(t.title||'')}">
+              <span class="ctile-p" ${t.poster ? `data-src="${esc(t.poster)}"` : ''}></span><span class="ctile-t">${esc(t.title || 'Sin título')}</span>
+              <button class="ctile-x" data-coll-rm="${esc(c.id)}" data-tid="${esc(t.id)}" aria-label="Quitar ${esc(t.title||'')} de la colección">✕</button></div>`).join('')}</div>` : '<p class="empty-note" style="padding:4px 0 8px">Todavía no tiene títulos. Buscalos acá abajo.</p>'}
+            <div class="csearch"><input class="input" id="co-q-${esc(c.id)}" data-coll-search="${esc(c.id)}" autocomplete="off" placeholder="Buscar un título para agregar…" aria-label="Buscar un título para agregar"><div class="csearch-res" hidden></div></div>
+          </div>
+          <div class="field"><span>Así se ve en el inicio</span><div class="coll-prev">${collBanner(c) || '<p class="empty-note" style="padding:8px 0">Agregá al menos un título publicado para verla.</p>'}</div></div>
+        </div>` : ''}
+      </div>`; }).join('')}</div>` : '<p class="empty-note" style="padding:12px 0">Todavía no hay colecciones. Tocá “+ Nueva colección”.</p>'}`;
+}
+const normQ = x => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+function collSearch(inp){
+  const c = S.colls.find(x => x.id === inp.dataset.collSearch); const res = inp.nextElementSibling; if (!c || !res) return;
+  const q = normQ(inp.value.trim()); if (!q){ res.hidden = true; res.innerHTML = ''; return; }
+  const inSet = new Set(c.items || []);
+  const hits = S.titles.filter(t => !inSet.has(t.id) && normQ(t.title).includes(q)).sort((a, b) => normQ(a.title).indexOf(q) - normQ(b.title).indexOf(q)).slice(0, 8);
+  res.innerHTML = hits.length ? hits.map(t => `<button type="button" class="csr" data-coll-pick="${esc(c.id)}" data-tid="${esc(t.id)}"><span class="csr-p" ${t.poster ? `style="background-image:url('${esc(t.poster)}')"` : ''}></span><span class="csr-t"><b>${esc(t.title || 'Sin título')}</b><small>${[t.year, t.type === 'serie' ? 'Serie' : 'Película', t.status === 'borrador' ? 'Borrador' : ''].filter(Boolean).join(' · ')}</small></span><span class="csr-add">Agregar</span></button>`).join('') : '<div class="csr-none">No encontré títulos con ese nombre.</div>';
+  res.hidden = false;
+}
+function collAdd(cid, tid){
+  const c = S.colls.find(x => x.id === cid); if (!c || (c.items ||= []).includes(tid)) return;
+  c.items.push(tid); saveColls(true); rerenderPanel();
+  const inp = document.getElementById('co-q-' + cid); if (inp) inp.focus();
 }
 document.addEventListener('input', e => {
-  const el = e.target; if (!S.owner || !el.dataset.collF) return;
+  const el = e.target; if (!S.owner) return;
+  if (el.dataset.collSearch){ collSearch(el); return; }
+  if (!el.dataset.collF) return;
   const c = S.colls.find(x => x.id === el.dataset.collId); if (!c) return;
   c[el.dataset.collF] = el.value; saveColls();
+  if (el.dataset.collF === 'name'){ const b = el.closest('.coll-card')?.querySelector('.coll-bar-main b'); if (b) b.textContent = el.value || 'Sin nombre'; }
 });
-document.addEventListener('change', e => {
-  const el = e.target; if (!S.owner || !el.dataset.collAddt || !el.value) return;
-  const c = S.colls.find(x => x.id === el.dataset.collAddt); if (!c) return;
-  (c.items ||= []).push(el.value); saveColls(true); rerenderPanel();
+document.addEventListener('keydown', e => {
+  const el = e.target; if (!S.owner || !el.dataset || !el.dataset.collSearch) return;
+  if (e.key === 'Enter'){ e.preventDefault(); const f = el.nextElementSibling?.querySelector('[data-coll-pick]'); if (f) collAdd(f.dataset.collPick, f.dataset.tid); }
+  if (e.key === 'Escape'){ el.value = ''; collSearch(el); }
 });
+let sortDrop = 0;
 document.addEventListener('click', e => {
   if (!S.owner) return;
-  const b = e.target.closest('[data-coll-add],[data-coll-move],[data-coll-del],[data-coll-imove],[data-coll-idel]'); if (!b) return;
+  if (Date.now() - sortDrop < 250 && e.target.closest('[data-sort-item]')){ e.preventDefault(); e.stopPropagation(); return; }
+  const b = e.target.closest('[data-coll-add],[data-coll-open],[data-coll-del],[data-coll-rm],[data-coll-pick]'); if (!b) return;
   const d = b.dataset, find = id => S.colls.find(x => x.id === id);
-  if (d.collAdd !== undefined){ S.colls.push({ id: uid('c'), name: 'Nueva colección', tagline: '', image: '', items: [] }); saveColls(true); rerenderPanel(); return; }
-  if (d.collMove){ const i = S.colls.findIndex(x => x.id === d.collMove), j = i + +d.d; if (j < 0 || j >= S.colls.length) return; [S.colls[i], S.colls[j]] = [S.colls[j], S.colls[i]]; saveColls(true); rerenderPanel(); return; }
+  if (d.collAdd !== undefined){ const id = uid('c'); S.colls.push({ id, name: 'Nueva colección', tagline: '', image: '', items: [] }); S.collOpen = id; saveColls(true); rerenderPanel(); setTimeout(() => { const i = document.getElementById('co-n-' + id); if (i){ i.focus(); i.select(); i.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }, 50); return; }
+  if (d.collOpen){ S.collOpen = S.collOpen === d.collOpen ? null : d.collOpen; rerenderPanel(); return; }
   if (d.collDel){ inlineConfirm(b.closest('[data-row]'), '¿Eliminar la colección?', () => { S.colls = S.colls.filter(x => x.id !== d.collDel); saveColls(true); rerenderPanel(); toast('Colección eliminada'); }); return; }
-  if (d.collImove){ const c = find(d.collImove), i = +d.i, j = i + +d.d; if (j < 0 || j >= c.items.length) return; [c.items[i], c.items[j]] = [c.items[j], c.items[i]]; saveColls(true); rerenderPanel(); return; }
-  if (d.collIdel){ const c = find(d.collIdel); c.items.splice(+d.i, 1); saveColls(true); rerenderPanel(); return; }
+  if (d.collRm){ const c = find(d.collRm); if (!c) return; const tile = b.closest('.ctile');
+    const done = () => { c.items = (c.items || []).filter(x => x !== d.tid); saveColls(true); rerenderPanel(); };
+    if (tile && tile.animate){ tile.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.8)' }], { duration: 180, easing: 'ease-in' }).onfinish = done; } else done(); return; }
+  if (d.collPick){ collAdd(d.collPick, d.tid); return; }
 });
+document.addEventListener('click', e => { if (!e.target.closest('.csearch')) document.querySelectorAll('.csearch-res').forEach(r => { r.hidden = true; }); });
+
+/* --- arrastrar para ordenar (colecciones y sus títulos) --- */
+let drag = null;
+document.addEventListener('pointerdown', e => {
+  if (!S.owner || e.button > 0) return;
+  const it = e.target.closest('[data-sort-item]'); const box = it && it.parentElement;
+  if (!box || !box.dataset.sort) return;
+  const isColl = box.dataset.sort === 'colls';
+  if (isColl && !e.target.closest('[data-drag-h]')) return;
+  if (!isColl && e.target.closest('button,input,textarea,select,a')) return;
+  e.preventDefault();
+  drag = { it, box, isColl, x0: e.clientX, y0: e.clientY, started: false };
+});
+function sortStart(e){
+  const { it } = drag, r = it.getBoundingClientRect();
+  const src = drag.isColl ? it.querySelector('.coll-bar') : it;
+  const g = src.cloneNode(true); g.classList.add('sort-ghost', drag.isColl ? 'is-coll' : 'is-tile');
+  g.style.width = r.width + 'px'; g.style.left = r.left + 'px'; g.style.top = r.top + 'px';
+  g.querySelectorAll('[data-src]').forEach(el => { const o = it.querySelector(`[data-src="${CSS.escape(el.dataset.src)}"]`); if (o && o.style.backgroundImage) el.style.backgroundImage = o.style.backgroundImage; });
+  (document.querySelector('.admin') || document.body).appendChild(g);
+  drag.g = g; drag.dx = e.clientX - r.left; drag.dy = e.clientY - r.top; drag.started = true;
+  it.classList.add('sort-ph'); document.body.classList.add('sorting');
+  requestAnimationFrame(() => g.classList.add('lift'));
+}
+function flipMove(box, fn){
+  const kids = [...box.children], first = new Map(kids.map(k => [k, k.getBoundingClientRect()]));
+  fn();
+  kids.forEach(k => { if (k === drag.it || !k.animate) return; const a = first.get(k), b = k.getBoundingClientRect(); const dx = a.left - b.left, dy = a.top - b.top;
+    if (dx || dy) k.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: 'translate(0,0)' }], { duration: 260, easing: 'cubic-bezier(.2,.7,.2,1)' }); });
+}
+document.addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (!drag.started){ if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 6) return; sortStart(e); }
+  e.preventDefault();
+  drag.g.style.left = (e.clientX - drag.dx) + 'px'; drag.g.style.top = (e.clientY - drag.dy) + 'px';
+  if (e.clientY < 80) window.scrollBy(0, -14); else if (e.clientY > innerHeight - 80) window.scrollBy(0, 14);
+  const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-sort-item]');
+  if (!over || over === drag.it || over.parentElement !== drag.box) return;
+  const r = over.getBoundingClientRect();
+  const after = drag.isColl ? e.clientY > r.top + r.height / 2 : (Math.abs(e.clientY - (r.top + r.height / 2)) < r.height / 2 ? e.clientX > r.left + r.width / 2 : e.clientY > r.top + r.height / 2);
+  const ref = after ? over.nextElementSibling : over;
+  if (ref === drag.it || drag.it.nextElementSibling === ref) return;
+  flipMove(drag.box, () => drag.box.insertBefore(drag.it, ref));
+}, { passive: false });
+function sortEnd(){
+  if (!drag) return; const d = drag; drag = null;
+  if (!d.started) return;
+  sortDrop = Date.now(); document.body.classList.remove('sorting');
+  const r = d.it.getBoundingClientRect();
+  d.g.classList.remove('lift'); d.g.style.left = r.left + 'px'; d.g.style.top = r.top + 'px'; d.g.classList.add('drop');
+  const ids = [...d.box.children].map(x => x.dataset.id).filter(Boolean);
+  setTimeout(() => {
+    d.g.remove(); d.it.classList.remove('sort-ph');
+    if (d.isColl){ const next = ids.map(id => S.colls.find(x => x.id === id)).filter(Boolean); if (next.map(x => x.id).join() !== S.colls.map(x => x.id).join()){ S.colls = next; saveColls(true); rerenderPanel(); } }
+    else { const c = S.colls.find(x => 'citems:' + x.id === d.box.dataset.sort); if (c && ids.join() !== (c.items || []).filter(id => byId(id)).join()){ c.items = ids.concat((c.items || []).filter(id => !byId(id))); saveColls(true); rerenderPanel(); } }
+  }, 240);
+}
+document.addEventListener('pointerup', sortEnd);
+document.addEventListener('pointercancel', sortEnd);
 function featRow(r){
   const raw = (r.items || []).map(it => ({ it, t: byId(it.titleId) })).filter(x => x.t && x.t.status !== 'borrador');
   if (!raw.length) return '';
@@ -3017,7 +3110,7 @@ async function checkOwner(){
   }, () => {});
   db.doc('site/collections').onSnapshot(snap => {
     const list = snap.exists ? (snap.data().list || []) : [];
-    if (S.route === 'admin' && S.adminTab === 'colecciones' && document.activeElement?.closest?.('.coll-ed')) return;
+    if (S.route === 'admin' && S.adminTab === 'colecciones' && (document.activeElement?.closest?.('.coll-ed') || document.body.classList.contains('sorting'))) return;
     S.colls = list; saveCache();
     if (S.route === 'admin'){ if (S.owner && S.adminTab === 'colecciones') rerenderPanel(); }
     else if ((S.route === 'home' || S.route === 'coleccion') && S.loaded.t){ const y = window.scrollY; render(); window.scrollTo(0, y); }
