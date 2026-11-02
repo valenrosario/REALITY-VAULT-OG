@@ -2488,7 +2488,7 @@ function openPlayer({ url, tid, s: season, e: episode }){
   playerRoot.innerHTML = `<div class="player${native ? ' rv' : ''}" role="dialog" aria-modal="true" aria-label="Reproductor">
     <div class="pl-top">
       <button class="pl-btn" data-pl-close aria-label="Volver">←</button>
-      <div class="pl-title"><strong>${esc(t?.title || '')}</strong>${sub ? `<span>${esc(sub)}</span>` : ''}</div>
+      <div class="pl-title">${t?.logo && safeUrl(t.logo) ? `<img class="pl-logo" src="${esc(t.logo)}" alt="${esc(t.title || '')}">` : `<strong>${esc(t?.title || '')}</strong>`}${sub ? `<span>${esc(sub)}</span>` : ''}</div>
       ${nx ? `<button class="pl-next" data-pl-next="${esc(t.id)}" data-s="${esc(nx.s.number)}" data-e="${esc(nx.e.number)}">Siguiente episodio ›</button>` : ''}
       <button class="pl-btn" data-pl-full aria-label="Pantalla completa">⛶</button>
     </div>
