@@ -2502,7 +2502,7 @@ function avVideo(el, url, { subs = '', at = 0 } = {}){
   fire('waiting');
   loadAV().then(async AVPlayer => {
     if (dead) return;
-    p = new AVPlayer({ container: el, wasmBaseUrl: new URL('./vendor/libmedia', location.href).href, enableHardware: true, enableWebCodecs: true, enableWorker: true, preLoadTime: 6 });
+    p = new AVPlayer({ container: el, wasmBaseUrl: location.origin + '/vendor/libmedia', enableHardware: true, enableWebCodecs: true, enableWorker: true, preLoadTime: 6 });
     p.on('played', () => { paused = false; ended = false; fire('play'); fire('playing'); });
     p.on('playing', () => { paused = false; fire('play'); });
     p.on('paused', () => { paused = true; fire('pause'); });
