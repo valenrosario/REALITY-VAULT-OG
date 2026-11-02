@@ -995,9 +995,12 @@ function collArt(c, items){
   if (c.image) return `<span class="coll-img" data-src="${esc(c.image)}"></span>`;
   const ps = items.filter(t => t.poster);
   if (!ps.length) return '';
-  const pool = []; while (pool.length < 14) pool.push(...ps);
-  const rowH = (a) => { const ps = a.map(t => `<span class="coll-p" data-src="${esc(t.poster)}"></span>`).join(''); return `<span class="coll-prow"><span class="coll-trk">${ps}${ps}</span></span>`; };
-  return `<span class="coll-wall">${rowH(pool.slice(0, 7))}${rowH(pool.slice(7, 14))}</span>`;
+  // respeta el orden de la colección: la fila de arriba arranca con el primero, la de abajo sigue con los que vienen
+  const k = ps.length >= 4 ? Math.ceil(ps.length / 2) : ps.length;
+  const r1 = ps.slice(0, k), r2 = ps.length >= 4 ? ps.slice(k) : ps;
+  const fill = a => { const out = []; while (out.length < 8) out.push(...a); return out; };
+  const rowH = (a) => { const html = fill(a).map(t => `<span class="coll-p" data-src="${esc(t.poster)}"></span>`).join(''); return `<span class="coll-prow"><span class="coll-trk">${html}${html}</span></span>`; };
+  return `<span class="coll-wall">${rowH(r1)}${rowH(r2)}</span>`;
 }
 function collBanner(c, big){
   const items = collItems(c);
