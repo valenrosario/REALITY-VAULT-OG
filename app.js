@@ -455,6 +455,13 @@ function mixColls(rows, colls){
   while (ci < colls.length) out.push(colls[ci++]);
   return out.join('');
 }
+function tvStrip(){
+  try { if (localStorage.getItem('rv-tvstrip') === '0') return ''; } catch {}
+  return `<section class="tvstrip" aria-label="App para la tele"><span class="tvs-ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+    <span class="tvs-t"><b>REALITY VAULT en tu tele</b><span>Instalá la app para Android TV y mirá todo en pantalla grande, con tu misma cuenta.</span></span>
+    <a class="btn btn-primary" href="/tv">Descargar para TV</a><button class="tvs-x" data-tvs-close aria-label="Cerrar este aviso">✕</button></section>`;
+}
+document.addEventListener('click', e => { const x = e.target.closest('[data-tvs-close]'); if (!x) return; try { localStorage.setItem('rv-tvstrip', '0'); } catch {} x.closest('.tvstrip')?.remove(); });
 function renderHome(){
   const pub = published();
   const newest = [...pub].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,20);
@@ -468,6 +475,7 @@ function renderHome(){
   const genreRows = Object.entries(genres).filter(([, l]) => l.length >= 3)
     .map(([g, l]) => ({ g, l, s: (prof.get(g) || 0) / maxP + rg() * 1.2 })).sort((a, b) => b.s - a.s).slice(0, 3);
   return mobileChips('home') + renderHero() + `<main>
+    ${tvStrip()}
     ${continueRow()}
     ${top10Row()}
     ${recommendedRow()}
@@ -491,12 +499,60 @@ function renderBrowse(kind){
     ${list.length ? `<div class="grid">${list.map(card).join('')}</div>` : `<p class="empty-note">Todavía no hay ${kind==='series'?'series':'películas'} publicadas.</p>`}
   </main>`;
 }
+/* ---------- búsqueda: sin acentos, tolera errores de tipeo y ordena por relevancia ---------- */
+const srchNorm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+function levMax(a, b, max){
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++){
+    const cur = [i]; let rmin = i;
+    for (let j = 1; j <= b.length; j++){ cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); if (cur[j] < rmin) rmin = cur[j]; }
+    if (rmin > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function wordScore(qw, words){
+  let best = 0;
+  for (const w of words){
+    if (!w) continue;
+    if (w === qw) best = Math.max(best, 10);
+    else if (w.startsWith(qw)) best = Math.max(best, 8);
+    else if (qw.length >= 3 && w.includes(qw)) best = Math.max(best, 5);
+    else if (qw.length >= 4){
+      const max = qw.length >= 7 ? 2 : 1;
+      const d = Math.min(levMax(qw, w, max), levMax(qw, w.slice(0, qw.length), max));
+      if (d <= max) best = Math.max(best, 6 - d);
+    }
+  }
+  return best;
+}
+function searchScore(t, qn, qws){
+  const f = [[srchNorm(t.title), 6], [(t.genres || []).map(srchNorm).join(' '), 2.5], [(t.tags || []).map(srchNorm).join(' '), 2.5],
+    [(t.cast || []).map(c => srchNorm(c.name)).join(' '), 3], [srchNorm(t.director), 2]];
+  const long = srchNorm([t.tagline, t.description].join(' '));
+  let total = 0;
+  for (const qw of qws){
+    let best = 0;
+    for (const [txt, w] of f){ if (!txt) continue; const s = wordScore(qw, txt.split(' ')) * w / 6; if (s > best) best = s; }
+    if (!best && long.includes(qw)) best = 1;
+    if (!best) return 0;
+    total += best;
+  }
+  const tt = srchNorm(t.title);
+  if (tt.startsWith(qn)) total += 20; else if (tt.includes(qn)) total += 10;
+  return total;
+}
+function searchTitles(q){
+  const qn = srchNorm(q); if (!qn) return [];
+  const qws = qn.split(' ');
+  return published().map(t => ({ t, s: searchScore(t, qn, qws) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s).map(x => x.t);
+}
 function renderSearch(){
-  const q = S.q.toLowerCase().trim();
-  const list = published().filter(t => [t.title,t.tagline,t.description,t.director,...(t.genres||[]),...(t.tags||[]),...(t.cast||[]).map(c=>c.name+' '+(c.role||''))]
-    .join(' ').toLowerCase().includes(q));
+  const list = searchTitles(S.q);
+  const more = [...published()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 12);
   return `<main><div class="page-head"><h1>“${esc(S.q)}”</h1><p>${list.length} resultado${list.length===1?'':'s'}</p></div>
-    ${list.length ? `<div class="grid">${list.map(card).join('')}</div>` : '<p class="empty-note">No encontramos nada con esa búsqueda. Probá con el nombre de un participante o una etiqueta.</p>'}</main>`;
+    ${list.length ? `<div class="grid">${list.map(card).join('')}</div>` : `<p class="empty-note">No encontramos nada con “${esc(S.q.trim())}”. Probá con otra palabra, el nombre de un participante o un género.</p>${row('Mientras tanto, lo más nuevo', more)}`}</main>`;
 }
 
 /* ---------- detail ---------- */
@@ -2745,6 +2801,24 @@ function openPlayer({ url, tid, s: season, e: episode }){
     const hidden = () => { if (document.hidden) save(); };
     v.addEventListener('pause', save); v.addEventListener('ended', save);
     document.addEventListener('visibilitychange', hidden); window.addEventListener('pagehide', save);
+    if (nx){
+      const stageEl = playerRoot.querySelector('.player');
+      const nc = document.createElement('div'); nc.className = 'pl-nc'; nc.hidden = true;
+      const nth = safeUrl(nx.e.thumb) || safeUrl(t?.backdrop);
+      nc.innerHTML = `${nth ? `<img src="${esc(nth)}" alt="">` : ''}<div class="pl-nc-t"><small>Siguiente episodio · en <b data-nc-n>20</b> s</small>
+        <strong>${esc(`T${nx.s.number}:E${nx.e.number}${nx.e.title ? ' · ' + nx.e.title : ''}`)}</strong>
+        <div class="pl-nc-b"><button class="pl-next" data-pl-next="${esc(t.id)}" data-s="${esc(nx.s.number)}" data-e="${esc(nx.e.number)}">Ver ahora</button><button class="pl-nc-x" data-nc-cancel>Cancelar</button></div></div><span class="pl-nc-bar"><i data-nc-bar></i></span>`;
+      stageEl.appendChild(nc);
+      let ncOff = false;
+      v.addEventListener('timeupdate', () => {
+        const r = v.duration - v.currentTime;
+        const show = !ncOff && v.duration > 120 && r <= 20 && r > 0;
+        nc.hidden = !show;
+        if (show){ nc.querySelector('[data-nc-n]').textContent = Math.ceil(r); nc.querySelector('[data-nc-bar]').style.width = ((20 - r) / 20 * 100) + '%'; }
+      });
+      v.addEventListener('ended', () => { if (!ncOff && v.duration > 120) nc.querySelector('[data-pl-next]').click(); });
+      nc.querySelector('[data-nc-cancel]').addEventListener('click', () => { ncOff = true; nc.hidden = true; });
+    }
     plSess = { v, tid, s: season, e: episode, rv, ready: () => isReady,
       timer: setInterval(() => { if (!v.paused) save(); }, 15000),
       off: () => { v.removeEventListener('pause', save); v.removeEventListener('ended', save); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', save); } };
@@ -2953,6 +3027,7 @@ document.addEventListener('click', e => {
   if (!a || a.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
   const href = a.getAttribute('href');
   if (!href.startsWith('/') || href.startsWith('//')) return;
+  if (/^\/tv([?#]|$)/.test(href)) return; // la página de la app de TV es un archivo aparte
   e.preventDefault(); navigate(href);
 });
 window.addEventListener('popstate', () => {
