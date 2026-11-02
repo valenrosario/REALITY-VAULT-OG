@@ -222,6 +222,66 @@ fun CollectionScreen(id: String, nav: Nav) {
 
 /* ---------------- buscar ---------------- */
 
+// Misma idea que el buscador de la web: sin acentos, tolera errores de tipeo y ordena por relevancia.
+private fun nrm(s: String): String =
+    java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase()
+        .replace(Regex("[^a-z0-9\\s]"), " ").replace(Regex("\\s+"), " ").trim()
+
+private fun levMax(a: String, b: String, max: Int): Int {
+    if (kotlin.math.abs(a.length - b.length) > max) return max + 1
+    var prev = IntArray(b.length + 1) { it }
+    for (i in 1..a.length) {
+        val cur = IntArray(b.length + 1); cur[0] = i; var rmin = i
+        for (j in 1..b.length) {
+            cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+            if (cur[j] < rmin) rmin = cur[j]
+        }
+        if (rmin > max) return max + 1
+        prev = cur
+    }
+    return prev[b.length]
+}
+
+private fun wordScore(qw: String, words: List<String>): Double {
+    var best = 0.0
+    for (w in words) {
+        if (w.isEmpty()) continue
+        val s = when {
+            w == qw -> 10.0
+            w.startsWith(qw) -> 8.0
+            qw.length >= 3 && w.contains(qw) -> 5.0
+            qw.length >= 4 -> {
+                val max = if (qw.length >= 7) 2 else 1
+                val d = minOf(levMax(qw, w, max), levMax(qw, w.take(qw.length), max))
+                if (d <= max) (6 - d).toDouble() else 0.0
+            }
+            else -> 0.0
+        }
+        if (s > best) best = s
+    }
+    return best
+}
+
+fun searchTitles(q: String, pub: List<Title>): List<Title> {
+    val qn = nrm(q); if (qn.isBlank()) return emptyList()
+    val qws = qn.split(" ")
+    return pub.mapNotNull { t ->
+        val tt = nrm(t.title)
+        val fields = listOf(tt to 6.0, t.genres.joinToString(" ") { nrm(it) } to 2.5, t.cast.joinToString(" ") { nrm(it.name) } to 3.0)
+        val long = nrm(t.tagline + " " + t.description)
+        var total = 0.0
+        for (qw in qws) {
+            var best = 0.0
+            for ((txt, w) in fields) { if (txt.isEmpty()) continue; val s = wordScore(qw, txt.split(" ")) * w / 6.0; if (s > best) best = s }
+            if (best == 0.0 && long.contains(qw)) best = 1.0
+            if (best == 0.0) return@mapNotNull null
+            total += best
+        }
+        if (tt.startsWith(qn)) total += 20 else if (tt.contains(qn)) total += 10
+        t to total
+    }.sortedByDescending { it.second }.map { it.first }
+}
+
 @Composable
 fun SearchScreen(nav: Nav) {
     var q by remember { mutableStateOf(nav.memory.focus["searchQ"] ?: "") }
@@ -229,9 +289,9 @@ fun SearchScreen(nav: Nav) {
     if (nav.memory.focus["search"] == null) AutoFocus(req)
     val pub = Store.published()
     val n = q.trim().lowercase()
-    val res = if (n.isBlank()) emptyList() else pub.filter { t ->
-        t.title.lowercase().contains(n) || t.genres.any { it.lowercase().contains(n) } || t.description.lowercase().contains(n)
-    }
+    val res = if (n.isBlank()) emptyList() else searchTitles(q, pub)
+    // sin nada escrito se muestran los más vistos (o los más nuevos), así la pantalla nunca queda vacía
+    val shown = if (n.isBlank()) Store.top10.mapNotNull { id -> pub.firstOrNull { it.id == id } }.ifEmpty { pub.sortedByDescending { it.createdAt }.take(12) } else res
     Row(Modifier.fillMaxSize().padding(start = 48.dp, top = 74.dp, end = 48.dp)) {
         Column(Modifier.width(420.dp)) {
             Text("Buscar", style = ts(24, FontWeight.Bold, Color.White))
@@ -247,11 +307,12 @@ fun SearchScreen(nav: Nav) {
         }
         Column(Modifier.fillMaxWidth().padding(start = 40.dp, top = 38.dp)) {
             if (n.isNotBlank() && res.isEmpty()) Text("No encontramos nada con “$q”.", style = ts(14, color = C.fg2))
+            if (shown.isNotEmpty()) Text(if (n.isBlank()) "Popular ahora" else "${shown.size} resultado${if (shown.size == 1) "" else "s"}", style = ts(13, FontWeight.Bold, Color.White.copy(alpha = .85f)))
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(100.dp), contentPadding = PaddingValues(top = 10.dp, bottom = 40.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(34.dp)
             ) {
-                items(res, key = { it.id }) { t ->
+                items(shown, key = { it.id }) { t ->
                     Focusable({ nav.go(Screen.Detail(t.id)) }, Modifier.aspectRatio(2f / 3f), pivotTop = true) { PosterCard(t) }
                 }
             }

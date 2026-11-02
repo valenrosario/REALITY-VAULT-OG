@@ -18,6 +18,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -211,9 +214,16 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         if (controlsVisible && !userPaused) { delay(4000); if (System.currentTimeMillis() - lastTouch >= 3900) controlsVisible = false }
     }
     fun bump() { lastTouch = System.currentTimeMillis(); controlsVisible = true }
-    // pasa sola al próximo capítulo al terminar
+    // Siguiente episodio, como las plataformas de streaming: en los últimos 20 s aparece una tarjeta
+    // con cuenta regresiva; al llegar a cero (o con "Reproducir ahora") pasa solo. "Atrás" la cancela.
+    var nextOff by remember(player) { mutableStateOf(false) }
+    val remainMs = durMs - posMs
+    val showNext = next != null && t != null && !nextOff && durMs > 120_000 && (ended || (remainMs in 1..20_000))
+    val nextReq = remember { FocusRequester() }
+    fun playNext() { if (next != null && t != null) nav.replace(Screen.Player(t.id, next.second.url, next.first.number, next.second.number)) }
+    LaunchedEffect(showNext) { if (showNext) AutoFocusOnce(nextReq) }
     LaunchedEffect(ended) {
-        if (ended && next != null && t != null) { delay(1600); nav.replace(Screen.Player(t.id, next.second.url, next.first.number, next.second.number)) }
+        if (ended && next != null && t != null && !nextOff) { delay(500); if (!nextOff) playNext() }
         else if (ended) controlsVisible = true
     }
 
@@ -224,7 +234,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     // El bloque "if (controlsVisible)" se desmonta por completo cuando se ocultan, así que el foco
     // hay que volver a pedirlo cada vez que se vuelven a mostrar, no solo una vez al entrar.
     LaunchedEffect(controlsVisible, userPaused) {
-        if (controlsVisible) AutoFocusOnce(if (!userPaused) playReq else contReq)
+        if (controlsVisible && !showNext) AutoFocusOnce(if (!userPaused) playReq else contReq)
     }
 
     // -- avisos de "-10 / +10" cuando se adelanta/atrasa con el control, sin tocar los botones --
@@ -242,6 +252,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     // "Atrás" del control: si los botones están en pantalla, lo primero es ocultarlos — recién
     // si ya estaban ocultos, "atrás" sale de verdad del reproductor (vuelve al detalle).
     BackHandler(enabled = controlsVisible) { controlsVisible = false }
+    BackHandler(enabled = showNext) { nextOff = true; controlsVisible = false }
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)
@@ -276,6 +287,11 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         )
         // capa invisible: cualquier botón del control despierta la interfaz
         if (!controlsVisible) WakeLayer(Modifier.fillMaxSize()) { bump() }
+
+        if (showNext && next != null && t != null) NextEpisodeCard(
+            t, next, remainMs, ended, nextReq,
+            Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 118.dp)
+        ) { playNext() }
 
         // subtítulos propios: tipografía del sitio, cuadro negro, bien arriba del borde y de la barra de controles
         if (subsOn && cueText.isNotBlank()) {
@@ -449,6 +465,37 @@ private fun fmtTime(ms: Long): String {
 }
 
 /** Pide foco una vez que el árbol se termine de componer (los botones pueden tardar un frame en existir). */
+@Composable
+private fun NextEpisodeCard(t: Title, next: Pair<Season, Episode>, remainMs: Long, ended: Boolean, req: FocusRequester, modifier: Modifier, onPlay: () -> Unit) {
+    val secs = if (ended) 0 else ((remainMs + 999) / 1000).toInt()
+    val ep = next.second
+    val img = ep.thumb.ifBlank { t.backdrop }.ifBlank { t.poster }
+    val frac = if (ended) 1f else ((20_000 - remainMs) / 20_000f).coerceIn(0f, 1f)
+    val shape = RoundedCornerShape(14.dp)
+    Box(modifier.width(400.dp).clip(shape).background(Color(0xEB0A0809)).border(1.dp, Color.White.copy(alpha = .16f), shape)) {
+        Row(Modifier.padding(start = 12.dp, top = 12.dp, end = 14.dp, bottom = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(118.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(C.surface)) {
+                if (img.isNotBlank()) Img(img, Modifier.fillMaxSize())
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Siguiente episodio · en $secs s", style = ts(11, color = Color.White.copy(alpha = .7f)))
+                Text(
+                    "T${next.first.number}:E${ep.number}" + (if (ep.title.isNotBlank()) " · ${ep.title}" else ""),
+                    style = ts(14, FontWeight.Bold, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)
+                )
+                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    PlayPill("Reproducir ahora", null, req) { onPlay() }
+                    Text("Atrás: cancelar", style = ts(10, color = Color.White.copy(alpha = .55f)), modifier = Modifier.padding(start = 10.dp))
+                }
+            }
+        }
+        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = .15f))) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(C.accent))
+        }
+    }
+}
+
 suspend fun AutoFocusOnce(req: FocusRequester) {
     repeat(6) { if (runCatching { req.requestFocus() }.isSuccess) return; delay(60) }
 }
