@@ -657,7 +657,9 @@ private fun CollBannerRow(r: RowSpec, nav: Nav, screenKey: String, restore: Stri
     val bg = Color(0xFF15100F)
     Box(Modifier.padding(top = 22.dp, start = 48.dp, end = 48.dp, bottom = 12.dp)) {
         CardA("coll/${c.id}", restore, nav, screenKey, { nav.go(Screen.Collection(c.id)) }, Modifier.fillMaxWidth().height(176.dp), scale = 1.02f) { _ ->
-            Box(Modifier.fillMaxSize().background(bg)) {
+            // resplandor de color sacado de la imagen (como el desenfoque de color de la web)
+            val tint = rememberTint(c.image.ifBlank { ps.firstOrNull()?.poster ?: "" })
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to bg, .45f to bg, 1f to tint.copy(alpha = .75f)))) {
                 if (c.image.isNotBlank()) {
                     Img(c.image, Modifier.fillMaxSize(), alignment = Alignment.CenterEnd)
                 } else if (ps.isNotEmpty()) {
@@ -684,7 +686,7 @@ private fun CollBannerRow(r: RowSpec, nav: Nav, screenKey: String, restore: Stri
                     }
                 }
                 // difuminado del lado izquierdo, donde va el texto
-                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to bg, .38f to bg.copy(alpha = .94f), .62f to bg.copy(alpha = .5f), 1f to Color.Transparent)))
+                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to bg, .30f to bg.copy(alpha = .96f), .46f to bg.copy(alpha = .78f), .62f to bg.copy(alpha = .38f), .80f to bg.copy(alpha = .08f), 1f to Color.Transparent)))
                 Column(Modifier.align(Alignment.CenterStart).padding(start = 28.dp).fillMaxWidth(.5f)) {
                     Text("COLECCIÓN", style = ts(10, FontWeight.Bold, C.accent).copy(letterSpacing = 2.sp))
                     Text(c.name, style = ts(24, FontWeight.Bold, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
