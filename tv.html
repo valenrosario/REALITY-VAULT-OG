@@ -32,9 +32,12 @@ a{color:inherit}
 .lw-in{display:grid;grid-template-columns:repeat(13,var(--w));gap:16px;animation:lwDrift 60s ease-in-out infinite alternate}
 @keyframes lwDrift{from{transform:translate(-3%,-1%)}to{transform:translate(3%,1%)}}
 .lw-p{display:block;aspect-ratio:2/3;border-radius:10px;background:#1b181e center/cover no-repeat;flex:none;opacity:0;transition:opacity .6s}
-.lw-p{transition:opacity .6s,filter 1.2s ease,transform 1.2s ease}
+.lw-p{position:relative;overflow:hidden;transition:opacity .6s,filter 1.8s cubic-bezier(.2,.7,.2,1),transform 1.8s cubic-bezier(.2,.7,.2,1),box-shadow 1.8s ease}
 .lw-p.on{opacity:1}
-.lw-p.glow{filter:brightness(1.9) saturate(1.2);transform:scale(1.035);position:relative;z-index:1}
+.lw-p::after{content:"";position:absolute;inset:-20%;background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.28) 50%,transparent 62%);transform:translateX(-110%);pointer-events:none}
+.lw-p.glow{filter:brightness(1.85) saturate(1.25);transform:scale(1.05);z-index:1;box-shadow:0 0 0 1px rgba(255,255,255,.22),0 14px 44px rgba(255,46,147,.32);transition:opacity .6s,filter .7s ease-out,transform .7s ease-out,box-shadow .7s ease-out}
+.lw-p.glow::after{animation:sheen 1.3s .1s ease-out both}
+@keyframes sheen{to{transform:translateX(110%)}}
 .veil{position:absolute;inset:0;background:radial-gradient(ellipse 60% 60% at 50% 50%,#0a090bf5,#0a090bcc 55%,#0a090b66),linear-gradient(transparent 78%,#0a090b)}
 .hc{position:relative;z-index:2;text-align:center;padding:0 22px;animation:up .9s .1s both cubic-bezier(.2,.7,.2,1)}
 @keyframes up{from{opacity:0;transform:translateY(26px)}}
@@ -183,16 +186,20 @@ a{color:inherit}
     if(!matchMedia('(prefers-reduced-motion:reduce)').matches){
       const ps=[...document.querySelectorAll('.lw-p')],hero=document.querySelector('.hero');let vis=true;
       if(io)new IntersectionObserver(e=>{vis=e[0].isIntersecting}).observe(hero);
-      setInterval(()=>{
-        if(!vis||document.hidden)return;
-        for(let k=0;k<2;k++){
-          const el=ps[Math.floor(Math.random()*ps.length)];
-          if(!el||!el.classList.contains('on')||el.classList.contains('glow'))continue;
-          const r=el.getBoundingClientRect();
-          if(r.bottom<0||r.top>innerHeight||r.right<0||r.left>innerWidth)continue;
-          el.classList.add('glow');setTimeout(()=>el.classList.remove('glow'),1500+Math.random()*1300);
-        }
-      },420);
+      const COLS=13,seen=el=>{const r=el.getBoundingClientRect();return r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth};
+      const lite=(el,hold)=>{if(!el||!el.classList.contains('on')||el.classList.contains('glow'))return;el.classList.add('glow');setTimeout(()=>el.classList.remove('glow'),hold)};
+      // sueltos: uno por vez, en lugares al azar
+      setInterval(()=>{if(!vis||document.hidden)return;
+        for(let t=0;t<6;t++){const el=ps[Math.floor(Math.random()*ps.length)];if(el&&seen(el)){lite(el,1400+Math.random()*1200);break}}
+      },650);
+      // cada tanto, una ola de luz que recorre una fila o una columna
+      const wave=()=>{if(vis&&!document.hidden){
+        let s=-1;for(let t=0;t<20&&s<0;t++){const k=Math.floor(Math.random()*ps.length);if(seen(ps[k]))s=k}
+        if(s>=0){const byRow=Math.random()<.5,step=byRow?1:COLS,n=6;
+          const r0=Math.floor(s/COLS);let start=byRow?Math.max(r0*COLS,s-2):Math.max(s%COLS,s-2*COLS);
+          for(let q=0;q<n;q++){const k=start+q*step;if(k>=ps.length||(byRow&&Math.floor(k/COLS)!==r0))break;setTimeout(()=>lite(ps[k],900),q*150)}}}
+        setTimeout(wave,4500+Math.random()*3500)};
+      setTimeout(wave,2500);
     }
     const withBd=shuf(all.filter(x=>ok(x.backdrop||x.bannerImage)));
     const h=withBd.find(x=>ok(x.logo))||withBd[0];
