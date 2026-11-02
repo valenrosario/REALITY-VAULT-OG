@@ -28,13 +28,10 @@ a{color:inherit}
 .back:hover{background:#000000aa}
 
 .hero{position:relative;min-height:100vh;min-height:100svh;overflow:hidden;display:flex;align-items:center;justify-content:center}
-.lw-wall{position:absolute;left:-12%;top:-22%;width:124%;height:150%;display:flex;gap:22px;justify-content:center;transform:rotate(-12deg)}
-.lw-col{display:flex;flex-direction:column;gap:22px;width:clamp(120px,14vw,220px);flex:none;margin-top:var(--off);animation:lwDn 70s linear infinite}
-.lw-col.up{animation-direction:reverse}
-.lw-col:nth-child(n+8){display:none}
-@media(min-width:1100px){.lw-col:nth-child(n+8){display:flex}}
-@keyframes lwDn{to{transform:translateY(-50%)}}
-.lw-p{display:block;aspect-ratio:2/3;border-radius:12px;background:#1b181e center/cover no-repeat;flex:none;opacity:0;transition:opacity .6s}
+.lw-wall{--w:clamp(104px,11.5vw,184px);position:absolute;left:50%;top:50%;width:calc(var(--w)*13 + 16px*12);margin:0;transform:translate(-50%,-50%) matrix(.88,-.47,.85,.53,0,0)}
+.lw-in{display:grid;grid-template-columns:repeat(13,var(--w));gap:16px;animation:lwDrift 60s ease-in-out infinite alternate}
+@keyframes lwDrift{from{transform:translate(-3%,-1%)}to{transform:translate(3%,1%)}}
+.lw-p{display:block;aspect-ratio:2/3;border-radius:10px;background:#1b181e center/cover no-repeat;flex:none;opacity:0;transition:opacity .6s}
 .lw-p.on{opacity:1}
 .veil{position:absolute;inset:0;background:radial-gradient(ellipse 60% 60% at 50% 50%,#0a090bf5,#0a090bcc 55%,#0a090b66),linear-gradient(transparent 78%,#0a090b)}
 .hc{position:relative;z-index:2;text-align:center;padding:0 22px;animation:up .9s .1s both cubic-bezier(.2,.7,.2,1)}
@@ -91,7 +88,7 @@ a{color:inherit}
   .qr{display:none}.steps li{gap:16px}.tv-row{grid-template-columns:repeat(4,minmax(0,1fr))}.tv-row i:nth-child(n+5){display:none}
   .foot{flex-direction:column;text-align:center}
 }
-@media(prefers-reduced-motion:reduce){.lw-col,.hint{animation:none}.rv{opacity:1;transform:none;transition:none}.hc{animation:none}}
+@media(prefers-reduced-motion:reduce){.lw-in,.hint{animation:none}.rv{opacity:1;transform:none;transition:none}.hc{animation:none}}
 </style>
 </head>
 <body>
@@ -176,9 +173,8 @@ a{color:inherit}
     const shuf=a=>a.map(v=>[Math.random(),v]).sort((x,y)=>x[0]-y[0]).map(x=>x[1]);
     const posters=shuf(all.filter(x=>ok(x.poster)));
     if(!posters.length)return;
-    const pool=[];while(pool.length<63)pool.push(...posters);
-    const cols=[];for(let c=0;c<9;c++){const sp=pool.slice(c*7,c*7+7).map(t=>'<span class="lw-p" data-s="'+t.poster.replace(/"/g,'&quot;')+'"></span>').join('');cols.push('<div class="lw-col'+(c%2?' up':'')+'" style="--off:'+((c*41)%80)+'px">'+sp+sp+'</div>')}
-    $('wall').innerHTML=cols.join('');
+    const pool=[];while(pool.length<143)pool.push(...posters);
+    $('wall').innerHTML='<div class="lw-in">'+pool.slice(0,143).map(t=>'<span class="lw-p" data-s="'+t.poster.replace(/"/g,'&quot;')+'"></span>').join('')+'</div>';
     const load=(el,u,cb)=>{const im=new Image();im.onload=()=>{el.style.backgroundImage='url("'+u+'")';el.classList.add('on');cb&&cb()};im.src=u};
     document.querySelectorAll('.lw-p').forEach(el=>load(el,el.dataset.s));
     const withBd=shuf(all.filter(x=>ok(x.backdrop||x.bannerImage)));
