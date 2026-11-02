@@ -1069,8 +1069,12 @@ body.in-landing .mchips,body.in-landing .mobile-chips{display:none}
 .coll-art{position:absolute;top:0;bottom:0;right:0;left:26%;z-index:-2;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent 0,rgba(0,0,0,.35) 14%,#000 42%);mask-image:linear-gradient(90deg,transparent 0,rgba(0,0,0,.35) 14%,#000 42%)}
 .coll-img{position:absolute;inset:0;background:center 30%/cover no-repeat;transition:transform 1.4s cubic-bezier(.2,.7,.2,1)}
 .coll-wall{--pw:clamp(118px,10.4vw,168px);position:absolute;top:47%;left:4%;display:flex;flex-direction:column;gap:16px;transform:translateY(-50%) rotate(-9deg) perspective(1600px) rotateY(-8deg);transform-origin:left center;transition:transform 1.4s cubic-bezier(.2,.7,.2,1)}
-.coll-prow{display:flex;gap:16px}
+.coll-prow{display:flex}
+.coll-trk{display:flex;gap:16px;padding-right:16px;animation:collMq 70s linear infinite;will-change:transform}
+.coll-prow+.coll-prow .coll-trk{animation-direction:reverse;animation-duration:85s}
 .coll-prow:first-child{margin-left:calc(var(--pw) * .5)}
+@keyframes collMq{to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.coll-trk{animation:none}}
 .coll-p{display:block;width:var(--pw);aspect-ratio:2/3;border-radius:14px;background:var(--surface-2) center/cover no-repeat;flex:none;box-shadow:0 10px 30px rgba(0,0,0,.45)}
 .coll-fade{position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(var(--surface-rgb),.9) 0,rgba(var(--surface-rgb),.7) 26%,rgba(var(--surface-rgb),.25) 44%,rgba(var(--surface-rgb),0) 60%)}
 .coll-txt{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:32px clamp(24px,3.4vw,48px);max-width:min(440px,44%)}

@@ -996,7 +996,7 @@ function collArt(c, items){
   const ps = items.filter(t => t.poster);
   if (!ps.length) return '';
   const pool = []; while (pool.length < 14) pool.push(...ps);
-  const rowH = (a) => `<span class="coll-prow">${a.map(t => `<span class="coll-p" data-src="${esc(t.poster)}"></span>`).join('')}</span>`;
+  const rowH = (a) => { const ps = a.map(t => `<span class="coll-p" data-src="${esc(t.poster)}"></span>`).join(''); return `<span class="coll-prow"><span class="coll-trk">${ps}${ps}</span></span>`; };
   return `<span class="coll-wall">${rowH(pool.slice(0, 7))}${rowH(pool.slice(7, 14))}</span>`;
 }
 function collBanner(c, big){
