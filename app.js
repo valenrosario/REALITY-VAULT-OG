@@ -818,6 +818,36 @@ function vidField(E, key, label, size, note){
   </div>`;
 }
 const VIDEO_MAX_MB = 200;
+/* --- aviso en el admin: ¿ya está lista la versión web (.web.mp4) de un MKV? --- */
+const webCopy = new Map(); // url -> { ok, t }
+const webAlt = u => u.replace(/\.mkv(?=[?#]|$)/i, '.web.mp4');
+async function webCopyReady(u){
+  const c = webCopy.get(u);
+  if (c && (c.ok || Date.now() - c.t < 12000)) return c.ok;
+  let ok = null;
+  try { const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 5000); const r = await fetch(webAlt(u), { method:'HEAD', signal: ctl.signal, cache:'no-store' }); clearTimeout(tm); ok = r.ok; } catch { ok = null; }
+  webCopy.set(u, { ok, t: Date.now() }); return ok;
+}
+async function refreshWebBadges(){
+  if (!S || S.route !== 'admin') return;
+  const ins = app.querySelectorAll('input[data-k="url"], input[data-f="url"]');
+  for (const inp of ins){
+    const u = (inp.value || '').trim();
+    let b = inp.nextElementSibling && inp.nextElementSibling.classList.contains('webcopy') ? inp.nextElementSibling : null;
+    if (!/^https?:\/\/\S+\.mkv([?#]|$)/i.test(u)){ if (b) b.remove(); continue; }
+    if (!b){ b = document.createElement('span'); b.className = 'webcopy'; inp.insertAdjacentElement('afterend', b); }
+    const ok = await webCopyReady(u);
+    if (ok === true){ b.className = 'webcopy ok'; b.textContent = '✓ Versión web lista'; }
+    else if (ok === false){ b.className = 'webcopy wait'; b.textContent = '⏳ Preparando versión web… (se actualiza sola)'; }
+    else { b.className = 'webcopy'; b.textContent = ''; }
+  }
+}
+let wbT = 0;
+const schedWB = () => { clearTimeout(wbT); wbT = setTimeout(refreshWebBadges, 500); };
+document.addEventListener('input', e => { if (e.target.matches && e.target.matches('input[data-k="url"], input[data-f="url"]')) schedWB(); });
+new MutationObserver(schedWB).observe(app, { childList:true, subtree:true });
+setInterval(refreshWebBadges, 15000);
+
 async function uploadVideo(file, onProgress){
   if (!/^video\/(mp4|webm|quicktime)$/.test(file.type) && !/\.(mp4|webm|mov|m4v)$/i.test(file.name)) throw new Error('Elegí un archivo MP4 o WebM.');
   if (file.size > VIDEO_MAX_MB * 1024 * 1024) throw new Error(`El video pesa ${(file.size/1048576).toFixed(0)} MB. El máximo es ${VIDEO_MAX_MB} MB: achicalo o recortalo antes de subirlo.`);
