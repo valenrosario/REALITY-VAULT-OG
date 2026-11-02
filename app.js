@@ -2454,19 +2454,17 @@ function rvPlayer(video){
   // (vendor/rv-audio.js: mediabunny + libav WASM) y lo sincronizamos con el video. Si falla, avisa claro.
   let audioChecked = false, sideAudio = null;
   on(video,'playing',()=>{ if (audioChecked) return; audioChecked = true; setTimeout(async ()=>{
-    if (video.paused || video.currentTime < .5) return;
-    const n = video.webkitAudioDecodedByteCount;
-    if (typeof n !== 'number') return toast('Diag: este navegador no informa el audio. Usá Chrome o Edge.', true);
-    if (n !== 0) return;
-    const warn = (why) => toast('Audio no reproducible por el navegador. Diag: ' + why, true);
+    if (video.paused || video.currentTime < .5 || typeof video.webkitAudioDecodedByteCount !== 'number') return;
+    if (video.webkitAudioDecodedByteCount !== 0) return;
+    const warn = () => toast('Este archivo tiene un audio (DTS, TrueHD o similar) que el navegador no puede reproducir. Para la web hay que subir el video con audio AAC o AC3.', true);
     try {
       const src = video.currentSrc || video.src;
-      if (!src || /^blob:|\.m3u8/i.test(src)) return warn('fuente ' + src);
+      if (!src || /^blob:|\.m3u8/i.test(src)) return warn();
       const m = await import('./vendor/rv-audio.js');
       const h = await m.playSyncedAudioFromUrl(video, src, new URL('./vendor/libav/', location.href).href);
-      if (!h || h === 'undecodable') return warn(h ? 'no se pudo decodificar (¿DTS/TrueHD, o falta CORS?)' : 'sin pista de audio');
-      sideAudio = h; toast('Audio activado (decodificador propio)');
-    } catch (e) { console.warn('[rv-audio]', e); warn(String(e && e.message || e).slice(0, 120)); }
+      if (!h || h === 'undecodable') return warn();
+      sideAudio = h;
+    } catch (e) { console.warn('[rv-audio]', e); warn(); }
   }, 2500); });
 
   syncVol();sync();bFull.innerHTML=I.fs;loadTracks();wake();
