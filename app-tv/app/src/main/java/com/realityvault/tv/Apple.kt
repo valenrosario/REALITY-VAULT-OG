@@ -8,6 +8,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -663,17 +664,22 @@ private fun CollBannerRow(r: RowSpec, nav: Nav, screenKey: String, restore: Stri
                     // muro de pósters inclinado a la derecha, como en el banner de la web
                     val k = if (ps.size >= 4) (ps.size + 1) / 2 else ps.size
                     val r1 = ps.take(k); val r2 = if (ps.size >= 4) ps.drop(k) else ps
-                    fun fill(a: List<Title>): List<Title> { val o = mutableListOf<Title>(); while (o.size < 7) o += a; return o }
+                    fun fill(a: List<Title>): List<Title> { val o = mutableListOf<Title>(); while (o.size < 7) o += a; return o.take(7) }
+                    // las filas se deslizan solas, una para cada lado, igual que en la web (70 s y 85 s)
+                    val setPx = with(LocalDensity.current) { (7 * (78 + 12)).dp.toPx() }
+                    val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "coll")
+                    val f1 by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(70000, easing = androidx.compose.animation.core.LinearEasing)), label = "c1")
+                    val f2 by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(85000, easing = androidx.compose.animation.core.LinearEasing)), label = "c2")
                     Column(
                         Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(.66f).graphicsLayer { rotationZ = -9f; scaleX = 1.3f; scaleY = 1.3f; translationX = 46f }
                             .wrapContentSize(Alignment.CenterStart, unbounded = true),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            fill(r1).forEach { t -> Img(t.poster, Modifier.width(78.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp))) }
+                        Row(Modifier.graphicsLayer { translationX = -f1 * setPx }, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            val l = fill(r1); (l + l).forEach { t -> Img(t.poster, Modifier.width(78.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)), crossfade = false) }
                         }
-                        Row(Modifier.padding(start = 40.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            fill(r2).forEach { t -> Img(t.poster, Modifier.width(78.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp))) }
+                        Row(Modifier.padding(start = 40.dp).graphicsLayer { translationX = -(1f - f2) * setPx }, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            val l = fill(r2); (l + l).forEach { t -> Img(t.poster, Modifier.width(78.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)), crossfade = false) }
                         }
                     }
                 }
