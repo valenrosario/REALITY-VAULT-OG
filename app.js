@@ -446,6 +446,15 @@ function mobileChips(active){
   const items = [['home','/','Todo'],['series','/series','Series'],['peliculas','/peliculas','Películas'],['mi-lista','/mi-lista','Mi lista']];
   return `<nav class="m-chips" aria-label="Secciones">${items.map(([k,h,l]) => `<a href="${h}" class="m-chip ${k===active?'on':''}" ${k===active?'aria-current="page"':''}>${l}</a>`).join('')}</nav>`;
 }
+// reparte las colecciones entre las filas (una cada tanto), en vez de apilarlas todas juntas
+function mixColls(rows, colls){
+  if (!colls.length) return rows.join('');
+  const out = [], gap = Math.max(1, Math.floor(rows.length / (colls.length + 1)));
+  let ci = 0;
+  rows.forEach((r, i) => { out.push(r); if (ci < colls.length && (i + 1) % gap === 0) out.push(colls[ci++]); });
+  while (ci < colls.length) out.push(colls[ci++]);
+  return out.join('');
+}
 function renderHome(){
   const pub = published();
   const newest = [...pub].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,20);
@@ -464,12 +473,13 @@ function renderHome(){
     ${recommendedRow()}
     ${listRow()}
     ${(S.frows||[]).map(featRow).join('')}
-    ${(S.colls||[]).map(c => collBanner(c)).join('')}
-    ${row('Destacados', byTaste(feat, 'feat', prof))}
-    ${row('Novedades', newest)}
-    ${row('Series', byTaste(series, 'series', prof), '/series')}
-    ${row('Películas', byTaste(movies, 'movies', prof), '/peliculas')}
-    ${genreRows.map(({ g, l }) => row(g, byTaste(l, 'g-' + g, prof))).join('')}
+    ${mixColls([
+      row('Destacados', byTaste(feat, 'feat', prof)),
+      row('Novedades', newest),
+      row('Series', byTaste(series, 'series', prof), '/series'),
+      row('Películas', byTaste(movies, 'movies', prof), '/peliculas'),
+      ...genreRows.map(({ g, l }) => row(g, byTaste(l, 'g-' + g, prof)))
+    ].filter(Boolean), (S.colls||[]).map(c => collBanner(c)).filter(Boolean))}
   </main>`;
 }
 function renderBrowse(kind){
