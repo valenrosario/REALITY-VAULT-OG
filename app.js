@@ -2452,14 +2452,12 @@ function rvPlayer(video){
   on(video,'loadeddata',()=>{err.hidden=true});
   // Si el video corre pero el navegador no decodifica el audio (AC3 / E-AC-3), lo decodificamos nosotros
   // (vendor/rv-audio.js: mediabunny + libav WASM) y lo sincronizamos con el video. Si falla, avisa claro.
-  let sideAudio = null, audioTried = false, silentTicks = 0;
-  const audioWatch = setInterval(async ()=>{
-    if (audioTried || video.paused || video.ended || video.readyState < 3) { silentTicks = 0; return; }
+  let audioChecked = false, sideAudio = null;
+  on(video,'playing',()=>{ if (audioChecked) return; audioChecked = true; setTimeout(async ()=>{
+    if (video.paused || video.currentTime < .5) return;
     const n = video.webkitAudioDecodedByteCount;
-    if (typeof n !== 'number') { audioTried = true; return toast('Diag: este navegador no informa el audio. Usá Chrome o Edge.', true); }
-    silentTicks = n === 0 ? silentTicks + 1 : 0;
-    if (silentTicks < 2) return;
-    audioTried = true;
+    if (typeof n !== 'number') return toast('Diag: este navegador no informa el audio. Usá Chrome o Edge.', true);
+    if (n !== 0) return;
     const warn = (why) => toast('Audio no reproducible por el navegador. Diag: ' + why, true);
     try {
       const src = video.currentSrc || video.src;
@@ -2469,10 +2467,10 @@ function rvPlayer(video){
       if (!h || h === 'undecodable') return warn(h ? 'no se pudo decodificar (¿DTS/TrueHD, o falta CORS?)' : 'sin pista de audio');
       sideAudio = h; toast('Audio activado (decodificador propio)');
     } catch (e) { console.warn('[rv-audio]', e); warn(String(e && e.message || e).slice(0, 120)); }
-  }, 1500);
+  }, 2500); });
 
   syncVol();sync();bFull.innerHTML=I.fs;loadTracks();wake();
-  return {destroy(){clearInterval(audioWatch);try{sideAudio&&sideAudio.destroy()}catch{};L.forEach(([t,e,f,o])=>t.removeEventListener(e,f,o));cancelAnimationFrame(raf);clearTimeout(idleT);clearTimeout(clickT);clearTimeout(busyT);tracks.forEach(t=>{t.oncuechange=null});root.classList.remove('idle')}};
+  return {destroy(){try{sideAudio&&sideAudio.destroy()}catch{};L.forEach(([t,e,f,o])=>t.removeEventListener(e,f,o));cancelAnimationFrame(raf);clearTimeout(idleT);clearTimeout(clickT);clearTimeout(busyT);tracks.forEach(t=>{t.oncuechange=null});root.classList.remove('idle')}};
 }
 let playerRoot = null;
 let plSess = null;
