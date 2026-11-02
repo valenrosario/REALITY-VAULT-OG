@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -125,6 +126,7 @@ fun App(nav: Nav, onExit: () -> Unit) {
             is Screen.Detail -> DetailScreen(s.id, nav)
             is Screen.Login -> LoginScreen(s, nav)
             is Screen.Person -> PersonScreen(s.name, nav)
+            is Screen.Collection -> CollectionScreen(s.id, nav)
             else -> Box(Modifier.fillMaxSize()) {
                 // El banner de inicio necesita su propio FocusRequester acá arriba para que el
                 // menú de arriba (Series/Películas/Mi lista) pueda mandar el foco directo para
@@ -345,7 +347,7 @@ fun slides(): List<Slide> {
     return Store.published().filter { it.featured }.shuffled(seededRandom).take(6).map { Slide(it, it.tvHero, "", it.tagline.ifBlank { it.description }) }
 }
 
-class RowSpec(val key: String, val title: String, val kind: String, val titles: List<Title>, val feat: List<Pair<Title, FeatItem>> = emptyList())
+class RowSpec(val key: String, val title: String, val kind: String, val titles: List<Title>, val feat: List<Pair<Title, FeatItem>> = emptyList(), val coll: Coll? = null)
 
 fun homeRows(): List<RowSpec> {
     val pub = Store.published()
@@ -360,15 +362,24 @@ fun homeRows(): List<RowSpec> {
         val items = r.items.mapNotNull { i -> pub.firstOrNull { it.id == i.titleId }?.let { it to i } }
         if (items.isNotEmpty()) rows += RowSpec("f-" + r.id, r.title, "feat", emptyList(), items)
     }
+    val rest = mutableListOf<RowSpec>()
     val feat = pub.filter { it.featured }
-    if (feat.isNotEmpty()) rows += RowSpec("feat", "Destacados", "poster", feat)
+    if (feat.isNotEmpty()) rest += RowSpec("feat", "Destacados", "poster", feat)
     val newest = pub.sortedByDescending { it.createdAt }.take(20)
-    if (newest.isNotEmpty()) rows += RowSpec("new", "Novedades", "poster", newest)
-    val series = pub.filter { it.isSerie }; if (series.isNotEmpty()) rows += RowSpec("series", "Series", "poster", series)
-    val movies = pub.filter { !it.isSerie }; if (movies.isNotEmpty()) rows += RowSpec("movies", "Películas", "poster", movies)
+    if (newest.isNotEmpty()) rest += RowSpec("new", "Novedades", "poster", newest)
+    val series = pub.filter { it.isSerie }; if (series.isNotEmpty()) rest += RowSpec("series", "Series", "poster", series)
+    val movies = pub.filter { !it.isSerie }; if (movies.isNotEmpty()) rest += RowSpec("movies", "Películas", "poster", movies)
     pub.flatMap { t -> t.genres.map { it to t } }.groupBy({ it.first }, { it.second })
         .entries.sortedByDescending { it.value.size }.take(8)
-        .forEach { (g, l) -> rows += RowSpec("g-$g", g, "poster", l) }
+        .forEach { (g, l) -> rest += RowSpec("g-$g", g, "poster", l) }
+    // las colecciones se reparten entre las filas, igual que en la web (una cada tanto, no todas juntas)
+    val colls = Store.colls.mapNotNull { c ->
+        val ts = c.items.mapNotNull { i -> pub.firstOrNull { it.id == i } }
+        if (ts.isEmpty()) null else RowSpec("c-" + c.id, c.name, "coll", ts, coll = c)
+    }
+    val gap = maxOf(1, rest.size / (colls.size + 1)); var ci = 0
+    rest.forEachIndexed { i, r -> rows += r; if (ci < colls.size && (i + 1) % gap == 0) rows += colls[ci++] }
+    while (ci < colls.size) rows += colls[ci++]
     return rows
 }
 
@@ -586,6 +597,7 @@ fun GlassButton(icon: ImageVector, onFocus: (() -> Unit)? = null, onClick: () ->
 @Composable
 fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
     val restore = nav.memory.focus[screenKey]
+    if (r.kind == "coll") { CollBannerRow(r, nav, screenKey, restore); return }
     // Espacio de sobra antes del título: la tarjeta enfocada de la fila de ARRIBA crece hacia
     // abajo al agrandarse (ver pivotTop en Focusable), y sin este margen terminaba pisando el
     // título de la fila siguiente ("Novedades", "Series", etc).
@@ -631,6 +643,52 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
                 }
             }
         }
+        }
+    }
+}
+
+/* ---------------- banner de colección (igual al de la web) ---------------- */
+
+@Composable
+private fun CollBannerRow(r: RowSpec, nav: Nav, screenKey: String, restore: String?) {
+    val c = r.coll ?: return
+    val ps = r.titles.filter { it.poster.isNotBlank() }
+    val bg = Color(0xFF15100F)
+    Box(Modifier.padding(top = 22.dp, start = 48.dp, end = 48.dp, bottom = 12.dp)) {
+        CardA("coll/${c.id}", restore, nav, screenKey, { nav.go(Screen.Collection(c.id)) }, Modifier.fillMaxWidth().height(176.dp), scale = 1.02f) { _ ->
+            Box(Modifier.fillMaxSize().background(bg)) {
+                if (c.image.isNotBlank()) {
+                    Img(c.image, Modifier.fillMaxSize(), alignment = Alignment.CenterEnd)
+                } else if (ps.isNotEmpty()) {
+                    // muro de pósters inclinado a la derecha, como en el banner de la web
+                    val k = if (ps.size >= 4) (ps.size + 1) / 2 else ps.size
+                    val r1 = ps.take(k); val r2 = if (ps.size >= 4) ps.drop(k) else ps
+                    fun fill(a: List<Title>): List<Title> { val o = mutableListOf<Title>(); while (o.size < 7) o += a; return o }
+                    Column(
+                        Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(.66f).graphicsLayer { rotationZ = -9f; scaleX = 1.3f; scaleY = 1.3f; translationX = 46f }
+                            .wrapContentSize(Alignment.CenterStart, unbounded = true),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            fill(r1).forEach { t -> Img(t.poster, Modifier.width(78.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp))) }
+                        }
+                        Row(Modifier.padding(start = 40.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            fill(r2).forEach { t -> Img(t.poster, Modifier.width(78.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp))) }
+                        }
+                    }
+                }
+                // difuminado del lado izquierdo, donde va el texto
+                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to bg, .38f to bg.copy(alpha = .94f), .62f to bg.copy(alpha = .5f), 1f to Color.Transparent)))
+                Column(Modifier.align(Alignment.CenterStart).padding(start = 28.dp).fillMaxWidth(.5f)) {
+                    Text("COLECCIÓN", style = ts(10, FontWeight.Bold, C.accent).copy(letterSpacing = 2.sp))
+                    Text(c.name, style = ts(24, FontWeight.Bold, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                    if (c.tagline.isNotBlank()) Text(c.tagline, style = ts(12, color = Color.White.copy(alpha = .75f)), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                    Text(
+                        "Ver colección", style = ts(12, FontWeight.Bold, Color.Black),
+                        modifier = Modifier.padding(top = 12.dp).background(Color.White, RoundedCornerShape(99.dp)).padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
         }
     }
 }

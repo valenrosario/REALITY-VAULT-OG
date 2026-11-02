@@ -142,13 +142,14 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         ExoPlayer.Builder(ctx).setSeekBackIncrementMs(10_000).setSeekForwardIncrementMs(10_000).build().apply {
             val subs = if (m.subsUrl.isNotBlank()) listOf(
                 MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(m.subsUrl))
-                    .setMimeType(MimeTypes.TEXT_VTT).setLanguage("es")
+                    .setId("rv-es").setMimeType(MimeTypes.TEXT_VTT).setLanguage("es")
                     .setSelectionFlags(M3C.SELECTION_FLAG_DEFAULT).build()
             ) else emptyList()
             val item = MediaItem.Builder().setUri(m.url).setSubtitleConfigurations(subs)
                 .apply { if (m.hls) setMimeType(MimeTypes.APPLICATION_M3U8) }.build()
             setMediaItem(item); prepare(); playWhenReady = true
             trackSelectionParameters = trackSelectionParameters.buildUpon()
+                .setPreferredTextLanguage("es")
                 .setTrackTypeDisabled(M3C.TRACK_TYPE_TEXT, m.subsUrl.isBlank()).build()
         }
     }
@@ -167,6 +168,15 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     DisposableEffect(player) {
         val l = object : M3Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { if (!isPlaying && resumed) savePos() }
+            // Si el MKV trae subtítulos propios (en inglés, por ejemplo), el reproductor puede elegir
+            // uno de esos. Cuando hay un .vtt cargado en el panel, ese es el que manda: lo forzamos.
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                if (m.subsUrl.isBlank()) return
+                val g = tracks.groups.firstOrNull { it.type == M3C.TRACK_TYPE_TEXT && (0 until it.length).any { i -> it.getTrackFormat(i).id?.endsWith("rv-es") == true } } ?: return
+                if (g.isSelected && tracks.groups.count { it.type == M3C.TRACK_TYPE_TEXT && it.isSelected } == 1) return
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                    .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, 0)).build()
+            }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { userPaused = !playWhenReady }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == M3Player.STATE_BUFFERING

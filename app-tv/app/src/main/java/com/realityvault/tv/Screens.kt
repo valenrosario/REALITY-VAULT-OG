@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -81,6 +82,7 @@ sealed class Screen {
     /** required = true: es la puerta de entrada obligatoria, no se puede saltear. */
     data class Login(val then: Screen? = null, val required: Boolean = false) : Screen()
     data class Person(val name: String) : Screen()
+    data class Collection(val id: String) : Screen()
 }
 
 private val mainScreens = listOf(Screen.Search, Screen.Home, Screen.Series, Screen.Movies, Screen.MyList, Screen.Account)
@@ -173,6 +175,48 @@ fun Chip(text: String, on: Boolean, onClick: () -> Unit) {
             Modifier.background(if (f) Color.White else if (on) C.accent else Color.White.copy(alpha = .1f)).padding(horizontal = 13.dp).height(30.dp),
             contentAlignment = Alignment.Center
         ) { Text(text, style = ts(12, FontWeight.Bold, if (f || on) Color.Black else C.fg)) }
+    }
+}
+
+/* ---------------- colección ---------------- */
+
+@Composable
+fun CollectionScreen(id: String, nav: Nav) {
+    if (!Store.loaded) { Loading(); return }
+    val pub = Store.published()
+    val c = Store.colls.firstOrNull { it.id == id }
+    val list = c?.items?.mapNotNull { i -> pub.firstOrNull { it.id == i } } ?: emptyList()
+    val key = "coll-$id"
+    val restore = nav.memory.focus[key]
+    val firstReq = remember { FocusRequester() }
+    if (c == null || list.isEmpty()) {
+        Column(Modifier.fillMaxSize().padding(start = 48.dp, top = 74.dp)) {
+            Text("Esta colección no está disponible.", style = ts(18, FontWeight.Bold, Color.White))
+            Spacer(Modifier.height(16.dp))
+            TextButtonTv("Volver", { nav.back() }, requester = firstReq)
+            AutoFocus(firstReq, key)
+        }
+        return
+    }
+    Column(Modifier.fillMaxSize().padding(start = 48.dp, top = 56.dp)) {
+        Text("COLECCIÓN", style = ts(11, FontWeight.Bold, C.accent).copy(letterSpacing = 2.sp))
+        Text(c.name, style = ts(28, FontWeight.Bold, Color.White))
+        if (c.tagline.isNotBlank()) Text(c.tagline, style = ts(13, color = C.fg2), modifier = Modifier.padding(top = 4.dp, end = 48.dp), maxLines = 2)
+        Text("${list.size} título${if (list.size == 1) "" else "s"}", style = ts(12, color = C.muted), modifier = Modifier.padding(top = 6.dp))
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(100.dp), state = nav.memory.grid(key),
+            contentPadding = PaddingValues(top = 22.dp, end = 48.dp, bottom = 40.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(34.dp)
+        ) {
+            items(list, key = { it.id }) { t ->
+                val k = "$key/${t.id}"
+                val req = remember { FocusRequester() }
+                if (k == restore || (restore == null && t.id == list.first().id)) AutoFocus(req, k)
+                Focusable({ nav.go(Screen.Detail(t.id)) }, Modifier.aspectRatio(2f / 3f), requester = req, onFocus = { nav.memory.focus[key] = k }, pivotTop = true) {
+                    PosterCard(t)
+                }
+            }
+        }
     }
 }
 

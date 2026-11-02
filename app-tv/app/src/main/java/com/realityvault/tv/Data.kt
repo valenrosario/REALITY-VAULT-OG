@@ -69,6 +69,8 @@ data class Banner(
 
 data class FeatItem(val titleId: String, val label: String, val image: String)
 data class FeatRow(val id: String, val title: String, val items: List<FeatItem>)
+/** Colección armada desde el panel de la web (site/collections). */
+data class Coll(val id: String, val name: String, val tagline: String, val image: String, val items: List<String>)
 
 data class Progress(val titleId: String, val season: Int?, val episode: Int?, val watched: List<String>, val updated: String,
     /** Minuto por el que vas en cada capítulo/película (mismo formato que la web): clave "m" o "T-E" → (segundo, duración). */
@@ -170,6 +172,7 @@ object Store {
     var titles by mutableStateOf<List<Title>>(emptyList())
     var banners by mutableStateOf<List<Banner>>(emptyList())
     var featRows by mutableStateOf<List<FeatRow>>(emptyList())
+    var colls by mutableStateOf<List<Coll>>(emptyList())
     var siteLogo by mutableStateOf("")
     var top10 by mutableStateOf<List<String>>(emptyList())
     var myList by mutableStateOf<List<String>>(emptyList())
@@ -225,11 +228,19 @@ object Store {
         }.filter { it.active }.sortedBy { it.order }
         val site = j.optJSONArray("site") ?: JSONArray()
         var rows = emptyList<FeatRow>()
+        var cl = emptyList<Coll>()
         for (k in 0 until site.length()) {
             val r = site.optJSONObject(k) ?: continue
             val d = r.optJSONObject("data") ?: continue
             when (r.s("id")) {
                 "config" -> siteLogo = d.s("logo")
+                "collections" -> {
+                    val la = d.optJSONArray("list") ?: JSONArray()
+                    cl = (0 until la.length()).mapNotNull { x ->
+                        val co = la.optJSONObject(x) ?: return@mapNotNull null
+                        Coll(co.s("id"), co.s("name"), co.s("tagline").trim(), co.s("image").trim(), co.strs("items"))
+                    }
+                }
                 "rows" -> {
                     val ra = d.optJSONArray("rows") ?: JSONArray()
                     rows = (0 until ra.length()).mapNotNull { x ->
@@ -243,6 +254,7 @@ object Store {
             }
         }
         featRows = rows
+        colls = cl
         loaded = true
     }
 
