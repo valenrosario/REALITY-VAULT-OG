@@ -2451,14 +2451,18 @@ function rvPlayer(video){
   on(video,'error',()=>{busy(false);err.textContent = /\.mkv(\?|#|$)/i.test(video.currentSrc||video.src||'') ? 'Este navegador no puede reproducir este archivo MKV (o su códec de video o audio). Probá con Chrome o Edge en la compu, o mirá en la app de la TV.' : 'No se pudo cargar el video.'; err.hidden=false});
   on(video,'loadeddata',()=>{err.hidden=true});
   // Si el video corre pero el navegador no decodifica el audio (AC3 / E-AC3 / DTS / TrueHD), avisa claro en vez de quedar mudo.
-  let audioChecked = false;
-  on(video,'playing',()=>{ if (audioChecked) return; audioChecked = true; setTimeout(()=>{
-    if (video.paused || video.muted || video.currentTime < 1 || typeof video.webkitAudioDecodedByteCount !== 'number') return;
-    if (video.webkitAudioDecodedByteCount === 0) video.dispatchEvent(new Event('rv-noaudio'));
-  }, 3500); });
+  let silentTicks = 0;
+  const audioWatch = setInterval(()=>{
+    if (video.paused || video.ended || (video.readyState|0) < 3) { silentTicks = 0; return; }
+    const n = video.webkitAudioDecodedByteCount;
+    if (typeof n !== 'number') return clearInterval(audioWatch);
+    silentTicks = n === 0 ? silentTicks + 1 : 0;
+    if (n > 0) return clearInterval(audioWatch);
+    if (silentTicks >= 2){ clearInterval(audioWatch); video.dispatchEvent(new Event('rv-noaudio')); }
+  }, 1200);
 
   syncVol();sync();bFull.innerHTML=I.fs;loadTracks();wake();
-  return {destroy(){L.forEach(([t,e,f,o])=>t.removeEventListener(e,f,o));cancelAnimationFrame(raf);clearTimeout(idleT);clearTimeout(clickT);clearTimeout(busyT);tracks.forEach(t=>{t.oncuechange=null});root.classList.remove('idle')}};
+  return {destroy(){clearInterval(audioWatch);L.forEach(([t,e,f,o])=>t.removeEventListener(e,f,o));cancelAnimationFrame(raf);clearTimeout(idleT);clearTimeout(clickT);clearTimeout(busyT);tracks.forEach(t=>{t.oncuechange=null});root.classList.remove('idle')}};
 }
 let playerRoot = null;
 let plSess = null;
@@ -2467,7 +2471,7 @@ function endPlayerSession(){
   const { v, tid, s, e, rv, timer, off, ready } = plSess; plSess = null;
   clearInterval(timer); off();
   if (ready() && tid && v.duration) savePos(tid, s, e, v.currentTime, v.duration);
-  rv?.destroy(); v._hls?.destroy();
+  rv?.destroy(); v._hls?.destroy(); try { v._side?.destroy(); } catch {}
 }
 /* --- motor alternativo para MKV (y MP4 sin audio en el navegador): libmedia AVPlayer (LGPL, vendor/libmedia).
    Lee el archivo por partes desde el link y decodifica en WASM el audio que el navegador no soporta
@@ -2476,6 +2480,16 @@ function endPlayerSession(){
 let avMod = null;
 const loadAV = () => avMod || (avMod = import('./vendor/libmedia/esm/avplayer.js').then(m => m.default));
 const isMkv = u => /\.mkv(\?|#|$)/i.test(u || '');
+const AV_BASE = location.origin + '/vendor/libmedia';
+const AV_SIMD = (() => { try { return WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11])); } catch { return false; } })();
+// decodificadores incluidos en vendor/libmedia/decode (mp3.wasm también trae MP1 y MP2)
+const AV_DEC = { 27:'h264', 173:'hevc', 167:'vp9', 225:'av1', 86018:'aac', 86019:'ac3', 86056:'eac3', 86020:'dca', 86017:'mp3', 86016:'mp3', 86015:'mp3', 86076:'opus', 86028:'flac', 86021:'vorbis' };
+function avWasm(type, codecId){
+  const r = AV_SIMD ? '-simd' : '';
+  if (type === 'resampler') return `${AV_BASE}/resample/resample${r}.wasm`;
+  if (type === 'stretchpitcher') return `${AV_BASE}/stretchpitch/stretchpitch${r}.wasm`;
+  const n = AV_DEC[codecId]; return n ? `${AV_BASE}/decode/${n}${r}.wasm` : '';
+}
 function avVideo(el, url, { subs = '', at = 0 } = {}){
   let p = null, paused = true, ended = false, dur = NaN, cur = at || 0, vol = 1, muted = false, rate = 1, started = false, startAt = at || 0, lastTu = 0, seekT = 0, dead = false;
   const fire = n => el.dispatchEvent(new Event(n));
@@ -2502,7 +2516,7 @@ function avVideo(el, url, { subs = '', at = 0 } = {}){
   fire('waiting');
   loadAV().then(async AVPlayer => {
     if (dead) return;
-    p = new AVPlayer({ container: el, wasmBaseUrl: location.origin + '/vendor/libmedia', enableHardware: true, enableWebCodecs: true, enableWorker: true, preLoadTime: 6 });
+    p = new AVPlayer({ container: el, getWasm: avWasm, enableHardware: true, enableWebCodecs: true, enableWorker: true, preLoadTime: 6 });
     p.on('played', () => { paused = false; ended = false; fire('play'); fire('playing'); });
     p.on('playing', () => { paused = false; fire('play'); });
     p.on('paused', () => { paused = true; fire('pause'); });
@@ -2537,7 +2551,7 @@ function openPlayer({ url, tid, s: season, e: episode, forceAv = false, at = 0 }
   } else if (t && t.type !== 'serie') subsUrl = safeUrl(t.subs);
   const nx = nextAfter(t, season, episode);
   if (!playerRoot){ playerRoot = document.createElement('div'); playerRoot.id = 'playerRoot'; document.body.appendChild(playerRoot); }
-  const useAv = native && emb.type === 'video' && (forceAv || isMkv(emb.src));
+  const useAv = native && emb.type === 'video' && forceAv;
   const media = useAv ? `<div class="rvp"><div id="plVideo" class="rvp-av"></div></div>` : emb.type === 'iframe'
     ? `<iframe src="${esc(emb.src)}" title="${esc(t?.title || 'Video')}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
     : `<div class="rvp"><video id="plVideo" autoplay playsinline preload="metadata" ${subsUrl ? 'crossorigin="anonymous"' : ''} ${t?.backdrop ? `poster="${esc(t.backdrop)}"` : ''}>${subsUrl ? `<track kind="subtitles" src="${esc(subsUrl)}" srclang="es" label="Español" default>` : ''}</video></div>`;
@@ -2561,8 +2575,21 @@ function openPlayer({ url, tid, s: season, e: episode, forceAv = false, at = 0 }
     else if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = emb.src;
     else loadHls().then(Hls => { if (!v.isConnected) return; const hls = new Hls(); hls.loadSource(emb.src); hls.attachMedia(v); v._hls = hls; }).catch(() => toast('No se pudo cargar el video', true));
     const rv = rvPlayer(v);
-    // si el navegador no puede con el audio del MP4, se reabre con el motor alternativo en el mismo minuto
-    if (!useAv) v.addEventListener('rv-noaudio', () => { const cur = v.currentTime; toast('Activando audio compatible…'); openPlayer({ url, tid, s: season, e: episode, forceAv: true, at: cur }); }, { once: true });
+    // Si el navegador no puede con el audio (AC3, E-AC3, MP2...): primero un decodificador de audio aparte
+    // sincronizado con el video (vendor/rv-audio.js); si tampoco puede (DTS...), o si el video no carga,
+    // se reabre en el mismo minuto con el reproductor alternativo (libmedia).
+    const toAv = () => { if (!v.isConnected) return; const cur = v.currentTime || 0; openPlayer({ url, tid, s: season, e: episode, forceAv: true, at: cur }); };
+    if (!useAv){
+      v.addEventListener('rv-noaudio', async () => {
+        try {
+          const m = await import('./vendor/rv-audio.js');
+          const h = await m.playSyncedAudioFromUrl(v, v.currentSrc || v.src, location.origin + '/vendor/libav/');
+          if (h && h !== 'undecodable'){ v._side = h; return; }
+        } catch (err) { console.warn('[rv-audio]', err); }
+        toast('Activando audio compatible…'); toAv();
+      }, { once: true });
+      if (emb.type === 'video') v.addEventListener('error', () => { toast('Probando reproductor alternativo…'); toAv(); }, { once: true });
+    }
     // volver al minuto donde lo dejaste, y guardar el minuto mientras mirás
     const saved = tid ? getPos(tid, season, season === '' ? null : episode) : null;
     let isReady = false;
