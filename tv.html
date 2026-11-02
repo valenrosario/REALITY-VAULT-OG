@@ -32,7 +32,9 @@ a{color:inherit}
 .lw-in{display:grid;grid-template-columns:repeat(13,var(--w));gap:16px;animation:lwDrift 60s ease-in-out infinite alternate}
 @keyframes lwDrift{from{transform:translate(-3%,-1%)}to{transform:translate(3%,1%)}}
 .lw-p{display:block;aspect-ratio:2/3;border-radius:10px;background:#1b181e center/cover no-repeat;flex:none;opacity:0;transition:opacity .6s}
+.lw-p{transition:opacity .6s,filter 1.2s ease,transform 1.2s ease}
 .lw-p.on{opacity:1}
+.lw-p.glow{filter:brightness(1.9) saturate(1.2);transform:scale(1.035);position:relative;z-index:1}
 .veil{position:absolute;inset:0;background:radial-gradient(ellipse 60% 60% at 50% 50%,#0a090bf5,#0a090bcc 55%,#0a090b66),linear-gradient(transparent 78%,#0a090b)}
 .hc{position:relative;z-index:2;text-align:center;padding:0 22px;animation:up .9s .1s both cubic-bezier(.2,.7,.2,1)}
 @keyframes up{from{opacity:0;transform:translateY(26px)}}
@@ -177,6 +179,21 @@ a{color:inherit}
     $('wall').innerHTML='<div class="lw-in">'+pool.slice(0,143).map(t=>'<span class="lw-p" data-s="'+t.poster.replace(/"/g,'&quot;')+'"></span>').join('')+'</div>';
     const load=(el,u,cb)=>{const im=new Image();im.onload=()=>{el.style.backgroundImage='url("'+u+'")';el.classList.add('on');cb&&cb()};im.src=u};
     document.querySelectorAll('.lw-p').forEach(el=>load(el,el.dataset.s));
+    // de a poco, algunos pósters se iluminan y se apagan solos
+    if(!matchMedia('(prefers-reduced-motion:reduce)').matches){
+      const ps=[...document.querySelectorAll('.lw-p')],hero=document.querySelector('.hero');let vis=true;
+      if(io)new IntersectionObserver(e=>{vis=e[0].isIntersecting}).observe(hero);
+      setInterval(()=>{
+        if(!vis||document.hidden)return;
+        for(let k=0;k<2;k++){
+          const el=ps[Math.floor(Math.random()*ps.length)];
+          if(!el||!el.classList.contains('on')||el.classList.contains('glow'))continue;
+          const r=el.getBoundingClientRect();
+          if(r.bottom<0||r.top>innerHeight||r.right<0||r.left>innerWidth)continue;
+          el.classList.add('glow');setTimeout(()=>el.classList.remove('glow'),1500+Math.random()*1300);
+        }
+      },420);
+    }
     const withBd=shuf(all.filter(x=>ok(x.backdrop||x.bannerImage)));
     const h=withBd.find(x=>ok(x.logo))||withBd[0];
     if(h){const hero=$('tvh');
