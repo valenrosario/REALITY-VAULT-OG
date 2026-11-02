@@ -2450,6 +2450,12 @@ function rvPlayer(video){
   ['playing','canplay','seeked','pause','loadeddata'].forEach(ev=>on(video,ev,()=>busy(false)));
   on(video,'error',()=>{busy(false);err.textContent = /\.mkv(\?|#|$)/i.test(video.currentSrc||video.src||'') ? 'Este navegador no puede reproducir este archivo MKV (o su códec de video o audio). Probá con Chrome o Edge en la compu, o mirá en la app de la TV.' : 'No se pudo cargar el video.'; err.hidden=false});
   on(video,'loadeddata',()=>{err.hidden=true});
+  // Si el video corre pero el navegador no decodifica el audio (AC3 / E-AC3 / DTS / TrueHD), avisa claro en vez de quedar mudo.
+  let audioChecked = false;
+  on(video,'playing',()=>{ if (audioChecked) return; audioChecked = true; setTimeout(()=>{
+    if (video.paused || video.muted || video.currentTime < 1 || typeof video.webkitAudioDecodedByteCount !== 'number') return;
+    if (video.webkitAudioDecodedByteCount === 0) toast('Este archivo tiene un audio (AC3, DTS o similar) que el navegador no puede reproducir. Para la web hay que subir el video con audio AAC.', true);
+  }, 3500); });
 
   syncVol();sync();bFull.innerHTML=I.fs;loadTracks();wake();
   return {destroy(){L.forEach(([t,e,f,o])=>t.removeEventListener(e,f,o));cancelAnimationFrame(raf);clearTimeout(idleT);clearTimeout(clickT);clearTimeout(busyT);tracks.forEach(t=>{t.oncuechange=null});root.classList.remove('idle')}};
