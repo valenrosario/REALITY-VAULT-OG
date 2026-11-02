@@ -2500,7 +2500,17 @@ function openPlayer({ url, tid, s: season, e: episode }){
   S.playerOpen = true;
   const v = playerRoot.querySelector('#plVideo');
   if (v){
-    if (emb.type === 'video') v.src = emb.src;
+    if (emb.type === 'video' && /\.mkv([?#]|$)/i.test(emb.src)){
+      // MKV: si ya existe la copia para la web (".web.mp4", la crea GitHub automáticamente), se usa esa
+      const alt = emb.src.replace(/\.mkv(?=[?#]|$)/i, '.web.mp4');
+      const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 3000);
+      fetch(alt, { method: 'HEAD', signal: ctl.signal }).then(r => r.ok, () => false).then(ok => {
+        clearTimeout(tm); if (!v.isConnected) return;
+        v.src = ok ? alt : emb.src;
+        if (!ok) toast('La versión web de este video se está preparando. Si no se escucha, probá en unos minutos.');
+      });
+    }
+    else if (emb.type === 'video') v.src = emb.src;
     else if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = emb.src;
     else loadHls().then(Hls => { if (!v.isConnected) return; const hls = new Hls(); hls.loadSource(emb.src); hls.attachMedia(v); v._hls = hls; }).catch(() => toast('No se pudo cargar el video', true));
     const rv = rvPlayer(v);

@@ -1,0 +1,67 @@
+# Crea automáticamente una copia ".web.mp4" de cada MKV subido a Cloudflare R2:
+# mismo video (copiado, sin recomprimir) y audio AAC estéreo, que cualquier navegador reproduce.
+# La web usa esa copia; la TV sigue usando el MKV original.
+# Secrets necesarios (Settings → Secrets and variables → Actions):
+#   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
+name: MKV a MP4 para la web
+on:
+  schedule: [{ cron: '*/10 * * * *' }]
+  workflow_dispatch:
+concurrency: { group: web-mp4, cancel-in-progress: false }
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      RCLONE_CONFIG_R2_TYPE: s3
+      RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+      RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      RCLONE_CONFIG_R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      RCLONE_CONFIG_R2_NO_CHECK_BUCKET: 'true'
+      BUCKET: ${{ secrets.R2_BUCKET }}
+    steps:
+      - name: Herramientas
+        run: |
+          curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null
+      - name: Buscar MKV sin versión web
+        id: todo
+        run: |
+          rclone lsf "r2:$BUCKET" -R --files-only > all.txt
+          grep -i '\.mkv$' all.txt | while IFS= read -r f; do
+            grep -qxF "${f%.*}.web.mp4" all.txt || echo "$f"
+          done > todo.txt
+          echo "Pendientes: $(wc -l < todo.txt)"
+          echo "n=$(wc -l < todo.txt)" >> "$GITHUB_OUTPUT"
+      - name: Liberar espacio
+        if: steps.todo.outputs.n != '0'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+          df -h . | tail -1
+      - name: Convertir
+        if: steps.todo.outputs.n != '0'
+        run: |
+          i=0
+          while IFS= read -r f; do
+            i=$((i+1)); echo "::group::Archivo $i"
+            out="${f%.*}.web.mp4"
+            rclone copyto "r2:$BUCKET/$f" in.mkv
+            v=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 in.mkv)
+            a=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 in.mkv)
+            case "$v" in
+              h264|vp9|av1) VO=(-c:v copy) ;;
+              hevc) VO=(-c:v copy -tag:v hvc1) ;;
+              *) VO=(-c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p) ;;
+            esac
+            if [ "$a" = "aac" ]; then AO=(-c:a copy); else AO=(-c:a aac -ac 2 -b:a 192k); fi
+            echo "video=$v audio=$a"
+            if ffmpeg -hide_banner -loglevel error -y -i in.mkv -map 0:v:0 -map 0:a:0? "${VO[@]}" "${AO[@]}" -sn -dn -map_chapters -1 -movflags +faststart out.mp4; then
+              rclone copyto out.mp4 "r2:$BUCKET/$out" --header-upload "Content-Type: video/mp4"
+              echo "OK"
+            else
+              echo "::warning::No se pudo convertir el archivo $i"
+            fi
+            rm -f in.mkv out.mp4
+            echo "::endgroup::"
+          done < todo.txt
