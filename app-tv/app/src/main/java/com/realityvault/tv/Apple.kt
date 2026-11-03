@@ -1064,11 +1064,11 @@ private fun ExtrasShowcase(t: Title, s: Season, nav: Nav) {
     val shape = RoundedCornerShape(20.dp)
     Box(
         Modifier.padding(start = 48.dp, end = 48.dp, top = 30.dp).fillMaxWidth().clip(shape)
-            .background(Brush.linearGradient(listOf(tint.copy(alpha = .9f).lighten(.05f), bg), start = androidx.compose.ui.geometry.Offset.Zero, end = androidx.compose.ui.geometry.Offset(1400f, 900f)))
-            .border(1.dp, Color.White.copy(alpha = .08f), shape)
+            .background(Color(0xF20E080B))
+            .border(1.dp, Color.White.copy(alpha = .10f), shape)
     ) {
-        Box(Modifier.matchParentSize().background(Brush.horizontalGradient(listOf(bg.copy(alpha = .45f), bg.copy(alpha = .85f)))))
-        Row(Modifier.padding(start = 26.dp, end = 26.dp, top = 24.dp, bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(26.dp)) {
+        Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(tint.copy(alpha = .38f), Color.Transparent), center = androidx.compose.ui.geometry.Offset(1500f, 0f), radius = 1300f)))
+        Row(Modifier.padding(start = 26.dp, end = 26.dp, top = 22.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
             Column(Modifier.weight(1.35f)) {
                 Text("★  CONTENIDO EXTRA", style = ts(10, FontWeight.Bold, C.accent).copy(letterSpacing = 2.sp))
                 Text("Más de la temporada ${s.number}", style = ts(24, FontWeight.Bold, Color.White), modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
@@ -1079,7 +1079,7 @@ private fun ExtrasShowcase(t: Title, s: Season, nav: Nav) {
                         Column(Modifier.align(Alignment.BottomStart).padding(start = 18.dp, end = 18.dp, bottom = 16.dp)) {
                             XPill()
                             Text(f.title.ifBlank { "Extra" }, style = ts(20, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-                            if (f.description.isNotBlank()) Text(f.description, style = ts(11, color = Color.White.copy(alpha = .82f)), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp, end = 40.dp))
+                            if (f.description.isNotBlank()) Text(f.description, style = ts(11, color = Color.White.copy(alpha = .82f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp, end = 60.dp))
                             Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Row(Modifier.background(Color.White, RoundedCornerShape(99.dp)).padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Ic.play, null, tint = Color.Black, modifier = Modifier.size(11.dp)); Spacer(Modifier.width(6.dp))
@@ -1091,24 +1091,24 @@ private fun ExtrasShowcase(t: Title, s: Season, nav: Nav) {
                     }
                 }
             }
-            if (xs.size > 1) Column(Modifier.weight(1f).padding(top = 36.dp)) {
+            if (xs.size > 1) Column(Modifier.weight(1f).padding(top = 2.dp)) {
                 Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.Bottom) {
-                    Text("Todos los extras", style = ts(13, FontWeight.Bold, Color.White), modifier = Modifier.weight(1f))
+                    Text("Todos los extras", style = ts(14, FontWeight.Bold, Color.White), modifier = Modifier.weight(1f))
                     Text("${xs.size} videos" + (if (mins > 0) " · $mins min" else ""), style = ts(10, color = Color.White.copy(alpha = .55f)))
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .1f)))
                 Spacer(Modifier.height(6.dp))
                 xs.forEach { x ->
-                    Focusable({ nav.playExtra(t, x.url) }, Modifier.fillMaxWidth().padding(vertical = 3.dp), shape = RoundedCornerShape(12.dp), scale = 1.02f, ring = false) { fx ->
-                        Row(Modifier.fillMaxWidth().background(if (fx) Color.White.copy(alpha = .14f) else Color.Transparent).padding(7.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.width(104.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(C.surface)) {
+                    Focusable({ nav.playExtra(t, x.url) }, Modifier.fillMaxWidth().padding(vertical = 2.dp), shape = RoundedCornerShape(12.dp), scale = 1.02f, ring = false) { fx ->
+                        Row(Modifier.fillMaxWidth().background(if (fx) Color.White else Color.Transparent).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(88.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(7.dp)).background(C.surface)) {
                                 if (x.thumb.isNotBlank()) Img(x.thumb, Modifier.fillMaxSize())
                                 if (x.duration.isNotBlank()) Text(x.duration, style = ts(8.5f, FontWeight.Bold, Color.White),
                                     modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp).background(Color.Black.copy(alpha = .78f), RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 1.dp))
                             }
                             Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                                Text(x.title.ifBlank { "Extra" }, style = ts(12.5f, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                if (x.description.isNotBlank()) Text(x.description, style = ts(10, color = Color.White.copy(alpha = .6f)), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                                Text(x.title.ifBlank { "Extra" }, style = ts(12.5f, FontWeight.Bold, if (fx) Color.Black else Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (x.description.isNotBlank()) Text(x.description, style = ts(10, color = if (fx) Color.Black.copy(alpha = .6f) else Color.White.copy(alpha = .55f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                             }
                         }
                     }
