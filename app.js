@@ -3044,6 +3044,8 @@ function openPlayer({ url, tid, s: season, e: episode, x }){
       v.addEventListener('ended', () => { if (!ncOff && v.duration > 120) nc.querySelector('[data-pl-next]').click(); });
       nc.querySelector('[data-nc-cancel]').addEventListener('click', () => { ncOff = true; nc.hidden = true; });
     }
+    // al terminar, si no arrancó otro capítulo (final de temporada, un extra, una película…), se cierra solo
+    v.addEventListener('ended', () => setTimeout(() => { if (S.playerOpen && plSess?.v === v && v.ended) closePlayer(); }, 1500));
     plSess = { v, tid, s: season, e: episode, rv, ready: () => isReady,
       timer: setInterval(() => { if (!v.paused) save(); }, 15000),
       off: () => { v.removeEventListener('pause', save); v.removeEventListener('ended', save); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', save); } };

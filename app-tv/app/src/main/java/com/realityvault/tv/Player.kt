@@ -225,7 +225,8 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     LaunchedEffect(showNext) { if (showNext) AutoFocusOnce(nextReq) }
     LaunchedEffect(ended) {
         if (ended && next != null && t != null && !nextOff) { delay(500); if (!nextOff) playNext() }
-        else if (ended) controlsVisible = true
+        // sin capítulo siguiente (final de temporada, un extra, una película…): vuelve solo a la ficha
+        else if (ended) { delay(1200); nav.back() }
     }
 
     val playReq = remember { FocusRequester() }
