@@ -1409,6 +1409,181 @@ const DESC_ES = {
   1776: 'Veinte mujeres solteras se mudan a una mansión en Los Ángeles para competir por el corazón de Flavor Flav, quien elige a su verdadero amor.',
   499: 'Reality estadounidense que muestra la vida cotidiana del cantante de heavy metal Ozzy Osbourne y su familia. Se estrenó en MTV en 2002 y en su primera temporada fue la serie más vista de la cadena.'
 };
+// Nombres y sinopsis de episodios en español para series que TMDB solo tiene en inglés o sin datos (clave: id de TMDB → temporada → [nombre, sinopsis] por número de episodio)
+const EP_ES = {
+  4406: {
+    "3": [
+      [
+        "Mecánicas",
+        "Paris y Nicole dejan Nueva York en un autobús rumbo a Nueva Jersey, donde trabajan como mecánicas en un taller de chapa y pintura."
+      ],
+      [
+        "Secretarias",
+        "Cuando Paris y Nicole hacen una pasantía en el correo interno de una empresa de marketing en Manhattan, descubren que subir en la escala corporativa es difícil, sobre todo con zapatos de diseñador."
+      ],
+      [
+        "Aerolínea",
+        "Paris y Nicole levantan vuelo al conseguir trabajo en una aerolínea. Pero todo sale mal cuando Nicole entra en pánico porque el gato de su anfitriona ataca a Foxy Cleopatra."
+      ],
+      [
+        "Funeraria",
+        "Paris y Nicole deciden trabajar en una funeraria de Nueva Jersey. Reina el caos de siempre cuando Nicole, sin querer, deja los restos de alguien en el peor lugar posible. Además, las dos intentan meterse con el hábito de fumar de su familia anfitriona, para disgusto de todos."
+      ],
+      [
+        "Cirugía plástica",
+        "Paris y Nicole van a trabajar con un cirujano plástico. Como era de esperar, el caos aparece de más de una manera. Mientras tanto, las chicas congenian con su nueva familia anfitriona y dejan una huella duradera en la mamá."
+      ],
+      [
+        "Noticiero",
+        "Paris y Nicole trabajan como presentadoras del clima en las noticias de Fox 45 Baltimore."
+      ],
+      [
+        "Guardería",
+        "Paris y Nicole hacen una pasantía en una guardería."
+      ],
+      [
+        "Zoológico",
+        "Cuando Paris y Nicole hacen una pasantía en un zoológico de Baltimore, descubren que las dos tienen verdaderos instintos animales. Mientras tanto, organizan una cita romántica para sus anfitriones, para reavivar la llama después de 20 años de matrimonio."
+      ],
+      [
+        "Cocina gourmet",
+        "Cuando las chicas hacen una pasantía en una pastelería gourmet, arman un enorme lío preparando postres. Además, Paris cocina la cena para la familia que la hospeda."
+      ],
+      [
+        "Vidente",
+        "Paris y Nicole hacen una pasantía con una vidente en Washington D. C. y juegan a ser casamenteras de la abuela de su familia anfitriona."
+      ],
+      [
+        "Hogar de ancianos",
+        "Paris y Nicole hacen una pasantía en una residencia de adultos mayores y, aunque fracasan en cocinar y limpiar, lo compensan sumando su propio toque al calendario de actividades."
+      ],
+      [
+        "Agencia de publicidad (Burger King)",
+        "Las chicas llegan a Miami, donde Paris y Nicole hacen una pasantía en una agencia de publicidad y su nueva familia anfitriona, los Jacobs, tiene dos bebés orangutanes, Pumpkin y Peanut. Además, Paris y Nicole tienen que crear un nuevo aviso para Burger King."
+      ],
+      [
+        "Bomberos",
+        "Las chicas llegan a Atlantic City, donde suben la temperatura al hacer una pasantía como bomberas. También intentan hacerse amigas de los hijos de su nueva familia anfitriona, pero el plan les sale mal."
+      ],
+      [
+        "Fábrica",
+        "Las chicas hacen una pasantía en una empresa de manufactura donde el trabajo resulta aburrido, pero igual logran divertirse con su familia anfitriona."
+      ],
+      [
+        "Organizadoras de bodas",
+        "Paris y Nicole prueban suerte como organizadoras de bodas en la capilla Dearly Beloved de Nashville. Los problemas empiezan cuando las chicas se quedan dormidas y dejan a una novia nerviosa mordiéndose las uñas en el altar."
+      ],
+      [
+        "Dentista",
+        "La última parada de las chicas es Tennessee, donde caen en manos de una oradora motivacional hiperanimada y entrenadora de reinas de belleza. Esta diva convence a Paris de anotarse en el certamen local. Mientras tanto, su última pasantía es en un consultorio dental, donde Paris y Nicole tienen que usar el torno."
+      ]
+    ],
+    "4": [
+      [
+        "La familia Nolan",
+        "¡Paris y Nicole están embarazadas! Bueno, más o menos. Se ponen trajes de embarazo de 16 kilos y reemplazan a un ama de casa en su noveno mes. Las compras y las fiestas quedan descartadas mientras las chicas luchan por limpiar la casa, criar a una nena de tres años, sobrevivir a la clase de preparto... ¿y terminar en un club nocturno? ¡Sí, las chicas viven el embarazo a su manera! Cuando Nicole lleva al señor Nolan a un local de strippers, las hormonas de la señora Nolan se disparan."
+      ],
+      [
+        "La familia Ghauri",
+        "Paris y Nicole cambian sus vestidos de diseñador por saris tradicionales y asumen las responsabilidades de una madre pakistaní tradicional. Con la paciencia de su “esposo” y de su “hijo” de quince años, americanizado, las chicas logran vestirse, hablar y bailar como amas de casa conservadoras... o al menos su versión de eso. Pero las cosas no salen tan bien cuando deciden compartir sus experiencias, sobre todo lo mucho que les gusta salir de fiesta."
+      ],
+      [
+        "La familia Weekes",
+        "Paris y Nicole reemplazan a un ama de casa desesperada por mantener viva la chispa en sus 12 años de matrimonio. El “esposo por un día” hace lo imposible por enseñarles cómo funciona una relación, pero el compromiso no les resulta fácil. Para mostrarle a la pareja cómo mantendrían ellas la chispa, Paris se pone salvaje y mojada en un campo de golf, y Nicole suma vendas en los ojos, tequila y una sesión de fotos erótica. Es seguro decir que esta pareja anfitriona nunca volverá a ser la misma."
+      ],
+      [
+        "La familia Padilla",
+        "Paris y Nicole visitan a una nueva familia y les piden que hagan de madres de cuatro niños."
+      ],
+      [
+        "La familia Bowden",
+        "Paris y Nicole organizan ceremonias de compromiso sorpresa para madres lesbianas que no están casadas."
+      ],
+      [
+        "La familia Murrie",
+        "Paris y Nicole enfrentan el desafío de cuidar a un niño de cinco años y a un bebé."
+      ],
+      [
+        "La familia Contreras",
+        "Paris y Nicole viven un campamento inolvidable con la familia."
+      ],
+      [
+        "La familia Beggs",
+        "Paris y Nicole ayudan a una familia con una casa desordenada."
+      ],
+      [
+        "La familia Burton",
+        "Paris y Nicole visitan a una familia artística. Los valores new age se ponen a prueba."
+      ],
+      [
+        "La confrontación",
+        "Una pareja que lleva 64 años casada les da a Paris y Nicole una merecida lección sobre el amor, la vida y el estar juntos."
+      ]
+    ],
+    "5": [
+      [
+        "Bienvenidos a Camp Shawnee",
+        "Paris y Nicole por fin vuelven a estar juntas después de su larga pelea y el Camp Shawnee de Malibú tiene el gusto de conocerlas. Les presentan a los campistas que quieren bajar de peso. Las chicas intentan ayudar a los campistas hambrientos recuperando su comida chatarra."
+      ],
+      [
+        "A todo glamour",
+        "Paris y Nicole tratan de ayudar a los campistas de Camp Shawnee a ponerse en forma. Les enseñan a las chicas a bajar de peso “a su manera”, y las chicas y los chicos compiten para ver quiénes bajan más. Nicole le da consejos a Hunter para impresionar a Paris. Más tarde, Hunter descubre que a Paris no se la impresiona fácil."
+      ],
+      [
+        "Las chicas del certamen solo quieren divertirse",
+        "Paris y Nicole arman lío cuando intentan asesorar a un grupo de chicas y a sus mamás para un certamen de belleza. Paris ayuda a Joey, el hijo del director del campamento, con su primera cita. Nicole tiene que darle a Hunter la noticia de que Paris solo lo quiere como amigo."
+      ],
+      [
+        "Las estrellas del show",
+        "Paris y Nicole preparan a los campistas y a sus mamás para el certamen. Con un giro inesperado, las mamás tienen que participar y son sus hijas quienes las preparan."
+      ],
+      [
+        "Coqueteando con el desastre",
+        "Comienza un campamento de terapia de pareja y las chicas reciben la visita de la mamá de Paris, Kathy Hilton. Las habilidades románticas de Paris y Nicole se ponen a prueba y la relación de Paris y Hunter da un giro importante."
+      ],
+      [
+        "Comprometidos",
+        "Mientras el campamento de parejas llega a su fin, Paris y Nicole ayudan a las parejas a renovar sus compromisos en ceremonias. Paris ayuda a un campista con sus problemas de compromiso. Alguien les está haciendo bromas pesadas a las chicas, pero no es quien sospechaban. También deben enfrentar sus propios problemas con el amor."
+      ],
+      [
+        "Conozcan a Myke Hawke",
+        "Empieza el campamento de supervivencia en Camp Shawnee y Paris y Nicole tienen que aprender a arreglárselas en la naturaleza. Los campistas son puestos a prueba comiendo insectos, usando cuchillos y encendiendo sus propias fogatas. El campamento resulta demasiado duro para un campista y otro se enamora de Myke Hawke."
+      ],
+      [
+        "Perdidas en el bosque",
+        "Las habilidades de “supervivencia” de Paris y Nicole se ponen a prueba cuando se pierden en el bosque. El campamento de supervivencia llega a su fin y los campistas y Myke tienen una despedida muy particular."
+      ],
+      [
+        "Casi sin fama",
+        "Comienza el campamento de actuación en Camp Shawnee. Paris y Hunter avanzan en su relación. Sally Kirkland se une al campamento y comparte técnicas y lecciones muy particulares con los campistas. Nicole y Paris tienen varios cruces con Sally."
+      ],
+      [
+        "Final de Hollywood",
+        "El final cierra la estadía de las chicas en Camp Shawnee. Se despiden del campamento con “Paris y Nicole: El musical” y una sorpresa para Ed, el director del campamento."
+      ]
+    ]
+  }
+};
+async function fillMissingEpisodes(){
+  let n = 0;
+  for (const t of S.titles){
+    const map = EP_ES[t.tmdbId]; if (!map || !Array.isArray(t.seasons)) continue;
+    let changed = false;
+    const seasons = t.seasons.map(s => {
+      const arr = map[s.number]; if (!arr) return s;
+      return { ...s, episodes: (s.episodes || []).map(e => {
+        const x = arr[(+e.number) - 1]; if (!x) return e;
+        const blankT = !(e.title || '').trim() || /^(Episodio|Episode)\s*\d+$/i.test(e.title.trim());
+        const blankD = !(e.description || '').trim();
+        if (!blankT && !blankD) return e;
+        changed = true;
+        return { ...e, title: blankT ? x[0] : e.title, description: blankD ? x[1] : e.description };
+      }) };
+    });
+    if (changed){ try { await S.db.doc('titles/' + t.id).set({ ...t, seasons, updatedAt: Date.now() }); n++; } catch {} }
+  }
+  if (n) toast(`Completé los nombres y sinopsis de los episodios de ${n} serie${n > 1 ? 's' : ''}.`);
+}
 async function fillMissingDescriptions(manual){
   const miss = S.titles.filter(t => !(t.description||'').trim());
   if (!miss.length){ if (manual) toast('Todos los títulos ya tienen descripción.'); return; }
@@ -1493,13 +1668,19 @@ async function tmdbImport(id){
       for (let i=0;i<wanted.length;i++){
         S.tmdb.status = `Importando temporada ${wanted[i].season_number} (${i+1} de ${wanted.length})…`; rerenderPanel();
         const sd = await tmdb(`/tv/${id}/season/${wanted[i].season_number}`);
+        const generic = n => !n || /^(Episodio|Episode)\s*\d+$/i.test(String(n).trim());
+        let en = null;
+        if ((sd.episodes||[]).some(ep => generic(ep.name) || !ep.overview)) en = await tmdb(`/tv/${id}/season/${wanted[i].season_number}`, { language:'en-US' }).catch(() => null);
         const prev = old.find(x => +x.number === sd.season_number);
         seasons.push({
           id: prev?.id || uid('s'), number: sd.season_number,
           title: sd.name && !/^(Temporada|Season)\s*\d+$/i.test(sd.name) ? sd.name : '',
           episodes: (sd.episodes||[]).map(ep => {
             const pe = prev?.episodes?.find(x => +x.number === ep.episode_number);
-            return { id: pe?.id || uid('e'), number: ep.episode_number, title: ep.name || '', description: ep.overview || '', duration: ep.runtime ? `${ep.runtime} min` : '', thumb: tmdbImg(ep.still_path,'w780'), url: pe?.url || '' };
+            const es = EP_ES[id]?.[sd.season_number]?.[ep.episode_number - 1], ee = en?.episodes?.find(x => x.episode_number === ep.episode_number);
+            const title = generic(ep.name) ? (es?.[0] || ee?.name || ep.name || '') : ep.name;
+            const description = ep.overview || es?.[1] || ee?.overview || '';
+            return { id: pe?.id || uid('e'), number: ep.episode_number, title, description, duration: ep.runtime ? `${ep.runtime} min` : '', thumb: tmdbImg(ep.still_path,'w780'), url: pe?.url || '' };
           })
         });
       }
@@ -3050,7 +3231,7 @@ function render(){
   document.body.classList.toggle('in-admin', S.route==='admin');
   document.body.classList.toggle('in-landing', isLanding());
   renderAccount();
-  if (S.route==='admin' && S.loaded.t && !S._descRun){ S._descRun = true; setTimeout(()=>fillMissingDescriptions(false), 800); }
+  if (S.route==='admin' && S.loaded.t && !S._descRun){ S._descRun = true; setTimeout(()=>{ fillMissingDescriptions(false); fillMissingEpisodes(); }, 800); }
   document.querySelectorAll('.nav a').forEach(a => { if (a.dataset.r===S.route && !S.q) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current'); });
   let html;
   if (S.noDb) html = `<div class="lock"><div class="dial" style="width:64px;height:64px" aria-hidden="true"></div><h1>Falta conectar la base de datos</h1><p>Completá <code>config.js</code> con los datos de tu proyecto de Supabase. Los pasos están en el archivo README.</p></div>`;
