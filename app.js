@@ -984,6 +984,24 @@ function renderSeasonsEd(E){
               <button class="iconbtn" data-ep-x="${si}.${ei}" aria-label="Quitar capítulo">✕</button></div>
           </div></div>`; }).join('')}
         <div><button class="btn btn-line btn-sm" data-ep-add="${si}">+ Capítulo</button></div>
+        <div class="ex-ed">
+          <div class="ex-ed-h"><span class="ex-star">${XSTAR}</span><b>Extras de esta temporada</b><small>${(s.extras||[]).length ? (s.extras.length + ' extra' + (s.extras.length>1?'s':'')) : 'Detrás de cámaras, escenas eliminadas, entrevistas… Aparecen aparte, sin contar como capítulos.'}</small></div>
+          ${(s.extras||[]).map((x,xi)=>`<div class="ep-ed ep-ed-x">
+            <div class="field">${slot('thumb',`seasons.${si}.extras.${xi}.thumb`,x.thumb,'r169','Miniatura')}<span class="hint">1280 × 720 px</span></div>
+            <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+              <div class="fgrid">
+                <label class="field" style="grid-column:span 2"><span>Título del extra</span><input class="input" id="x-t-${si}-${xi}" data-ex="${si}.${xi}" data-f="title" value="${esc(x.title)}" placeholder="Detrás de cámaras"></label>
+                <label class="field"><span>Duración</span><input class="input" id="x-d-${si}-${xi}" data-ex="${si}.${xi}" data-f="duration" value="${esc(x.duration)}" placeholder="12 min"></label>
+              </div>
+              <label class="field"><span>Descripción</span><textarea class="textarea" style="min-height:56px" id="x-s-${si}-${xi}" data-ex="${si}.${xi}" data-f="description">${esc(x.description)}</textarea></label>
+              <label class="field"><span>Subtítulos en español (.vtt)</span><input class="input" id="x-v-${si}-${xi}" data-ex="${si}.${xi}" data-f="subs" value="${esc(x.subs)}" placeholder="Enlace al archivo .vtt (opcional)"></label>
+              <label class="field"><span>Enlace para la TV (4K, opcional)</span><input class="input" id="x-t4-${si}-${xi}" data-ex="${si}.${xi}" data-f="urlTv" value="${esc(x.urlTv)}" placeholder="Solo para la app de la TV. Vacío = usa el enlace de abajo"></label>
+              <div class="ep-ed-foot"><input class="input" id="x-u-${si}-${xi}" data-ex="${si}.${xi}" data-f="url" value="${esc(x.url)}" placeholder="Enlace del video del extra" aria-label="Enlace del extra">
+                ${xi > 0 ? `<button class="iconbtn" data-ex-up="${si}.${xi}" aria-label="Subir (el primero es el destacado)" title="Subir (el primero es el destacado)">↑</button>` : '<span class="ex-feat">Destacado</span>'}
+                <button class="iconbtn" data-ex-x="${si}.${xi}" aria-label="Quitar extra">✕</button></div>
+            </div></div>`).join('')}
+          <div><button class="btn btn-line btn-sm" data-ex-add="${si}">+ Extra</button></div>
+        </div>
       </div></div></div>`; }).join('')}
     <div><button class="btn btn-line" data-season-add>+ Temporada</button></div></div>`;
 }
@@ -1675,6 +1693,7 @@ async function tmdbImport(id){
         seasons.push({
           id: prev?.id || uid('s'), number: sd.season_number,
           title: sd.name && !/^(Temporada|Season)\s*\d+$/i.test(sd.name) ? sd.name : '',
+          extras: prev?.extras || [],
           episodes: (sd.episodes||[]).map(ep => {
             const pe = prev?.episodes?.find(x => +x.number === ep.episode_number);
             const es = EP_ES[id]?.[sd.season_number]?.[ep.episode_number - 1], ee = en?.episodes?.find(x => x.episode_number === ep.episode_number);
@@ -1848,6 +1867,7 @@ app.addEventListener('input', e => {
   else if (el.dataset.cast){ E.cast[+el.dataset.cast][el.dataset.f] = el.value; markDirty(); }
   else if (el.dataset.season){ E.seasons[+el.dataset.season][el.dataset.f] = el.value; markDirty(); if (el.dataset.f==='number'){ const n = el.closest('.season-h').querySelector('.num'); n.textContent = 'T'+el.value; } }
   else if (el.dataset.ep){ const [si,ei] = el.dataset.ep.split('.').map(Number); E.seasons[si].episodes[ei][el.dataset.f] = el.value; markDirty(); }
+  else if (el.dataset.ex){ const [si,xi] = el.dataset.ex.split('.').map(Number); E.seasons[si].extras[xi][el.dataset.f] = el.value; markDirty(); }
 });
 app.addEventListener('change', async e => {
   const el = e.target;
@@ -1932,6 +1952,9 @@ app.addEventListener('click', async e => {
   if (d.epSoon){ const [si,ei]=d.epSoon.split('.').map(Number); const e2 = E.seasons[si].episodes[ei]; e2.availability = e2.availability === 'proximamente' ? '' : 'proximamente'; markDirty(); rerenderPanel(); return; }
   if (d.epAdd !== undefined){ const s = E.seasons[+d.epAdd]; const n = Math.max(0,...s.episodes.map(x=>+x.number||0))+1; s.episodes.push({id:uid('e'),number:n,title:'',description:'',duration:'',thumb:'',url:''}); markDirty(); rerenderPanel(); document.getElementById(`e-t-${d.epAdd}-${s.episodes.length-1}`)?.focus(); return; }
   if (d.epX){ const [si,ei]=d.epX.split('.').map(Number); E.seasons[si].episodes.splice(ei,1); markDirty(); rerenderPanel(); return; }
+  if (d.exAdd !== undefined){ const s = E.seasons[+d.exAdd]; (s.extras ||= []).push({ id:uid('x'), title:'', description:'', duration:'', thumb:'', url:'' }); markDirty(); rerenderPanel(); document.getElementById(`x-t-${d.exAdd}-${s.extras.length-1}`)?.focus(); return; }
+  if (d.exX){ const [si,xi]=d.exX.split('.').map(Number); E.seasons[si].extras.splice(xi,1); markDirty(); rerenderPanel(); return; }
+  if (d.exUp){ const [si,xi]=d.exUp.split('.').map(Number); const a = E.seasons[si].extras; [a[xi-1], a[xi]] = [a[xi], a[xi-1]]; markDirty(); rerenderPanel(); return; }
   if (d.clear){ e.stopPropagation();
     if (d.clear.startsWith('coll:')){ const c = S.colls.find(x => x.id === d.clear.slice(5)); if (c){ c.image = ''; await saveColls(true); rerenderPanel(); } return; }
     if (d.clear.startsWith('frow:')){ const [, rid, idx] = d.clear.split(':'); const r = S.frows.find(x => x.id === rid); if (r && r.items[+idx]){ r.items[+idx].image = ''; await saveFrows(true); rerenderPanel(); } return; }
@@ -2031,6 +2054,24 @@ function renderTitlePage(id){
   <div class="tp-tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" data-tptab="${k}" aria-selected="${S.tpTab===k}">${l}</button>`).join('')}</div>
   <section class="tp-panel">${S.tpTab==='episodios' ? renderEpisodesTab(t, seasons) : S.tpTab==='sugerencias' ? renderSuggTab(t) : renderDetailsTab(t, seasons)}</section>`;
 }
+const XSTAR = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.8-6.3 3.8 1.7-7L2 9.2l7.1-.6z"/></svg>';
+const extrasOf = s => (s.extras || []).map((x, xi) => ({ ...x, xi })).filter(x => safeUrl(x.url));
+function extrasPanel(t, s){
+  const xs = extrasOf(s); if (!xs.length) return '';
+  const f = xs[0], mins = xs.reduce((a, x) => a + (parseInt(x.duration) || 0), 0);
+  const attrs = x => `data-watch data-x="${esc(t.id)}:${esc(s.number)}:${x.xi}" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener"`;
+  const cut = (txt, n) => txt && txt.length > n ? txt.slice(0, n - 1) + '…' : (txt || '');
+  return `<section class="xv" aria-label="Extras de la temporada ${esc(s.number)}">
+    ${f.thumb ? `<span class="xv-bg" data-src="${esc(f.thumb)}"></span>` : ''}
+    <div class="xv-in">
+      <div class="xv-main"><div class="xv-k">${XSTAR} CONTENIDO EXTRA</div><h3 class="xv-h">Más de la temporada ${esc(s.number)}</h3>
+        <a class="xv-f" ${attrs(f)}><span class="xv-fi" ${f.thumb ? `data-src="${esc(f.thumb)}"` : ''}></span>
+          <span class="xv-ft"><span class="xpill">${XSTAR} EXTRA</span><b>${esc(f.title || 'Extra')}</b>${f.description ? `<span class="xv-fd">${esc(cut(f.description, 200))}</span>` : ''}
+          <span class="xv-act"><span class="xv-btn">${ICONS.play} Ver extra</span>${f.duration ? `<span class="xv-dur">${esc(f.duration)}</span>` : ''}</span></span></a></div>
+      ${xs.length > 1 ? `<div class="xv-list"><div class="xv-lh"><b>Todos los extras</b><span>${xs.length} videos${mins ? ' · ' + mins + ' min' : ''}</span></div>
+        ${xs.map(x => `<a class="xv-i" ${attrs(x)}><span class="xv-t" ${x.thumb ? `data-src="${esc(x.thumb)}"` : ''}>${x.duration ? `<i>${esc(x.duration)}</i>` : ''}</span><span class="xv-it"><b>${esc(x.title || 'Extra')}</b>${x.description ? `<span>${esc(cut(x.description, 70))}</span>` : ''}</span></a>`).join('')}</div>` : ''}
+    </div></section>`;
+}
 function renderEpisodesTab(t, seasons){
   const s = seasons[S.tpSeason] || seasons[0]; if (!s) return '';
   return `${seasons.length>1 ? `<select class="pill-select" id="tpSeason" aria-label="Temporada">${seasons.map((x,i)=>`<option value="${i}" ${i===S.tpSeason?'selected':''}>Temporada ${esc(x.number)}${x.title?' · '+esc(x.title):''}</option>`).join('')}</select>` : `<span class="pill-select" style="background-image:none;padding-right:16px">Temporada ${esc(s.number)}</span>`}
@@ -2041,7 +2082,8 @@ function renderEpisodesTab(t, seasons){
         <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number, t.logo)}${seen?'<span class="seen-tag">✓ Visto</span>':soon?'<span class="seen-tag soon-tag">Próximamente</span>':''}</div>
         <div class="ep-meta"><span class="ep-label">Episodio ${esc(e.number)}</span><strong>${esc(e.title || 'Episodio '+e.number)}</strong></div>
         ${e.description?`<p>${esc(e.description)}</p>`:''}
-        ${!soon && e.duration?`<div class="ep-d">${esc(e.duration)}</div>`:''}</${tag}>`; }).join('')}</div><button class="rail-btn r" data-scroll="1" aria-label="Siguientes">›</button></div>` : '<p class="empty-note" style="padding:0">Esta temporada todavía no tiene episodios.</p>'}`;
+        ${!soon && e.duration?`<div class="ep-d">${esc(e.duration)}</div>`:''}</${tag}>`; }).join('')}</div><button class="rail-btn r" data-scroll="1" aria-label="Siguientes">›</button></div>` : '<p class="empty-note" style="padding:0">Esta temporada todavía no tiene episodios.</p>'}
+    ${extrasPanel(t, s)}`;
 }
 function renderSuggTab(t){
   const pub = published().filter(x=>x.id!==t.id);
@@ -2926,8 +2968,9 @@ function endPlayerSession(){
   if (ready() && tid && v.duration) savePos(tid, s, e, v.currentTime, v.duration);
   rv?.destroy(); v._hls?.destroy();
 }
-function openPlayer({ url, tid, s: season, e: episode }){
-  const t = tid ? byId(tid) : null;
+function openPlayer({ url, tid, s: season, e: episode, x }){
+  const [xt, xsn, xi] = x ? String(x).split(':') : [];
+  const t = tid ? byId(tid) : xt ? byId(xt) : null;
   const emb = embedFor(url); if (!emb) return;
   endPlayerSession();
   const native = emb.type !== 'iframe';
@@ -2937,7 +2980,8 @@ function openPlayer({ url, tid, s: season, e: episode }){
     sub = `T${season}:E${episode}${ep?.title ? ' · ' + ep.title : ''}`;
     subsUrl = safeUrl(ep?.subs);
   } else if (t && t.type !== 'serie') subsUrl = safeUrl(t.subs);
-  const nx = nextAfter(t, season, episode);
+  if (x && t){ const xe = (t.seasons || []).find(z => +z.number === +xsn)?.extras?.[+xi]; sub = 'Extra' + (xe?.title ? ' · ' + xe.title : ''); subsUrl = safeUrl(xe?.subs); }
+  const nx = x ? null : nextAfter(t, season, episode);
   if (!playerRoot){ playerRoot = document.createElement('div'); playerRoot.id = 'playerRoot'; document.body.appendChild(playerRoot); }
   const media = emb.type === 'iframe'
     ? `<iframe src="${esc(emb.src)}" title="${esc(t?.title || 'Video')}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
@@ -3058,7 +3102,7 @@ document.addEventListener('click', e => {
   if (!a || !S.session) return;
   e.preventDefault();
   if (a.closest('.auth-card')) closeDetail();
-  openPlayer({ url: a.getAttribute('href'), tid: a.dataset.tid || '', s: a.dataset.s ?? '', e: a.dataset.e ?? '' });
+  openPlayer({ url: a.getAttribute('href'), tid: a.dataset.tid || '', s: a.dataset.s ?? '', e: a.dataset.e ?? '', x: a.dataset.x || '' });
 }, true);
 
 // gate every "watch" link behind an account (capture phase, before navigation)
