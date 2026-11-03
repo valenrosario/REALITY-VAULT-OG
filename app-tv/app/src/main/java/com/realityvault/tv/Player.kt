@@ -92,13 +92,14 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
     val subsUrl = remember(s, t, episode) {
         when {
             episode != null -> safeSub(episode.subs)
+            t != null && s.extra -> safeSub(t.seasons.flatMap { it.extras }.firstOrNull { it.url == s.url }?.subs ?: "")
             t != null && !s.trailer -> safeSub(t.subs)
             else -> ""
         }
     }
     val media = remember(s.url, subsUrl) { mediaFor(s.url, subsUrl) }
-    val next = remember(s, t) { if (t != null) Store.nextAfter(t, s.season, s.episode) else null }
-    LaunchedEffect(s) { if (!s.trailer) Store.recordWatch(s.titleId, s.season, s.episode) }
+    val next = remember(s, t) { if (t != null && !s.extra) Store.nextAfter(t, s.season, s.episode) else null }
+    LaunchedEffect(s) { if (!s.trailer && !s.extra) Store.recordWatch(s.titleId, s.season, s.episode) }
 
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
         when (media) {
@@ -159,7 +160,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     var cueText by remember { mutableStateOf("") }
     PauseInBackground(player)
     // --- seguir desde donde te quedaste (igual que la web) ---
-    val track = t != null && !s.trailer
+    val track = t != null && !s.trailer && !s.extra
     fun savePos() {
         if (!track) return
         val d = player.duration; val c = player.currentPosition

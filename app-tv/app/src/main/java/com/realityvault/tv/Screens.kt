@@ -78,7 +78,7 @@ sealed class Screen {
     data object Search : Screen()
     data object Account : Screen()
     data class Detail(val id: String) : Screen()
-    data class Player(val titleId: String, val url: String, val season: Int?, val episode: Int?, val trailer: Boolean = false) : Screen()
+    data class Player(val titleId: String, val url: String, val season: Int?, val episode: Int?, val trailer: Boolean = false, val extra: Boolean = false) : Screen()
     /** required = true: es la puerta de entrada obligatoria, no se puede saltear. */
     data class Login(val then: Screen? = null, val required: Boolean = false) : Screen()
     data class Person(val name: String) : Screen()
@@ -108,6 +108,12 @@ class Nav {
     /** Ver algo: pide cuenta igual que el sitio. */
     fun play(t: Title, url: String, season: Int?, episode: Int?) {
         val p = Screen.Player(t.id, url, season, episode)
+        if (Store.session == null) go(Screen.Login(p)) else go(p)
+    }
+
+    /** Ver un extra de temporada: no cuenta para "Seguir viendo" ni para el siguiente capítulo. */
+    fun playExtra(t: Title, url: String) {
+        val p = Screen.Player(t.id, url, null, null, extra = true)
         if (Store.session == null) go(Screen.Login(p)) else go(p)
     }
 }

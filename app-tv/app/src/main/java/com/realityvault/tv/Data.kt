@@ -20,7 +20,8 @@ data class Episode(
     val duration: String, val url: String, val thumb: String, val subs: String = ""
 )
 
-data class Season(val number: Int, val name: String, val episodes: List<Episode>)
+/** extras: material adicional de la temporada (detrás de cámaras, escenas eliminadas…); no cuentan como capítulos. */
+data class Season(val number: Int, val name: String, val episodes: List<Episode>, val extras: List<Episode> = emptyList())
 
 data class CastMember(val name: String, val role: String, val photo: String)
 
@@ -110,7 +111,15 @@ fun parseTitle(o: JSONObject): Title {
                     eps += Episode(eo.i("number", j + 1), eo.s("title"), eo.s("description"), eo.s("duration"), tvUrl(eo), eo.s("thumb"), eo.s("subs").trim())
                 }
             }
-            seasons += Season(so.i("number", i + 1), so.s("name").ifBlank { so.s("title") }, eps)
+            val xs = mutableListOf<Episode>()
+            so.optJSONArray("extras")?.let { xa ->
+                for (j in 0 until xa.length()) {
+                    val xo = xa.optJSONObject(j) ?: continue
+                    val u = tvUrl(xo)
+                    if (u.startsWith("http")) xs += Episode(j + 1, xo.s("title"), xo.s("description"), xo.s("duration"), u, xo.s("thumb"), xo.s("subs").trim())
+                }
+            }
+            seasons += Season(so.i("number", i + 1), so.s("name").ifBlank { so.s("title") }, eps, xs)
         }
     }
     return Title(
