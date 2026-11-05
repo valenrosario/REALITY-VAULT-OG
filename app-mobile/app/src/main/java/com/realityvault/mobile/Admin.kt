@@ -461,8 +461,9 @@ private fun TitleImages(doc: Doc) {
     }
     ACard("Celular", "Las que usa la app del celular y la web en pantallas chicas.") {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            AImage("Portada del inicio", "mobilebanner", doc.str("bannerImageMobile"), "4:5 · deja libre la parte de abajo", modifier = Modifier.weight(1f)) { doc.set("bannerImageMobile", it) }
-            AImage("Fondo de la ficha", "mobile", doc.str("backdropMobile"), "16:10 · 1600 × 1000", modifier = Modifier.weight(1f)) { doc.set("backdropMobile", it) }
+            AImage("Portada del inicio", "mobilebanner", doc.str("bannerImageMobile"), "4:5 · deja libre la parte de abajo", modifier = Modifier.weight(1f),
+                fallback = doc.str("bannerImage").ifBlank { doc.str("backdrop") }) { doc.set("bannerImageMobile", it) }
+            AImage("Fondo de la ficha", "mobile", doc.str("backdropMobile"), "16:10 · 1600 × 1000", modifier = Modifier.weight(1f), fallback = doc.str("backdrop")) { doc.set("backdropMobile", it) }
         }
     }
     ACard("Computadora y TV") {
@@ -808,9 +809,11 @@ private fun AdminBanner(id: String, nav: Nav) {
             item {
                 ACard("Imágenes", "La del celular es vertical: dejá libre la parte de abajo, ahí van el logo y el texto.") {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        AImage("Celular", "mobilebanner", doc.str("imageMobile"), "4:5 · 1080 × 1350", modifier = Modifier.weight(1f)) { doc.set("imageMobile", it) }
+                        AImage("Celular", "mobilebanner", doc.str("imageMobile"), "4:5 · tocá Encuadrar para moverla", modifier = Modifier.weight(1f),
+                            fallback = t?.optString("bannerImageMobile")?.ifBlank { null } ?: doc.str("image").ifBlank { t?.optString("bannerImage")?.ifBlank { null } ?: t?.optString("backdrop") ?: "" }) { doc.set("imageMobile", it) }
                         Column(Modifier.weight(1f)) {
-                            AImage("Computadora", "banner", doc.str("image"), "3:1 · 2400 × 800") { doc.set("image", it) }
+                            AImage("Computadora", "banner", doc.str("image"), "3:1 · 2400 × 800",
+                                fallback = t?.optString("bannerImage")?.ifBlank { null } ?: t?.optString("backdrop") ?: "") { doc.set("image", it) }
                         }
                     }
                 }

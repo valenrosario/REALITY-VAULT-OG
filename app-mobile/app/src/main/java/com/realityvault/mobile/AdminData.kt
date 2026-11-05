@@ -176,6 +176,26 @@ object AdminData {
         if (rot == 0) bmp else Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, Matrix().apply { postRotate(rot.toFloat()) }, true)
     }
 
+    /** Baja una imagen de un enlace (un momento, solo para poder reencuadrarla). */
+    suspend fun download(url: String): Bitmap = withContext(Dispatchers.IO) {
+        val c = URL(url).openConnection() as HttpURLConnection
+        val bytes = try {
+            c.connectTimeout = 15000; c.readTimeout = 30000; c.instanceFollowRedirects = true
+            c.setRequestProperty("User-Agent", "RealityVault-Android")
+            if (c.responseCode !in 200..299) throw Exception("No se pudo bajar la imagen (${c.responseCode}).")
+            c.inputStream.use { it.readBytes() }
+        } finally { c.disconnect() }
+        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
+        var sample = 1
+        while (o.outWidth / (sample * 2) >= 3000 || o.outHeight / (sample * 2) >= 3000) sample *= 2
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: throw Exception("Ese enlace no es una imagen que se pueda abrir.")
+    }
+
+    /** Al cambiar de cuenta: se olvida todo lo del panel y se vuelve a comprobar. */
+    fun reset() { isAdmin = false; loaded = false; titles = emptyList(); banners = emptyList(); rows = JSONArray(); colls = JSONArray(); site = JSONObject(); ver++ }
+
     /** Recorta (si hace falta), achica al tamaño del tipo, comprime en WebP y sube. Devuelve el enlace público. */
     suspend fun upload(src: Bitmap, kind: String, crop: android.graphics.Rect?): String = withContext(Dispatchers.IO) {
         val (mw, mh, alpha) = SPECS[kind] ?: SPECS.getValue("backdrop")

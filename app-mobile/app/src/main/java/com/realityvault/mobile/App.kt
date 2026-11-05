@@ -91,6 +91,11 @@ fun App(nav: Nav, onExit: () -> Unit) {
         UpdateDialog(nav)
         // al agregar/sacar series de Mi lista, la campanita toma nota de sus capítulos actuales
         androidx.compose.runtime.LaunchedEffect(Store.myList, Store.titles) { Notifs.scan() }
+        // al entrar o salir de una cuenta: se vuelve a comprobar si es la de administrador (sin cerrar la app)
+        androidx.compose.runtime.LaunchedEffect(Store.session?.userId) {
+            AdminData.reset()
+            if (Store.session != null) runCatching { AdminData.checkAdmin() }
+        }
     }
 }
 

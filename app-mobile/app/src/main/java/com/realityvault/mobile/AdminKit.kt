@@ -228,11 +228,23 @@ fun AConfirm(text: String, sub: String? = null, yes: String = "Eliminar", onYes:
  */
 @Composable
 fun AImage(label: String, kind: String, url: String, hint: String? = null, ratio: Float = AdminData.ASPECT[kind] ?: (16f / 9f), contain: Boolean = false,
-           modifier: Modifier = Modifier, onChange: (String) -> Unit) {
+           modifier: Modifier = Modifier, fallback: String = "", onChange: (String) -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var picked by remember { mutableStateOf<Bitmap?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var busyText by remember { mutableStateOf("Subiendo…") }
+    val canCrop = AdminData.ASPECT[kind] != null
+    val source = url.ifBlank { fallback }
+    // reencuadrar una imagen ya cargada (o un enlace): se baja un momento y se abre el recorte
+    fun adjust() {
+        if (busy || source.isBlank()) return
+        busy = true; busyText = "Abriendo…"
+        scope.launch {
+            try { picked = AdminData.download(source) } catch (e: Exception) { AdminToast.show(e.message ?: "No se pudo abrir la imagen", true) }
+            busy = false; busyText = "Subiendo…"
+        }
+    }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) scope.launch {
             try {
@@ -256,17 +268,33 @@ fun AImage(label: String, kind: String, url: String, hint: String? = null, ratio
             contentAlignment = Alignment.Center
         ) {
             if (url.isNotBlank()) Img(url, Modifier.fillMaxSize().padding(if (contain) 12.dp else 0.dp), scale = if (contain) ContentScale.Fit else ContentScale.Crop)
+            else if (fallback.isNotBlank()) {
+                Img(fallback, Modifier.fillMaxSize().graphicsLayer { alpha = .5f }, scale = if (contain) ContentScale.Fit else ContentScale.Crop)
+                Text("Usa la del título", style = ts(11, FontWeight.Bold, Color.White), modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                    .background(Color.Black.copy(alpha = .6f), RoundedCornerShape(99.dp)).padding(horizontal = 9.dp, vertical = 4.dp))
+            }
             else Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Ic.plus, null, tint = Color.White.copy(alpha = .7f), modifier = Modifier.size(26.dp))
                 Text("Elegir imagen", style = ts(12.5f, FontWeight.Bold, Color.White.copy(alpha = .7f)), modifier = Modifier.padding(top = 4.dp))
             }
-            if (url.isNotBlank() && !busy) Text("Cambiar", style = ts(11.5f, FontWeight.Bold, Color.White), modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
-                .background(Color.Black.copy(alpha = .6f), RoundedCornerShape(99.dp)).padding(horizontal = 10.dp, vertical = 5.dp))
             if (busy) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .6f)), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = C.accent, strokeWidth = 2.5.dp, modifier = Modifier.size(28.dp))
-                    Text("Subiendo…", style = ts(12, FontWeight.Bold, Color.White), modifier = Modifier.padding(top = 8.dp))
+                    Text(busyText, style = ts(12, FontWeight.Bold, Color.White), modifier = Modifier.padding(top = 8.dp))
                 }
+            }
+        }
+        // acciones debajo de la imagen (entran bien aunque la casilla sea angosta)
+        if (source.isNotBlank()) Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (canCrop) Row(
+                Modifier.weight(1f).clip(RoundedCornerShape(99.dp)).background(C.accent).tap({ adjust() }, .95f).padding(vertical = 7.dp),
+                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Ic.fullscreen, null, tint = Color.Black, modifier = Modifier.size(13.dp))
+                Text("Encuadrar", style = ts(12, FontWeight.Bold, Color.Black), maxLines = 1, modifier = Modifier.padding(start = 4.dp))
+            }
+            Box(Modifier.weight(1f).clip(RoundedCornerShape(99.dp)).background(Color.White.copy(alpha = .1f)).tap({ if (!busy) launcher.launch("image/*") }, .95f).padding(vertical = 7.dp), contentAlignment = Alignment.Center) {
+                Text(if (url.isNotBlank()) "Cambiar" else "Elegir otra", style = ts(12, FontWeight.Bold, Color.White), maxLines = 1)
             }
         }
         if (hint != null) Text(hint, style = ts(11.5f, color = C.faint).copy(lineHeight = 15.sp), modifier = Modifier.padding(top = 5.dp))
