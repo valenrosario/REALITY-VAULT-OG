@@ -335,6 +335,31 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
             delay(400)
         }
     }
+    // --- Chromecast: si hay una TV conectada, el video se manda allá y el celular queda como control ---
+    val castS = Cast.session
+    var wasCasting by remember { mutableStateOf(false) }
+    val castLine = when {
+        episode != null -> "T${s.season}:E${episode.number} · " + episode.title.ifBlank { "Episodio ${episode.number}" }
+        s.extra -> "Extra"; s.trailer -> "Tráiler"; else -> ""
+    }
+    val castImg = (episode?.thumb?.takeIf { it.isNotBlank() } ?: t?.wide?.takeIf { it.isNotBlank() } ?: t?.backdrop).orEmpty()
+    LaunchedEffect(castS, url) {
+        if (castS != null) {
+            wasCasting = true
+            player.pause()
+            if (Cast.canCast(url!!)) {
+                val saved = if (track) Store.getPos(t!!.id, s.season, s.episode) else null
+                val start = if (resumed) player.currentPosition else if (posResumable(saved)) saved!!.first * 1000 else 0L
+                Cast.load(url!!, m.subsUrl, t?.title ?: "", castLine, castImg, start)
+            }
+        } else if (wasCasting) {
+            // se dejó de transmitir: sigue en el celular desde el minuto en que iba la TV
+            wasCasting = false
+            if (Cast.lastPosMs > 0) player.seekTo(Cast.lastPosMs)
+            player.play()
+        }
+    }
+
     // "Saltear intro / resumen" cargado en el panel (capítulo, extra o película)
     val skips = remember(s, t, episode) {
         when {
@@ -576,6 +601,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                             if (sub.isNotBlank()) Text(sub, style = ts(12, color = Color.White.copy(alpha = .75f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (Cast.available) Box(Modifier.size(40.dp).clip(CircleShape).background(Color(0x9C3C3C42)), contentAlignment = Alignment.Center) { CastButton(40.dp, 21.dp) }
                             GlassButton(Ic.settings, "Audio, subtítulos y calidad", { panel = true; controlsVisible = false }, size = 40.dp)
                             GlassButton(Ic.lock, "Bloquear controles", { locked = true; controlsVisible = true; lastTouch = System.currentTimeMillis() }, size = 40.dp)
                             GlassButton(if (portrait) Ic.fullscreen else Ic.fullscreenExit, "Girar pantalla", { portrait = !portrait; bump() }, size = 40.dp)
@@ -619,6 +645,10 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                     onClose = { panel = false; bump() }
                 )
             }
+
+            if (castS != null) CastLayer(t?.title ?: "", castLine, castImg, Cast.canCast(url!!), { p, d ->
+                if (track) { val id = t!!.id; val se = s.season; val ep = s.episode; Store.bg.launch { Store.savePos(id, se, ep, p / 1000, d / 1000) } }
+            }, { nav.back() })
         }
     }
 }
@@ -677,6 +707,66 @@ private fun qualityOptions(tr: Tracks, p: ExoPlayer): List<Opt> {
     return listOf(auto) + vids.sortedByDescending { it.third }.map { (g, i, h) ->
         Opt(if (h > 0) "${h}p" else "Pista ${i + 1}", manual && g.isTrackSelected(i)) {
             p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i)).build()
+        }
+    }
+}
+
+/* ---------------- transmitiendo a la TV ---------------- */
+
+@Composable
+private fun CastLayer(title: String, line: String, image: String, castable: Boolean, onSave: (Long, Long) -> Unit, onBack: () -> Unit) {
+    val rmc = Cast.session?.remoteMediaClient
+    var pos by remember { mutableLongStateOf(0L) }
+    var dur by remember { mutableLongStateOf(0L) }
+    var playing by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(true) }
+    var drag by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(rmc) {
+        var tick = 0
+        while (rmc != null) {
+            pos = rmc.approximateStreamPosition; dur = rmc.streamDuration
+            playing = rmc.isPlaying; loading = rmc.isBuffering || rmc.isLoadingNextItem || (rmc.mediaInfo == null && castable)
+            if (pos > 0) Cast.lastPosMs = pos
+            if (++tick % 30 == 0 && playing && dur > 0) onSave(pos, dur)
+            delay(500)
+        }
+    }
+    DisposableEffect(Unit) { onDispose { if (dur > 0 && pos > 0) onSave(pos, dur) } }
+    fun seekTo(ms: Long) { rmc?.seek(com.google.android.gms.cast.MediaSeekOptions.Builder().setPosition(ms.coerceIn(0, maxOf(dur, 0))).build()); pos = ms }
+
+    Box(Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) { detectTapGestures { } }) {
+        if (image.isNotBlank()) Img(image, Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .78f), .5f to Color.Black.copy(alpha = .62f), 1f to Color.Black.copy(alpha = .92f))))
+        GlassButton(Ic.back, "Volver", onBack, Modifier.align(Alignment.TopStart).padding(18.dp), size = 40.dp)
+        Column(Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Ic.cast, null, tint = C.accent, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+                Text("Transmitiendo en ${Cast.deviceName}", style = ts(13, FontWeight.Bold, C.accent))
+            }
+            Text(title, style = ts(22, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+            if (line.isNotBlank()) Text(line, style = ts(13, color = Color.White.copy(alpha = .75f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+            if (!castable) {
+                Text("Este video todavía no se puede transmitir: se está preparando su versión compatible. Probá en unos minutos.",
+                    style = ts(13, color = Color.White.copy(alpha = .85f)).copy(textAlign = TextAlign.Center), modifier = Modifier.padding(top = 18.dp).widthIn(max = 420.dp))
+            } else {
+                Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(34.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SeekBtn(true) { seekTo(pos - 10_000) }
+                    Box(Modifier.size(66.dp).tap({ if (playing) rmc?.pause() else rmc?.play(); playing = !playing }, .92f).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+                        if (loading && !playing) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.5.dp, modifier = Modifier.size(26.dp))
+                        else Icon(if (playing) Ic.pause else Ic.play, if (playing) "Pausar" else "Reproducir", tint = Color.Black, modifier = Modifier.size(28.dp))
+                    }
+                    SeekBtn(false) { seekTo(pos + 10_000) }
+                }
+                Column(Modifier.padding(top = 14.dp).widthIn(max = 640.dp).fillMaxWidth()) {
+                    SeekBar(drag ?: pos, dur, 0, {}, { f -> drag = (f * dur).toLong() }, { f -> drag = null; seekTo((f * dur).toLong()) })
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(fmtTime(drag ?: pos), style = ts(12, color = Color.White.copy(alpha = .8f)))
+                        Text(fmtTime(dur), style = ts(12, color = Color.White.copy(alpha = .8f)))
+                    }
+                }
+            }
+            Text("Dejar de transmitir", style = ts(13, FontWeight.Bold, Color.White),
+                modifier = Modifier.padding(top = 16.dp).clip(RoundedCornerShape(99.dp)).background(Color.White.copy(alpha = .14f)).tap({ Cast.stop() }).padding(horizontal = 18.dp, vertical = 10.dp))
         }
     }
 }

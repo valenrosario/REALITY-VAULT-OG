@@ -44,6 +44,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -123,7 +127,47 @@ fun homeRows(): List<RowSpec> {
     return rows
 }
 
-/* ---------------- pantalla de inicio ---------------- */
+/* ---------------- pantalla de inicio (diseño tipo discovery+) ---------------- */
+
+/** Pestañas de arriba: "Para vos" + Series, Películas y los géneros con más títulos. */
+private fun homeTabs(): List<String> =
+    listOf("Para vos", "Series", "Películas") + Store.published().flatMap { it.genres }.groupingBy { it }.eachCount()
+        .entries.sortedByDescending { it.value }.take(8).map { it.key }
+
+private fun openTab(tab: String, nav: Nav) = when (tab) {
+    "Para vos" -> Unit
+    "Series" -> nav.section(Screen.Series)
+    "Películas" -> nav.section(Screen.Movies)
+    else -> nav.go(Screen.Genre(tab))
+}
+
+/** Logo a la izquierda; transmitir, novedades y perfil a la derecha. */
+@Composable
+private fun TopIcons(nav: Nav) {
+    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        LocalLogo(Modifier.height(28.dp).width(150.dp))
+        Spacer(Modifier.weight(1f))
+        CastButton(42.dp, 25.dp)
+        Spacer(Modifier.width(6.dp))
+        BellButton(42.dp, 25.dp)
+        Spacer(Modifier.width(10.dp))
+        AvatarButton(nav)
+    }
+}
+
+@Composable
+private fun Tabs(tabs: List<String>, nav: Nav) {
+    LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+        items(tabs, key = { it }) { tab ->
+            val on = tab == "Para vos"
+            Column(Modifier.tap({ openTab(tab, nav) }, .95f).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(tab, style = ts(17, FontWeight.Bold, if (on) Color.White else Color.White.copy(alpha = .72f)), maxLines = 1)
+                Spacer(Modifier.height(7.dp))
+                Box(Modifier.height(3.dp).width(if (on) 62.dp else 0.dp).background(Color.White, RoundedCornerShape(99.dp)))
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -134,32 +178,32 @@ fun HomeScreen(nav: Nav) {
     if (all.isEmpty() && rows.isEmpty()) { Empty("Todavía no hay títulos publicados."); return }
     val listState = nav.memory.list("home")
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val tabs = homeTabs()
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottom + 96.dp)) {
-            item(key = "hero") { if (all.isNotEmpty()) Hero(all, nav) else Spacer(Modifier.height(90.dp)) }
+            item(key = "hero") {
+                if (all.isNotEmpty()) Hero(all, tabs, nav)
+                else Column(Modifier.statusBarsPadding().padding(top = 10.dp)) { TopIcons(nav); Spacer(Modifier.height(10.dp)); Tabs(tabs, nav) }
+            }
             items(rows, key = { it.key }) { r -> RowSection(r, nav) }
         }
-        // logo y foto de perfil flotando arriba; se oscurece un poco para que se lean sobre la portada
-        Row(
-            Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent)))
-                .statusBarsPadding().padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            LocalLogo(Modifier.height(26.dp).width(160.dp))
-            Spacer(Modifier.weight(1f))
-            AvatarButton(nav)
+        // al bajar, la barra de arriba queda fija con fondo
+        val pinned by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 420 } }
+        AnimatedVisibility(pinned, enter = fadeIn(tween(180)), exit = fadeOut(tween(140))) {
+            Column(Modifier.fillMaxWidth().background(C.bg.copy(alpha = .96f)).statusBarsPadding().padding(top = 8.dp, bottom = 6.dp)) {
+                TopIcons(nav); Spacer(Modifier.height(4.dp)); Tabs(tabs, nav)
+            }
         }
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Hero(all: List<Slide>, nav: Nav) {
+private fun Hero(all: List<Slide>, tabs: List<String>, nav: Nav) {
     val cfg = LocalConfiguration.current
-    val h = minOf(cfg.screenWidthDp * 1.28f, cfg.screenHeightDp * 0.74f).dp
+    val h = minOf(cfg.screenWidthDp * 1.72f, cfg.screenHeightDp * 0.82f).dp
     val pager = rememberPagerState { all.size }
-    val scope = rememberCoroutineScope()
     // pasa solo cada 7 s; si la persona lo está arrastrando, espera
     LaunchedEffect(pager.currentPage, pager.isScrollInProgress, all.size) {
         if (all.size > 1 && !pager.isScrollInProgress) { delay(7000); pager.animateScrollToPage((pager.currentPage + 1) % all.size) }
@@ -168,39 +212,37 @@ private fun Hero(all: List<Slide>, nav: Nav) {
         HorizontalPager(pager, Modifier.fillMaxSize(), key = { it }) { i ->
             val slide = all[i]
             val t = slide.t
-            val target = Store.playTarget(t)
-            Box(Modifier.fillMaxSize().tap({ nav.go(Screen.Detail(t.id)) }, .99f)) {
+            Box(Modifier.fillMaxSize().tap({ nav.go(Screen.Detail(t.id)) }, 1f)) {
                 if (slide.image.isNotBlank()) Img(slide.image, Modifier.fillMaxSize(), alignment = Alignment.TopCenter, crossfade = false) else Placeholder(t, Modifier.fillMaxSize(), big = true)
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .5f to Color.Transparent, .8f to Color.Black.copy(alpha = .62f), 1f to Color.Black)))
-                Column(Modifier.align(Alignment.BottomCenter).padding(start = 22.dp, end = 22.dp, bottom = 34.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (slide.headline.isNotBlank()) Text(slide.headline, style = ts(30, FontWeight.Bold, Color.White).copy(textAlign = TextAlign.Center, lineHeight = 32.sp), maxLines = 2)
-                    else TitleLogo(t, 250.dp, 84.dp, 30)
-                    Spacer(Modifier.height(10.dp))
-                    KindLine(t, center = true)
-                    if (slide.text.isNotBlank()) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(slide.text, style = ts(13, FontWeight.Light, Color.White.copy(alpha = .85f)).copy(textAlign = TextAlign.Center, lineHeight = 18.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                    Spacer(Modifier.height(16.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        when {
-                            t.isSoon -> PillButton(if (t.releaseDate.isNotBlank()) "Próximamente · ${t.releaseDate}" else "Próximamente", { nav.go(Screen.Detail(t.id)) }, icon = null)
-                            target != null -> PillButton(if (target.cont) target.label else "Reproducir", { nav.play(t, target.url, target.season, target.episode) })
-                            else -> PillButton("Ver detalles", { nav.go(Screen.Detail(t.id)) }, icon = null)
-                        }
-                        ListToggle(t, nav)
-                    }
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+                    0f to Color.Black.copy(alpha = .55f), .2f to Color.Transparent, .5f to Color.Transparent, .74f to C.bg.copy(alpha = .55f), .9f to C.bg.copy(alpha = .94f), 1f to C.bg
+                )))
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 26.dp, end = 26.dp, bottom = 50.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (slide.headline.isNotBlank()) Text(slide.headline, style = ts(34, FontWeight.Bold, Color.White).copy(textAlign = TextAlign.Center, lineHeight = 36.sp), maxLines = 2)
+                    else TitleLogo(t, (cfg.screenWidthDp * .74f).dp, 118.dp, 40)
+                    val meta = listOfNotNull(
+                        t.rating.ifBlank { null },
+                        if (t.isSerie) t.seasons.size.takeIf { it > 0 }?.let { "$it temporada${if (it == 1) "" else "s"}" } else t.duration.ifBlank { t.year.ifBlank { null } }
+                    )
+                    if (meta.isNotEmpty()) Text(meta.joinToString("     "), style = ts(14, color = Color.White.copy(alpha = .8f)), modifier = Modifier.padding(top = 18.dp))
+                    if (slide.text.isNotBlank()) Text(
+                        slide.text, style = ts(16, color = Color.White.copy(alpha = .93f)).copy(textAlign = TextAlign.Center, lineHeight = 22.sp),
+                        maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp)
+                    )
                 }
             }
         }
+        // arriba, sobre la portada: logo, íconos y pestañas
+        Column(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 10.dp)) {
+            TopIcons(nav); Spacer(Modifier.height(10.dp)); Tabs(tabs, nav)
+        }
         if (all.size > 1) Row(
-            Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(13.dp), verticalAlignment = Alignment.CenterVertically
         ) {
             all.indices.forEach { i ->
                 val on = i == pager.currentPage
-                val sz by animateFloatAsState(if (on) 8f else 6f, tween(220), label = "dot")
-                Box(Modifier.size(sz.dp).background(if (on) C.accent else Color.White.copy(alpha = .4f), CircleShape))
+                Box(Modifier.size(9.dp).background(if (on) Color.White else Color(0xFF5B5F78), CircleShape))
             }
         }
     }
@@ -220,12 +262,13 @@ fun ListToggle(t: Title, nav: Nav, size: androidx.compose.ui.unit.Dp = 46.dp) {
 @Composable
 private fun RowSection(r: RowSpec, nav: Nav) {
     if (r.kind == "coll") { CollBanner(r, nav); return }
-    Column(Modifier.padding(top = 22.dp)) {
-        Text(r.title, style = ts(15, FontWeight.Bold, Color.White.copy(alpha = .94f)), modifier = Modifier.padding(start = 18.dp, bottom = 10.dp))
+    val cardW = (LocalConfiguration.current.screenWidthDp * .4f).coerceAtMost(220f).dp
+    Column(Modifier.padding(top = 26.dp)) {
+        Text(r.title, style = ts(19, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 20.dp, bottom = 12.dp))
         LazyRow(
             state = nav.memory.list("row-" + r.key),
-            contentPadding = PaddingValues(horizontal = 18.dp),
-            horizontalArrangement = Arrangement.spacedBy(if (r.kind == "top") 6.dp else 11.dp)
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (r.kind == "top") 6.dp else 12.dp)
         ) {
             if (r.kind == "feat") {
                 itemsIndexed(r.feat, key = { i, _ -> "f$i" }) { _, (t, item) ->
@@ -244,7 +287,7 @@ private fun RowSection(r: RowSpec, nav: Nav) {
                         Text("${i + 1}", modifier = Modifier.offset(x = 10.dp, y = 8.dp), style = ts(92, FontWeight.Bold, C.accent).copy(drawStyle = Stroke(width = 4f)))
                         PosterCard(t, Modifier.width(112.dp).aspectRatio(2f / 3f).tap({ nav.go(Screen.Detail(t.id)) }).clip(RoundedCornerShape(9.dp)))
                     }
-                    else -> PosterCard(t, Modifier.width(116.dp).aspectRatio(2f / 3f).tap({ nav.go(Screen.Detail(t.id)) }).clip(RoundedCornerShape(9.dp)))
+                    else -> PosterCard(t, Modifier.width(cardW).aspectRatio(2f / 3f).tap({ nav.go(Screen.Detail(t.id)) }).clip(RoundedCornerShape(5.dp)))
                 }
             }
         }

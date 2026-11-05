@@ -22,6 +22,8 @@ sealed class Screen {
     data class Login(val then: Screen? = null, val required: Boolean = false) : Screen()
     data class Person(val name: String) : Screen()
     data class Collection(val id: String) : Screen()
+    /** Categoría del inicio (pestañas de arriba): todos los títulos de un género. */
+    data class Genre(val name: String) : Screen()
 
     /** Las pantallas que muestran la barra de abajo. */
     val isTab get() = this is Home || this is Series || this is Movies || this is MyList || this is Search

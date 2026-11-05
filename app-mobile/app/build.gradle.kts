@@ -19,7 +19,7 @@ val relKeystorePath = System.getenv("RV_KEYSTORE_PATH")?.takeIf { file(it).exist
 val tvSrc = rootProject.file("../app-tv/app/src/main/java/com/realityvault/tv")
 val sharedOut = layout.buildDirectory.dir("generated/shared")
 val copyShared = tasks.register<Copy>("copyShared") {
-    from(tvSrc) { include("Data.kt", "Embed.kt") }
+    from(tvSrc) { include("Data.kt", "Embed.kt", "UpdateCore.kt") }
     into(sharedOut.map { it.dir("com/realityvault/tv") })
 }
 
@@ -34,6 +34,8 @@ android {
         versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         versionName = "1." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
         buildConfigField("boolean", "TV_LINKS", "false")
+        // avisos de versión nueva dentro de la app (lo publica GitHub en el release "mobile")
+        buildConfigField("String", "UPDATE_URL", "\"https://github.com/valenrosario/REALITY-VAULT-OG/releases/download/mobile/update.json\"")
         buildConfigField("String", "SUPABASE_URL", "\"${cfg("supabaseUrl")}\"")
         buildConfigField("String", "SUPABASE_KEY", "\"${cfg("supabaseAnonKey")}\"")
         buildConfigField("String", "SITE_URL", "\"https://reality-vault.vercel.app/\"")
@@ -92,4 +94,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
+    // Chromecast
+    implementation("com.google.android.gms:play-services-cast-framework:21.5.0")
+    implementation("androidx.mediarouter:mediarouter:1.7.0")
+    implementation("androidx.appcompat:appcompat:1.6.1")
 }

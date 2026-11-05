@@ -126,6 +126,8 @@ object Ic {
     val replay = icon("M4 12a8 8 0 1 0 2.5 -5.8", "M4 4v4h4", width = 2f)
     val forward = icon("M20 12a8 8 0 1 1 -2.5 -5.8", "M20 4v4h-4", width = 2f)
     val next = icon("M6 5l9 7l-9 7z", "M18 5v14", width = 2f)
+    val cast = icon("M3 7V6a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-6", "M3 11a9 9 0 0 1 9 9", "M3 15a5 5 0 0 1 5 5", "M3 19.5h.5", width = 2f)
+    val bell = icon("M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z", "M10 20.5a2 2 0 0 0 4 0", width = 2f)
     val audio = icon("M9 18V6l10 -2v12", "M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0", "M13 16a3 3 0 1 0 6 0a3 3 0 1 0 -6 0", width = 2f)
 }
 

@@ -32,6 +32,8 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         Store.init(this)
+        Cast.init(this)
+        com.realityvault.tv.Updater.init(this)
         // imágenes: caché en memoria y en disco para que todo aparezca al instante
         Coil.setImageLoader(
             ImageLoader.Builder(this)
@@ -48,6 +50,7 @@ class MainActivity : ComponentActivity() {
                 while (true) {
                     Store.refreshCatalog()
                     Store.refreshUser()
+                    autoCheckUpdates()
                     delay(3 * 60_000)
                 }
             }

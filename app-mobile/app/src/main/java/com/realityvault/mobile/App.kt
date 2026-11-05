@@ -55,7 +55,7 @@ fun App(nav: Nav, onExit: () -> Unit) {
                     else -> fadeIn(tween(220)) togetherWith fadeOut(tween(160))
                 } as ContentTransform
             },
-            label = "screens", contentKey = { it::class.simpleName + (it as? Screen.Detail)?.id + (it as? Screen.Collection)?.id + (it as? Screen.Person)?.name }
+            label = "screens", contentKey = { it::class.simpleName + (it as? Screen.Detail)?.id + (it as? Screen.Collection)?.id + (it as? Screen.Person)?.name + (it as? Screen.Genre)?.name }
         ) { s ->
             when (s) {
                 Screen.Splash -> SplashScreen(nav)
@@ -68,12 +68,14 @@ fun App(nav: Nav, onExit: () -> Unit) {
                 Screen.Home -> HomeScreen(nav)
                 Screen.Series -> GridScreen(nav, "series")
                 Screen.Movies -> GridScreen(nav, "peliculas")
+                is Screen.Genre -> GridScreen(nav, "g:" + s.name)
                 Screen.MyList -> GridScreen(nav, "milista")
                 Screen.Search -> SearchScreen(nav)
             }
         }
         // la barra de abajo queda fija mientras se cambia de sección (no parpadea con la transición)
         AnimatedVisibility(nav.top.isTab, Modifier.align(Alignment.BottomCenter), enter = fadeIn(tween(200)), exit = fadeOut(tween(120))) { BottomBar(nav) }
+        UpdateDialog(nav)
     }
 }
 
@@ -119,8 +121,9 @@ fun AvatarButton(nav: Nav, modifier: Modifier = Modifier) {
 
 /** Encabezado simple para las pantallas con lista (Series, Películas, Mi lista). */
 @Composable
-fun ScreenHeader(title: String, nav: Nav, subtitle: String? = null) {
+fun ScreenHeader(title: String, nav: Nav, subtitle: String? = null, back: Boolean = false) {
     Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (back) { GlassButton(Ic.back, "Volver", { nav.back() }, size = 40.dp); androidx.compose.foundation.layout.Spacer(Modifier.size(12.dp)) }
         Column(Modifier.weight(1f)) {
             Text(title, style = ts(26, FontWeight.Bold, Color.White))
             if (subtitle != null) Text(subtitle, style = ts(12, color = C.muted))

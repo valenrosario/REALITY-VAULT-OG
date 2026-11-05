@@ -79,13 +79,13 @@ fun GridScreen(nav: Nav, kind: String) {
     val base = when (kind) {
         "series" -> pub.filter { it.isSerie }
         "peliculas" -> pub.filter { !it.isSerie }
-        else -> Store.myList.mapNotNull { id -> pub.firstOrNull { it.id == id } }
+        else -> if (kind.startsWith("g:")) pub.filter { kind.removePrefix("g:") in it.genres } else Store.myList.mapNotNull { id -> pub.firstOrNull { it.id == id } }
     }
-    val genres = if (kind == "milista") emptyList() else base.flatMap { it.genres }.distinct().sorted()
+    val genres = if (kind == "milista" || kind.startsWith("g:")) emptyList() else base.flatMap { it.genres }.distinct().sorted()
     val list = if (genre.isBlank()) base else base.filter { genre in it.genres }
-    val title = when (kind) { "series" -> "Series"; "peliculas" -> "Películas"; else -> "Mi lista" }
+    val title = when { kind == "series" -> "Series"; kind == "peliculas" -> "Películas"; kind.startsWith("g:") -> kind.removePrefix("g:"); else -> "Mi lista" }
     Column(Modifier.fillMaxSize()) {
-        ScreenHeader(title, nav, "${list.size} título${if (list.size == 1) "" else "s"}")
+        ScreenHeader(title, nav, "${list.size} título${if (list.size == 1) "" else "s"}", back = kind.startsWith("g:"))
         if (genres.isNotEmpty()) LazyRow(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item { Chip("Todos", genre.isBlank()) { genre = ""; nav.memory.text["genre-$kind"] = "" } }
             items(genres) { g -> Chip(g, genre == g) { genre = g; nav.memory.text["genre-$kind"] = g } }
