@@ -55,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -129,8 +130,8 @@ private fun fmtTime(ms: Long): String {
  * (la crea GitHub solo), se usa esa; si no, se reproduce el original.
  */
 private suspend fun resolveUrl(u: String): String {
-    if (!Regex("\\.mkv([?#]|$)", RegexOption.IGNORE_CASE).containsMatchIn(u)) return u
-    val alt = u.replace(Regex("\\.mkv(?=[?#]|$)", RegexOption.IGNORE_CASE), ".web.mp4")
+    if (!Regex("\\.(mkv|ts|m2ts|mts)([?#]|$)", RegexOption.IGNORE_CASE).containsMatchIn(u)) return u
+    val alt = u.replace(Regex("\\.(mkv|ts|m2ts|mts)(?=[?#]|$)", RegexOption.IGNORE_CASE), ".web.mp4")
     return withContext(Dispatchers.IO) {
         runCatching {
             val c = URL(alt).openConnection() as HttpURLConnection
@@ -465,9 +466,16 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
 
             // subtítulos
             if (subsOn && cueText.isNotBlank()) {
-                Box(Modifier.align(Alignment.BottomCenter).padding(bottom = if (controlsVisible && !locked) 92.dp else 28.dp).widthIn(max = 640.dp).padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
-                    Text(cueText, style = ts(17, FontWeight.Bold, Color.White), textAlign = TextAlign.Center,
-                        modifier = Modifier.background(Color.Black.copy(alpha = .68f), RoundedCornerShape(7.dp)).padding(horizontal = 12.dp, vertical = 5.dp))
+                // tamaño según la pantalla (como en las plataformas de streaming): ~6 % del lado corto
+                val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+                val subSize = (minOf(cfg.screenWidthDp, cfg.screenHeightDp) * .062f).coerceIn(19f, 34f)
+                Box(Modifier.align(Alignment.BottomCenter).padding(bottom = if (controlsVisible && !locked) 100.dp else 22.dp).fillMaxWidth(.88f), contentAlignment = Alignment.Center) {
+                    Text(cueText, textAlign = TextAlign.Center,
+                        style = ts(subSize, FontWeight.Bold, Color.White).copy(
+                            lineHeight = (subSize * 1.22f).sp,
+                            shadow = androidx.compose.ui.graphics.Shadow(Color.Black, androidx.compose.ui.geometry.Offset(0f, 2f), 7f)
+                        ),
+                        modifier = Modifier.background(Color.Black.copy(alpha = .5f), RoundedCornerShape(8.dp)).padding(horizontal = 14.dp, vertical = 4.dp))
                 }
             }
 
@@ -533,7 +541,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                             if (sub.isNotBlank()) Text(sub, style = ts(12, color = Color.White.copy(alpha = .75f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            GlassButton(Ic.settings, "Audio, subtítulos y calidad", { panel = true; bump() }, size = 40.dp)
+                            GlassButton(Ic.settings, "Audio, subtítulos y calidad", { panel = true; controlsVisible = false }, size = 40.dp)
                             GlassButton(Ic.lock, "Bloquear controles", { locked = true; controlsVisible = true; lastTouch = System.currentTimeMillis() }, size = 40.dp)
                             GlassButton(if (portrait) Ic.fullscreen else Ic.fullscreenExit, "Girar pantalla", { portrait = !portrait; bump() }, size = 40.dp)
                         }
@@ -567,14 +575,13 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
 
             // panel de audio / subtítulos / calidad / velocidad
             if (panel) {
-                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .45f)).pointerInput(Unit) { detectTapGestures(onTap = { panel = false }) })
                 SettingsPanel(
-                    Modifier.align(Alignment.CenterEnd),
+                    Modifier.fillMaxSize(),
                     audio = audioOptions(tracks, player),
                     subs = subtitleOptions(tracks, player, subsOn) { subsOn = it },
                     quality = qualityOptions(tracks, player),
                     speed = listOf(.5f, .75f, 1f, 1.25f, 1.5f, 2f).map { v -> Opt(if (v == 1f) "Normal" else "${v}x".replace(".0x", "x"), speed == v) { speed = v; player.setPlaybackSpeed(v) } },
-                    onClose = { panel = false }
+                    onClose = { panel = false; bump() }
                 )
             }
         }
@@ -641,30 +648,42 @@ private fun qualityOptions(tr: Tracks, p: ExoPlayer): List<Opt> {
 
 /* ---------------- piezas de la interfaz ---------------- */
 
+/** Ajustes a pantalla completa, en columnas (audio · subtítulos · calidad · velocidad), como en Netflix o Disney+. */
 @Composable
 private fun SettingsPanel(modifier: Modifier, audio: List<Opt>, subs: List<Opt>, quality: List<Opt>, speed: List<Opt>, onClose: () -> Unit) {
-    Column(
-        modifier.fillMaxHeight().widthIn(max = 320.dp).fillMaxWidth(.62f)
-            .background(Color(0xF2121014)).pointerInput(Unit) { detectTapGestures { } }
-            .verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Ajustes", style = ts(17, FontWeight.Bold, Color.White), modifier = Modifier.weight(1f))
-            GlassButton(Ic.close, "Cerrar", onClose, size = 36.dp)
+    val cols = listOf("Audio" to audio, "Subtítulos" to subs, "Calidad" to quality, "Velocidad" to speed).filter { it.second.isNotEmpty() }
+    Box(modifier.background(Color(0xF00A080B)).pointerInput(Unit) { detectTapGestures { } }) {
+        GlassButton(Ic.close, "Cerrar", onClose, Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 20.dp), size = 42.dp)
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().padding(start = 28.dp, end = 28.dp, top = 26.dp, bottom = 12.dp)) {
+            val gap = 30.dp
+            if (maxWidth > 560.dp) {
+                val w = ((maxWidth - 70.dp - gap * (cols.size - 1)) / cols.size.coerceAtLeast(1)).coerceAtMost(250.dp)
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally)) {
+                    cols.forEach { (n, o) ->
+                        Column(Modifier.width(w).fillMaxHeight().verticalScroll(rememberScrollState())) { Section(n, o) }
+                    }
+                }
+            } else Column(Modifier.fillMaxSize().padding(top = 40.dp).verticalScroll(rememberScrollState())) {
+                cols.forEach { (n, o) -> Section(n, o); Spacer(Modifier.height(18.dp)) }
+            }
         }
-        Section("Audio", audio); Section("Subtítulos", subs); Section("Calidad", quality); Section("Velocidad", speed)
-        if (audio.isEmpty() && subs.isEmpty() && quality.isEmpty()) Text("Este video no tiene más pistas de audio, subtítulos ni calidades.", style = ts(12, color = C.muted), modifier = Modifier.padding(top = 14.dp))
     }
 }
 
 @Composable
 private fun Section(title: String, opts: List<Opt>) {
-    if (opts.isEmpty()) return
-    Text(title.uppercase(), style = ts(10.5f, FontWeight.Bold, C.accent).copy(letterSpacing = 1.4f.let { androidx.compose.ui.unit.TextUnit(it, androidx.compose.ui.unit.TextUnitType.Sp) }), modifier = Modifier.padding(top = 18.dp, bottom = 4.dp))
+    Text(title, style = ts(18, FontWeight.Bold, Color.White), modifier = Modifier.padding(top = 10.dp, bottom = 10.dp))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .12f)))
+    Spacer(Modifier.height(6.dp))
     opts.forEach { o ->
-        Row(Modifier.fillMaxWidth().tap(o.onPick, .98f).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) { if (o.selected) Icon(Ic.check, null, tint = C.accent, modifier = Modifier.size(16.dp)) }
-            Text(o.label, style = ts(14, if (o.selected) FontWeight.Bold else FontWeight.Normal, if (o.selected) Color.White else Color.White.copy(alpha = .8f)), modifier = Modifier.padding(start = 10.dp))
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (o.selected) Color.White.copy(alpha = .08f) else Color.Transparent)
+                .tap(o.onPick, .98f).padding(horizontal = 10.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { if (o.selected) Icon(Ic.check, null, tint = C.accent, modifier = Modifier.size(18.dp)) }
+            Text(o.label, style = ts(15.5f, if (o.selected) FontWeight.Bold else FontWeight.Normal, if (o.selected) Color.White else Color.White.copy(alpha = .66f)),
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp))
         }
     }
 }

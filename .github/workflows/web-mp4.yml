@@ -1,9 +1,9 @@
-# Crea automáticamente una copia ".web.mp4" de cada MKV subido a Cloudflare R2:
+# Crea automáticamente una copia ".web.mp4" de cada MKV o TS subido a Cloudflare R2:
 # mismo video (copiado, sin recomprimir) y audio AAC estéreo, que cualquier navegador reproduce.
 # La web usa esa copia; la TV sigue usando el MKV original.
 # Secrets necesarios (Settings → Secrets and variables → Actions):
 #   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
-name: MKV a MP4 para la web
+name: MKV y TS a MP4 para la web
 on:
   schedule: [{ cron: '*/10 * * * *' }]
   workflow_dispatch:
@@ -24,11 +24,15 @@ jobs:
       - name: Herramientas
         run: |
           curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null
-      - name: Buscar MKV sin versión web
+      - name: Buscar MKV y TS sin versión web
         id: todo
         run: |
           rclone lsf "r2:$BUCKET" -R --files-only > all.txt
-          grep -i '\.mkv$' all.txt | while IFS= read -r f; do
+          # Las carpetas con un .m3u8 son videos HLS: sus .ts son segmentos y no se tocan
+          grep -i '\.m3u8$' all.txt | sed 's|/[^/]*$||' | sort -u > hlsdirs.txt
+          grep -iE '\.(mkv|ts|m2ts|mts)$' all.txt | while IFS= read -r f; do
+            d=$(dirname "$f")
+            if echo "$f" | grep -qiE '\.(ts|m2ts|mts)$' && grep -qxF "$d" hlsdirs.txt; then continue; fi
             grep -qxF "${f%.*}.web.mp4" all.txt || echo "$f"
           done > todo.txt
           echo "Pendientes: $(wc -l < todo.txt)"
@@ -49,11 +53,11 @@ jobs:
             [ -n "$f" ] || continue
             i=$((i+1)); echo "::group::Archivo $i: $f"
             out="${f%.*}.web.mp4"
-            if ! rclone copyto "r2:$BUCKET/$f" in.mkv </dev/null || [ ! -s in.mkv ]; then
-              echo "::warning::No se pudo descargar $f"; fails=$((fails+1)); rm -f in.mkv; echo "::endgroup::"; continue
+            if ! rclone copyto "r2:$BUCKET/$f" in.vid </dev/null || [ ! -s in.vid ]; then
+              echo "::warning::No se pudo descargar $f"; fails=$((fails+1)); rm -f in.vid; echo "::endgroup::"; continue
             fi
-            v=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 in.mkv)
-            a=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 in.mkv)
+            v=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 in.vid)
+            a=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 in.vid)
             case "$v" in
               h264|vp9|av1) VO=(-c:v copy) ;;
               hevc) VO=(-c:v copy -tag:v hvc1) ;;
@@ -61,13 +65,13 @@ jobs:
             esac
             if [ "$a" = "aac" ]; then AO=(-c:a copy); else AO=(-c:a aac -ac 2 -b:a 192k); fi
             echo "video=$v audio=$a"
-            if ffmpeg -nostdin -hide_banner -loglevel error -y -i in.mkv -map 0:v:0 -map 0:a:0? "${VO[@]}" "${AO[@]}" -sn -dn -map_chapters -1 -movflags +faststart out.mp4; then
+            if ffmpeg -nostdin -hide_banner -loglevel error -y -i in.vid -avoid_negative_ts make_zero -map 0:v:0 -map 0:a:0? "${VO[@]}" "${AO[@]}" -sn -dn -map_chapters -1 -movflags +faststart out.mp4; then
               if rclone copyto out.mp4 "r2:$BUCKET/$out" --header-upload "Content-Type: video/mp4" </dev/null; then echo "OK"
               else echo "::warning::No se pudo subir $out"; fails=$((fails+1)); fi
             else
               echo "::warning::No se pudo convertir $f"; fails=$((fails+1))
             fi
-            rm -f in.mkv out.mp4
+            rm -f in.vid out.mp4
             echo "::endgroup::"
           done 3< todo.txt
           echo "Convertidos: $((i-fails)) de $i"

@@ -822,7 +822,7 @@ function renderEditor(){
       </div><div><button class="btn btn-line btn-sm" data-cast-add>+ Agregar persona</button></div>
     </div>
     ${isSerie ? renderSeasonsEd(E) : `<div class="fs"><h3>Reproducción</h3><div class="fgrid">
-      <label class="field span2"><span>Enlace para ver la película</span><input class="input" id="f-url" data-k="url" value="${esc(E.url)}" placeholder="https://…"><span class="hint">Se reproduce dentro del sitio. Funciona con YouTube, Vimeo, Google Drive, Dailymotion, OK.ru, Internet Archive, archivos .mp4 o .m3u8 y servicios como StreamHG: ahí copiá el <b>Embed code</b> completo y pegalo acá (el sitio se queda solo con el enlace).</span></label>
+      <label class="field span2"><span>Enlace para ver la película</span><input class="input" id="f-url" data-k="url" value="${esc(E.url)}" placeholder="https://…"><span class="hint">Se reproduce dentro del sitio. Funciona con YouTube, Vimeo, Google Drive, Dailymotion, OK.ru, Internet Archive, archivos .mp4, .ts o .m3u8 y servicios como StreamHG: ahí copiá el <b>Embed code</b> completo y pegalo acá (el sitio se queda solo con el enlace).</span></label>
       <label class="field span2"><span>Enlace para la TV (4K, opcional)</span><input class="input" id="f-urltv" data-k="urlTv" value="${esc(E.urlTv)}" placeholder="https://…/pelicula-4k.mkv"><span class="hint">Solo lo usa la app de la TV (4K, Dolby, varios audios). Si lo dejás vacío, la TV usa el enlace de arriba. La web siempre usa el de arriba.</span></label>
       <label class="field span2"><span>Subtítulos en español (.vtt)</span><input class="input" id="f-subs" data-k="subs" value="${esc(E.subs)}" placeholder="https://…/pelicula.es.vtt"><span class="hint">Opcional. Enlace a un archivo .vtt. Solo se muestran con enlaces de archivo .mp4, .webm o .m3u8.</span></label>
     </div></div>`}
@@ -888,7 +888,7 @@ function vidField(E, key, label, size, note){
 const VIDEO_MAX_MB = 200;
 /* --- aviso en el admin: ¿ya está lista la versión web (.web.mp4) de un MKV? --- */
 const webCopy = new Map(); // url -> { ok, t }
-const webAlt = u => u.replace(/\.mkv(?=[?#]|$)/i, '.web.mp4');
+const webAlt = u => u.replace(/\.(mkv|ts|m2ts|mts)(?=[?#]|$)/i, '.web.mp4');
 async function webCopyReady(u){
   const c = webCopy.get(u);
   if (c && (c.ok || Date.now() - c.t < 12000)) return c.ok;
@@ -902,7 +902,7 @@ async function refreshWebBadges(){
   for (const inp of ins){
     const u = (inp.value || '').trim();
     let b = inp.nextElementSibling && inp.nextElementSibling.classList.contains('webcopy') ? inp.nextElementSibling : null;
-    if (!/^https?:\/\/\S+\.mkv([?#]|$)/i.test(u)){ if (b) b.remove(); continue; }
+    if (!/^https?:\/\/\S+\.(mkv|ts|m2ts|mts)([?#]|$)/i.test(u)){ if (b) b.remove(); continue; }
     if (!b){ b = document.createElement('span'); b.className = 'webcopy'; inp.insertAdjacentElement('afterend', b); }
     const ok = await webCopyReady(u);
     if (ok === true){ b.className = 'webcopy ok'; b.textContent = '✓ Versión web lista'; }
@@ -2741,12 +2741,39 @@ function embedFor(url){
   if (h === 'archive.org'){ const m = u.pathname.match(/\/(?:details|embed)\/(.+)/); if (m) return { type:'iframe', provider:'Internet Archive', src:`https://archive.org/embed/${m[1]}` }; }
   if (/\.(mp4|webm|ogv|ogg|mov|m4v|mkv)$/i.test(u.pathname)) return { type:'video', src:url, mkv:/\.mkv$/i.test(u.pathname) };
   if (/\.m3u8$/i.test(u.pathname)) return { type:'hls', src:url };
+  if (/\.(ts|m2ts|mts)$/i.test(u.pathname)) return { type:'ts', src:url };
   return { type:'iframe', src:url, generic:true };
 }
 let hlsLoading = null;
 function loadHls(){
   if (window.Hls) return Promise.resolve(window.Hls);
   return hlsLoading ||= new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js'; sc.onload = () => res(window.Hls); sc.onerror = rej; document.head.appendChild(sc); });
+}
+/* Archivos .ts (MPEG-TS): el navegador no los reproduce solo (por eso se descargaban).
+   Se usa la copia ".web.mp4" si ya existe (la crea GitHub, igual que con los MKV);
+   mientras tanto se reproducen con mpegts.js. */
+let mtsLoading = null;
+function loadMpegts(){
+  if (window.mpegts) return Promise.resolve(window.mpegts);
+  return mtsLoading ||= new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js'; sc.onload = () => res(window.mpegts); sc.onerror = () => { mtsLoading = null; rej(); }; document.head.appendChild(sc); });
+}
+function playTs(v, src){
+  return loadMpegts().then(m => {
+    if (!v.isConnected) return;
+    if (!m.isSupported()){ toast('Este navegador no puede reproducir archivos .ts. Probá con Chrome o Edge.', true); return; }
+    const p = m.createPlayer({ type:'mpegts', isLive:false, url:src }, { enableWorker:true, lazyLoad:false });
+    p.attachMediaElement(v); p.load(); const pr = p.play(); if (pr && pr.catch) pr.catch(() => {});
+    v._hls = { destroy(){ try { p.destroy(); } catch {} } };
+  }).catch(() => toast('No se pudo cargar el video', true));
+}
+function setTsSource(v, src){
+  const alt = src.replace(/\.(ts|m2ts|mts)(?=[?#]|$)/i, '.web.mp4');
+  const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 3000);
+  fetch(alt, { method:'HEAD', signal: ctl.signal }).then(r => r.ok, () => false).then(ok => {
+    clearTimeout(tm); if (!v.isConnected) return;
+    if (ok) v.src = alt;
+    else { playTs(v, src); toast('La versión completa de este video se está preparando. Mientras tanto se puede ver, pero sin adelantar.'); }
+  });
 }
 function nextAfter(t, season, episode){
   if (!t || t.type !== 'serie' || season == null || season === '') return null;
@@ -3012,6 +3039,7 @@ function openPlayer({ url, tid, s: season, e: episode, x }){
       });
     }
     else if (emb.type === 'video') v.src = emb.src;
+    else if (emb.type === 'ts') setTsSource(v, emb.src);
     else if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = emb.src;
     else loadHls().then(Hls => { if (!v.isConnected) return; const hls = new Hls(); hls.loadSource(emb.src); hls.attachMedia(v); v._hls = hls; }).catch(() => toast('No se pudo cargar el video', true));
     const rv = rvPlayer(v);
@@ -3080,10 +3108,11 @@ function openTrailer(id){
   const box = document.createElement('div'); box.className = 'trailer-pop'; box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true'); box.setAttribute('aria-label','Tráiler de ' + (t.title||''));
   const media = emb.type === 'iframe'
     ? `<iframe src="${esc(emb.src)}" title="Tráiler" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
-    : `<video controls autoplay playsinline src="${esc(emb.src)}"></video>`;
+    : `<video controls autoplay playsinline ${emb.type === 'ts' ? '' : `src="${esc(emb.src)}"`}></video>`;
   box.innerHTML = `<div class="tp-card"><div class="tp-head"><strong>Tráiler · ${esc(t.title||'')}</strong><button class="pl-btn" data-trailer-close aria-label="Cerrar">✕</button></div><div class="tp-frame">${media}</div></div>`;
   document.body.appendChild(box); document.body.style.overflow = 'hidden';
   const v = box.querySelector('video');
+  if (v && emb.type === 'ts') setTsSource(v, emb.src);
   if (v && emb.type === 'hls'){ v.removeAttribute('src'); if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = emb.src; else loadHls().then(Hls => { const h = new Hls(); h.loadSource(emb.src); h.attachMedia(v); v._hls = h; }); }
   box.querySelector('[data-trailer-close]').focus();
 }

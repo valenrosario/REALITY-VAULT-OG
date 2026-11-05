@@ -40,7 +40,7 @@ fun mediaFor(raw: String, subsUrl: String = ""): Media? {
     }
     if (h == "ok.ru") Regex("video(?:embed)?/(\\d+)").find(path)?.let { return Media.Embed("https://ok.ru/videoembed/${it.groupValues[1]}") }
     if (h == "archive.org") Regex("/(?:details|embed)/(.+)").find(path)?.let { return Media.Embed("https://archive.org/embed/${it.groupValues[1]}") }
-    if (Regex("\\.(mp4|webm|mkv|mov|m4v)$", RegexOption.IGNORE_CASE).containsMatchIn(path)) return Media.Native(url, false, subsUrl)
+    if (Regex("\\.(mp4|webm|mkv|mov|m4v|ts|m2ts|mts)$", RegexOption.IGNORE_CASE).containsMatchIn(path)) return Media.Native(url, false, subsUrl)
     if (Regex("\\.m3u8$", RegexOption.IGNORE_CASE).containsMatchIn(path)) return Media.Native(url, true, subsUrl)
     return Media.Embed(url)
 }

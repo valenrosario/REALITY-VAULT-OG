@@ -3,6 +3,8 @@ package com.realityvault.mobile
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -174,23 +176,31 @@ private fun EpisodeRow(t: Title, s: Season, e: Episode, prog: Progress?, onClick
         seen -> 1f
         else -> 0f
     }
-    Row(Modifier.fillMaxWidth().tap(onClick, .98f).padding(horizontal = 20.dp, vertical = 9.dp), verticalAlignment = Alignment.Top) {
-        Box(Modifier.width(138.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(9.dp)).background(C.surface)) {
-            val img = e.thumb.ifBlank { t.wide }
-            if (img.isNotBlank()) Img(img, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
-            if (!hasVideo) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .4f)), contentAlignment = Alignment.Center) { Text("Sin video", style = ts(10.5f, FontWeight.Bold, Color.White.copy(alpha = .85f))) }
-            else Box(Modifier.align(Alignment.Center).size(30.dp).background(Color.Black.copy(alpha = .45f), CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Ic.play, null, tint = Color.White, modifier = Modifier.size(13.dp))
+    // Igual que en las plataformas de streaming: miniatura grande con el título al lado y la sinopsis abajo, a todo el ancho
+    Column(Modifier.fillMaxWidth().tap(onClick, .98f).padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.fillMaxWidth(.5f).widthIn(max = 300.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(C.surface)) {
+                val img = e.thumb.ifBlank { t.wide }
+                if (img.isNotBlank()) Img(img, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
+                if (!hasVideo) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .45f)), contentAlignment = Alignment.Center) { Text("Sin video", style = ts(12, FontWeight.Bold, Color.White.copy(alpha = .85f))) }
+                else Box(
+                    Modifier.align(Alignment.Center).size(42.dp).background(Color.Black.copy(alpha = .42f), CircleShape).border(1.5.dp, Color.White.copy(alpha = .9f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) { Icon(Ic.play, null, tint = Color.White, modifier = Modifier.size(17.dp)) }
+                if (frac > 0f) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = .28f))) {
+                    Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(C.accent))
+                }
             }
-            if (frac > 0f) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = .25f))) {
-                Box(Modifier.fillMaxSize().fillMaxWidth(frac).background(C.accent))
+            Column(Modifier.padding(start = 14.dp).weight(1f)) {
+                Text("${e.number}. ${e.title.ifBlank { "Episodio ${e.number}" }}", style = ts(15.5f, FontWeight.Bold, Color.White), maxLines = 3, overflow = TextOverflow.Ellipsis)
+                val meta = listOfNotNull(e.duration.ifBlank { null }, if (seen && (pos == null || frac >= 1f)) "Visto" else null).joinToString(" · ")
+                if (meta.isNotBlank()) Text(meta, style = ts(12.5f, color = Color.White.copy(alpha = .6f)), modifier = Modifier.padding(top = 4.dp))
             }
         }
-        Column(Modifier.padding(start = 12.dp).weight(1f)) {
-            Text("${e.number}. ${e.title.ifBlank { "Episodio ${e.number}" }}", style = ts(13.5f, FontWeight.Bold, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (e.duration.isNotBlank()) Text(e.duration, style = ts(11, color = Color.White.copy(alpha = .6f)), modifier = Modifier.padding(top = 2.dp))
-            if (e.description.isNotBlank()) Text(e.description, style = ts(11.5f, FontWeight.Light, Color.White.copy(alpha = .72f)), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
-        }
+        if (e.description.isNotBlank()) Text(
+            e.description, style = ts(13.5f, color = Color.White.copy(alpha = .7f)).copy(lineHeight = 19.sp),
+            maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp)
+        )
     }
 }
 
