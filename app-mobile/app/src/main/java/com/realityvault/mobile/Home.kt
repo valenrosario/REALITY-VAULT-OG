@@ -44,6 +44,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -76,28 +79,54 @@ import kotlinx.coroutines.launch
 
 data class Slide(val t: Title, val image: String, val headline: String, val text: String)
 
-fun slides(): List<Slide> {
+fun slides(match: (Title) -> Boolean = { true }): List<Slide> {
     // Mismo orden "al azar pero fijo durante la sesión" que usa el sitio web (ver Store.bannerSeed).
     val seededRandom = kotlin.random.Random(Store.bannerSeed)
     val fromBanners = Store.banners.shuffled(seededRandom).mapNotNull { b: Banner ->
-        val t = Store.byId(b.titleId)?.takeIf { it.status != "borrador" } ?: return@mapNotNull null
+        val t = Store.byId(b.titleId)?.takeIf { it.status != "borrador" && match(it) } ?: return@mapNotNull null
         // en el celular: primero la imagen vertical pensada para celular (como la web)
         val img = b.imageMobile.ifBlank { t.bannerMobile.ifBlank { b.image.ifBlank { t.bannerImage.ifBlank { t.backdrop.ifBlank { t.poster } } } } }
         Slide(t, img, b.headline, b.text.ifBlank { t.tagline.ifBlank { t.description } })
     }
     if (fromBanners.isNotEmpty()) return fromBanners
-    return Store.published().filter { it.featured }.shuffled(seededRandom).take(6).map {
+    val pool = Store.published().filter(match)
+    return pool.filter { it.featured }.ifEmpty { pool.sortedByDescending { it.createdAt } }.shuffled(seededRandom).take(6).map {
         Slide(it, it.bannerMobile.ifBlank { it.bannerImage.ifBlank { it.backdrop.ifBlank { it.poster } } }, "", it.tagline.ifBlank { it.description })
     }
 }
 
 class RowSpec(val key: String, val title: String, val kind: String, val titles: List<Title>, val feat: List<Pair<Title, FeatItem>> = emptyList(), val coll: Coll? = null)
 
-fun homeRows(): List<RowSpec> {
+/** Recomendados según tus gustos: géneros de Mi lista (los favoritos que elegiste) y de lo que viste. */
+fun recommended(): List<Title> {
+    val pub = Store.published()
+    val liked = (Store.myList + Store.progress.map { it.titleId }).distinct().mapNotNull { Store.byId(it) }
+    val seen = liked.map { it.id }.toSet()
+    val gw = HashMap<String, Int>()
+    liked.forEach { t -> t.genres.forEach { g -> gw[g] = (gw[g] ?: 0) + 1 } }
+    val series = liked.count { it.isSerie }; val movies = liked.size - series
+    val scored = pub.filter { it.id !in seen }.map { t ->
+        t to (t.genres.sumOf { gw[it] ?: 0 } * 3 + (if (t.isSerie == (series >= movies)) 1 else 0) + liked.count { l -> l.cast.any { c -> t.cast.any { it.name.equals(c.name, true) } } } * 2)
+    }.filter { it.second > 1 }.sortedWith(compareByDescending<Pair<Title, Int>> { it.second }.thenByDescending { it.first.createdAt }).map { it.first }
+    val fill = pub.filter { it.id !in seen && it !in scored }.sortedWith(compareByDescending<Title> { it.featured }.thenByDescending { it.createdAt })
+    return (scored + fill).take(20)
+}
+
+private fun tabMatch(tab: String): (Title) -> Boolean = when (tab) {
+    "Series" -> { t -> t.isSerie }
+    "Películas" -> { t -> !t.isSerie }
+    "Para vos" -> { _ -> true }
+    else -> { t -> tab in t.genres }
+}
+
+fun homeRows(tab: String = "Para vos"): List<RowSpec> {
+    if (tab != "Para vos") return tabRows(tab)
     val pub = Store.published()
     val rows = mutableListOf<RowSpec>()
     val cont = Store.progress.mapNotNull { p -> Store.byId(p.titleId)?.takeIf { it.status != "borrador" } }
     if (cont.isNotEmpty()) rows += RowSpec("cont", "Seguir viendo", "wide", cont)
+    val rec = recommended()
+    if (rec.isNotEmpty()) rows += RowSpec("rec", "Recomendado para vos", "poster", rec)
     val top = Store.top10.mapNotNull { id -> pub.firstOrNull { it.id == id } }.take(10)
     if (top.isNotEmpty()) rows += RowSpec("top", "Top 10 hoy", "top", top)
     val list = Store.myList.mapNotNull { id -> pub.firstOrNull { it.id == id } }
@@ -127,19 +156,38 @@ fun homeRows(): List<RowSpec> {
     return rows
 }
 
+/** Filas de una pestaña (Series, Películas o un género): todo se arma ahí mismo, sin salir del inicio. */
+private fun tabRows(tab: String): List<RowSpec> {
+    val match = tabMatch(tab)
+    val pub = Store.published().filter(match)
+    val rows = mutableListOf<RowSpec>()
+    val cont = Store.progress.mapNotNull { p -> Store.byId(p.titleId)?.takeIf { it.status != "borrador" && match(it) } }
+    if (cont.isNotEmpty()) rows += RowSpec("cont", "Seguir viendo", "wide", cont)
+    val rec = recommended().filter(match)
+    if (rec.size >= 3) rows += RowSpec("rec", "Recomendado para vos", "poster", rec)
+    val top = Store.top10.mapNotNull { id -> pub.firstOrNull { it.id == id } }.take(10)
+    if (top.size >= 3) rows += RowSpec("top", "Top 10 hoy", "top", top)
+    val newest = pub.sortedByDescending { it.createdAt }.take(20)
+    if (newest.isNotEmpty()) rows += RowSpec("new", "Novedades", "poster", newest)
+    val feat = pub.filter { it.featured }
+    if (feat.isNotEmpty()) rows += RowSpec("feat", "Destacados", "poster", feat)
+    pub.flatMap { t -> t.genres.filter { it != tab }.map { it to t } }.groupBy({ it.first }, { it.second })
+        .entries.filter { it.value.size >= 2 }.sortedByDescending { it.value.size }.take(8)
+        .forEach { (g, l) -> rows += RowSpec("g-$g", g, "poster", l) }
+    Store.colls.forEach { c ->
+        val ts = c.items.mapNotNull { i -> pub.firstOrNull { it.id == i } }
+        if (ts.size >= 2) rows += RowSpec("c-" + c.id, c.name, "coll", ts, coll = c)
+    }
+    if (rows.none { it.key == "new" } && pub.isNotEmpty()) rows += RowSpec("all", tab, "poster", pub)
+    return rows
+}
+
 /* ---------------- pantalla de inicio (diseño tipo discovery+) ---------------- */
 
 /** Pestañas de arriba: "Para vos" + Series, Películas y los géneros con más títulos. */
 private fun homeTabs(): List<String> =
     listOf("Para vos", "Series", "Películas") + Store.published().flatMap { it.genres }.groupingBy { it }.eachCount()
         .entries.sortedByDescending { it.value }.take(8).map { it.key }
-
-private fun openTab(tab: String, nav: Nav) = when (tab) {
-    "Para vos" -> Unit
-    "Series" -> nav.section(Screen.Series)
-    "Películas" -> nav.section(Screen.Movies)
-    else -> nav.go(Screen.Genre(tab))
-}
 
 /** Logo a la izquierda; transmitir, novedades y perfil a la derecha. */
 @Composable
@@ -149,21 +197,28 @@ private fun TopIcons(nav: Nav) {
         Spacer(Modifier.weight(1f))
         CastButton(42.dp, 25.dp)
         Spacer(Modifier.width(6.dp))
-        BellButton(42.dp, 25.dp)
+        BellButton(nav, 42.dp, 25.dp)
         Spacer(Modifier.width(10.dp))
         AvatarButton(nav)
     }
 }
 
 @Composable
-private fun Tabs(tabs: List<String>, nav: Nav) {
-    LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+private fun Tabs(tabs: List<String>, selected: String, onSelect: (String) -> Unit) {
+    val state = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(selected) { val i = tabs.indexOf(selected); if (i > 0) state.animateScrollToItem((i - 1).coerceAtLeast(0)) }
+    LazyRow(state = state, contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         items(tabs, key = { it }) { tab ->
-            val on = tab == "Para vos"
-            Column(Modifier.tap({ openTab(tab, nav) }, .95f).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(tab, style = ts(17, FontWeight.Bold, if (on) Color.White else Color.White.copy(alpha = .72f)), maxLines = 1)
+            val on = tab == selected
+            val alpha by animateFloatAsState(if (on) 1f else .68f, tween(200), label = "tabA")
+            Column(Modifier.width(IntrinsicSize.Max).tap({ onSelect(tab) }, .95f).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(tab, style = ts(17, FontWeight.Bold, Color.White.copy(alpha = alpha)), maxLines = 1)
                 Spacer(Modifier.height(7.dp))
-                Box(Modifier.height(3.dp).width(if (on) 62.dp else 0.dp).background(Color.White, RoundedCornerShape(99.dp)))
+                // subrayado del ancho de la palabra, como en la captura
+                androidx.compose.animation.AnimatedVisibility(on, enter = fadeIn(tween(180)) + androidx.compose.animation.expandHorizontally(tween(220)), exit = fadeOut(tween(120)) + androidx.compose.animation.shrinkHorizontally(tween(160))) {
+                    Box(Modifier.fillMaxWidth().height(3.dp).background(Color.White, RoundedCornerShape(99.dp)))
+                }
+                if (!on) Spacer(Modifier.height(3.dp))
             }
         }
     }
@@ -173,26 +228,29 @@ private fun Tabs(tabs: List<String>, nav: Nav) {
 @Composable
 fun HomeScreen(nav: Nav) {
     if (!Store.loaded) { Loading(); return }
-    val all = slides()
-    val rows = homeRows()
-    if (all.isEmpty() && rows.isEmpty()) { Empty("Todavía no hay títulos publicados."); return }
+    val tabs = homeTabs()
+    var tab by remember { mutableStateOf(nav.memory.text["homeTab"]?.takeIf { it in tabs } ?: "Para vos") }
+    val all = remember(tab, Store.titles, Store.banners) { slides(tabMatch(tab)) }
+    val rows = remember(tab, Store.titles, Store.myList, Store.progress, Store.colls, Store.top10, Store.featRows) { homeRows(tab) }
+    if (Store.published().isEmpty()) { Empty("Todavía no hay títulos publicados."); return }
     val listState = nav.memory.list("home")
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val tabs = homeTabs()
+    val scope = rememberCoroutineScope()
+    val pick: (String) -> Unit = { tb -> if (tb != tab) { tab = tb; nav.memory.text["homeTab"] = tb; scope.launch { listState.scrollToItem(0) } } }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottom + 96.dp)) {
-            item(key = "hero") {
-                if (all.isNotEmpty()) Hero(all, tabs, nav)
-                else Column(Modifier.statusBarsPadding().padding(top = 10.dp)) { TopIcons(nav); Spacer(Modifier.height(10.dp)); Tabs(tabs, nav) }
+            item(key = "hero-$tab") {
+                if (all.isNotEmpty()) Hero(all, tabs, tab, pick, nav)
+                else Column(Modifier.statusBarsPadding().padding(top = 10.dp)) { TopIcons(nav); Spacer(Modifier.height(10.dp)); Tabs(tabs, tab, pick) }
             }
-            items(rows, key = { it.key }) { r -> RowSection(r, nav) }
+            items(rows, key = { "$tab-" + it.key }) { r -> RowSection(r, nav) }
         }
         // al bajar, la barra de arriba queda fija con fondo
         val pinned by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 420 } }
         AnimatedVisibility(pinned, enter = fadeIn(tween(180)), exit = fadeOut(tween(140))) {
             Column(Modifier.fillMaxWidth().background(C.bg.copy(alpha = .96f)).statusBarsPadding().padding(top = 8.dp, bottom = 6.dp)) {
-                TopIcons(nav); Spacer(Modifier.height(4.dp)); Tabs(tabs, nav)
+                TopIcons(nav); Spacer(Modifier.height(4.dp)); Tabs(tabs, tab, pick)
             }
         }
     }
@@ -200,7 +258,7 @@ fun HomeScreen(nav: Nav) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Hero(all: List<Slide>, tabs: List<String>, nav: Nav) {
+private fun Hero(all: List<Slide>, tabs: List<String>, tab: String, pick: (String) -> Unit, nav: Nav) {
     val cfg = LocalConfiguration.current
     val h = minOf(cfg.screenWidthDp * 1.72f, cfg.screenHeightDp * 0.82f).dp
     val pager = rememberPagerState { all.size }
@@ -234,7 +292,7 @@ private fun Hero(all: List<Slide>, tabs: List<String>, nav: Nav) {
         }
         // arriba, sobre la portada: logo, íconos y pestañas
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 10.dp)) {
-            TopIcons(nav); Spacer(Modifier.height(10.dp)); Tabs(tabs, nav)
+            TopIcons(nav); Spacer(Modifier.height(10.dp)); Tabs(tabs, tab, pick)
         }
         if (all.size > 1) Row(
             Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),

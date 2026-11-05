@@ -1,5 +1,19 @@
 package com.realityvault.mobile
 
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -113,20 +127,88 @@ fun CollectionScreen(id: String, nav: Nav) {
     val pub = Store.published()
     val c = Store.colls.firstOrNull { it.id == id }
     val list = c?.items?.mapNotNull { i -> pub.firstOrNull { it.id == i } } ?: emptyList()
-    Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 12.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            GlassButton(Ic.back, "Volver", { nav.back() }, size = 40.dp)
-        }
-        if (c == null || list.isEmpty()) {
+    if (c == null || list.isEmpty()) {
+        Box(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) { Text("Esta colección no está disponible.", style = ts(17, FontWeight.Bold, Color.White)) }
-        } else PosterGrid(list, nav, "coll-$id") {
-            Column(Modifier.padding(bottom = 14.dp, top = 6.dp)) {
-                Text("COLECCIÓN", style = ts(11, FontWeight.Bold, C.accent).copy(letterSpacing = 2.sp))
-                Text(c.name, style = ts(28, FontWeight.Bold, Color.White))
-                if (c.tagline.isNotBlank()) Text(c.tagline, style = ts(13, color = C.fg2), modifier = Modifier.padding(top = 4.dp), maxLines = 3)
-                Text("${list.size} título${if (list.size == 1) "" else "s"}", style = ts(12, color = C.muted), modifier = Modifier.padding(top = 6.dp))
+            Box(Modifier.statusBarsPadding().padding(start = 12.dp, top = 8.dp)) { GlassButton(Ic.back, "Volver", { nav.back() }, size = 40.dp) }
+        }
+        return
+    }
+    val cfg = LocalConfiguration.current
+    val heroH = minOf(cfg.screenWidthDp * 1.15f, cfg.screenHeightDp * .62f).dp
+    val tint = rememberTint(c.image.ifBlank { list.first().poster })
+    val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val series = list.count { it.isSerie }; val movies = list.size - series
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to tint.darken(.35f), .35f to tint.darken(.55f), 1f to C.bg))) {
+        LazyColumn(state = nav.memory.list("coll-$id"), contentPadding = PaddingValues(bottom = bottom + 30.dp)) {
+            item(key = "hero") {
+                Box(Modifier.fillMaxWidth().height(heroH)) {
+                    if (c.image.isNotBlank()) Img(c.image, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
+                    else PosterWall(list, Modifier.fillMaxSize())
+                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+                        0f to Color.Black.copy(alpha = .45f), .25f to Color.Transparent, .55f to Color.Transparent, .82f to tint.darken(.35f).copy(alpha = .9f), 1f to tint.darken(.35f)
+                    )))
+                    Column(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 18.dp)) {
+                        Text("COLECCIÓN", style = ts(11, FontWeight.Bold, C.accent).copy(letterSpacing = 2.5.sp))
+                        Text(c.name, style = ts(34, FontWeight.Bold, Color.White).copy(lineHeight = 38.sp), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                        if (c.tagline.isNotBlank()) Text(c.tagline, style = ts(14.5f, color = Color.White.copy(alpha = .85f)).copy(lineHeight = 20.sp), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                        Text(listOfNotNull(
+                            if (series > 0) "$series serie${if (series == 1) "" else "s"}" else null,
+                            if (movies > 0) "$movies película${if (movies == 1) "" else "s"}" else null
+                        ).joinToString(" · "), style = ts(12.5f, FontWeight.Bold, Color.White.copy(alpha = .65f)), modifier = Modifier.padding(top = 10.dp))
+                    }
+                }
+            }
+            itemsIndexed(list, key = { _, t -> t.id }) { i, t -> CollItem(i + 1, t, nav) }
+        }
+        Box(Modifier.statusBarsPadding().padding(start = 12.dp, top = 8.dp)) { GlassButton(Ic.back, "Volver", { nav.back() }, size = 40.dp) }
+    }
+}
+
+/** Muro de pósters inclinado que se desliza solo (cuando la colección no tiene imagen propia). */
+@Composable
+private fun PosterWall(list: List<Title>, modifier: Modifier) {
+    val ps = list.filter { it.poster.isNotBlank() }.ifEmpty { return }
+    val inf = rememberInfiniteTransition(label = "wall")
+    val f by inf.animateFloat(0f, 1f, infiniteRepeatable(tween(60000, easing = LinearEasing)), label = "w")
+    val setPx = with(LocalDensity.current) { (8 * (96 + 10)).dp.toPx() }
+    Box(modifier.clipToBounds()) {
+        Column(
+            Modifier.fillMaxSize().graphicsLayer { rotationZ = -10f; scaleX = 1.35f; scaleY = 1.35f }.wrapContentSize(Alignment.Center, unbounded = true),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            repeat(4) { r ->
+                val row = List(8) { k -> ps[(k + r * 3) % ps.size] }
+                val dir = if (r % 2 == 0) -1f else 1f
+                Row(Modifier.graphicsLayer { translationX = dir * f * setPx - (if (dir > 0) setPx else 0f) }, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    (row + row).forEach { t -> Img(t.poster, Modifier.width(96.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)), crossfade = false) }
+                }
             }
         }
+    }
+}
+
+/** Cada título de la colección: imagen ancha con su logo, datos y sinopsis — no una grilla vacía. */
+@Composable
+private fun CollItem(n: Int, t: Title, nav: Nav) {
+    Column(Modifier.fillMaxWidth().tap({ nav.go(Screen.Detail(t.id)) }, .98f).padding(horizontal = 18.dp, vertical = 12.dp)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp)).background(C.surface)) {
+            if (t.wide.isNotBlank()) Img(t.wide, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .5f to Color.Transparent, 1f to Color.Black.copy(alpha = .8f))))
+            Box(Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 12.dp)) { TitleLogo(t, 170.dp, 52.dp, 18, Alignment.BottomStart) }
+            Text("$n", style = ts(13, FontWeight.Bold, Color.White), modifier = Modifier.align(Alignment.TopStart).padding(10.dp)
+                .background(Color.Black.copy(alpha = .55f), RoundedCornerShape(99.dp)).padding(horizontal = 9.dp, vertical = 3.dp))
+            if (t.isSoon) Text("Próximamente", style = ts(11, FontWeight.Bold, C.accent), modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)
+                .background(Color.Black.copy(alpha = .6f), RoundedCornerShape(99.dp)).padding(horizontal = 10.dp, vertical = 4.dp))
+        }
+        Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(t.title, style = ts(16, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            ListToggle(t, nav, 34.dp)
+        }
+        Text(listOfNotNull(t.kind(), t.year.ifBlank { null }, if (t.isSerie && t.seasons.isNotEmpty()) "${t.seasons.size} temporada${if (t.seasons.size == 1) "" else "s"}" else t.duration.ifBlank { null }).joinToString(" · "),
+            style = ts(12.5f, color = Color.White.copy(alpha = .6f)), modifier = Modifier.padding(top = 2.dp))
+        val txt = t.tagline.ifBlank { t.description }
+        if (txt.isNotBlank()) Text(txt, style = ts(13.5f, color = Color.White.copy(alpha = .75f)).copy(lineHeight = 19.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
     }
 }
 

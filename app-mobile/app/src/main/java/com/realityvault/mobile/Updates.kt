@@ -56,16 +56,6 @@ suspend fun autoCheckUpdates() {
     if (a != null && UpdateUi.snoozed != a.versionCode) UpdateUi.open = true
 }
 
-/** Campanita: punto rosa si hay una versión nueva; al tocarla busca y muestra el resultado. */
-@Composable
-fun BellButton(size: Dp = 40.dp, iconSize: Dp = 23.dp) {
-    val scope = rememberCoroutineScope()
-    Box(Modifier.size(size).tap({ UpdateUi.open = true; scope.launch { Updater.checkManually() } }, .9f), contentAlignment = Alignment.Center) {
-        Icon(Ic.bell, "Novedades de la app", tint = Color.White, modifier = Modifier.size(iconSize))
-        if (Updater.available != null) Box(Modifier.align(Alignment.Center).offset(x = 7.dp, y = (-8).dp).size(9.dp).background(C.accent, CircleShape))
-    }
-}
-
 @Composable
 fun UpdateDialog(nav: Nav) {
     if (!UpdateUi.open) return

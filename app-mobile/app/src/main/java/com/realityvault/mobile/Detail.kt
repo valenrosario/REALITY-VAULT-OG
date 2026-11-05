@@ -70,29 +70,39 @@ fun DetailScreen(id: String, nav: Nav) {
         mutableIntStateOf(t.seasons.indexOfFirst { it.number == prog?.season }.coerceAtLeast(0))
     }
     var more by remember(id) { mutableStateOf(false) }
-    val heroImg = t.backdropMobile.ifBlank { t.backdrop.ifBlank { t.bannerImage.ifBlank { t.poster } } }
+    val heroImg = t.backdropMobile.ifBlank { t.bannerMobile.ifBlank { t.backdrop.ifBlank { t.bannerImage.ifBlank { t.poster } } } }
     val tint = rememberTint(heroImg)
-    val related = remember(id, Store.titles) {
-        Store.published().filter { o -> o.id != t.id && o.genres.any { it in t.genres } }
-            .sortedByDescending { o -> o.genres.count { it in t.genres } }.take(14)
+    // similares: mismos géneros, mismo tipo, misma colección o mismo reparto; si hay pocos, se completa
+    // con lo más nuevo del mismo tipo — nunca queda vacío
+    val related = remember(id, Store.titles, Store.colls) {
+        val inColl = Store.colls.filter { t.id in it.items }.flatMap { it.items }.toSet()
+        val pool = Store.published().filter { it.id != t.id && !it.isSoon }
+        val scored = pool.map { o ->
+            o to (o.genres.count { it in t.genres } * 3 + (if (o.isSerie == t.isSerie) 2 else 0) + (if (o.id in inColl) 3 else 0) +
+                o.cast.count { c -> t.cast.any { it.name.equals(c.name, true) } } * 2)
+        }.filter { it.second >= 3 }.sortedWith(compareByDescending<Pair<Title, Int>> { it.second }.thenByDescending { it.first.createdAt }).map { it.first }
+        val fill = pool.filter { it !in scored }.sortedWith(compareByDescending<Title> { it.isSerie == t.isSerie }.thenByDescending { it.featured }.thenByDescending { it.createdAt })
+        (scored + fill).take(16)
     }
     val cfg = LocalConfiguration.current
-    val heroH = (cfg.screenWidthDp * 0.78f).dp
+    // portada alta: la foto y su difuminado terminan a la altura del logo, que queda encima
+    val heroH = minOf(cfg.screenWidthDp * 1.12f, cfg.screenHeightDp * .66f).dp
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to tint.lighten(.08f), .5f to tint, 1f to tint.darken(.6f)))) {
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to tint, .45f to tint, 1f to tint.darken(.6f)))) {
         LazyColumn(state = nav.memory.list("detail-$id"), modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottom + 40.dp)) {
-            // portada
-            item(key = "hero") {
-                Box(Modifier.fillMaxWidth().height(heroH)) {
-                    if (heroImg.isNotBlank()) Img(heroImg, Modifier.fillMaxSize(), alignment = Alignment.TopCenter) else Placeholder(t, Modifier.fillMaxSize(), big = true)
-                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .35f), .3f to Color.Transparent, .62f to Color.Transparent, 1f to tint)))
-                }
-            }
-            // título, datos y botones
+            // portada + título: la imagen se funde con el color de fondo justo detrás del logo
             item(key = "info") {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    TitleLogo(t, 260.dp, 84.dp, 30)
+                Box(Modifier.fillMaxWidth()) {
+                    Box(Modifier.fillMaxWidth().height(heroH)) {
+                        if (heroImg.isNotBlank()) Img(heroImg, Modifier.fillMaxSize(), alignment = Alignment.TopCenter) else Placeholder(t, Modifier.fillMaxSize(), big = true)
+                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = .38f), .22f to Color.Transparent, .5f to Color.Transparent,
+                            .66f to tint.copy(alpha = .35f), .8f to tint.copy(alpha = .78f), .92f to tint.copy(alpha = .97f), 1f to tint
+                        )))
+                    }
+                Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = heroH * .7f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    TitleLogo(t, 270.dp, 96.dp, 32)
                     Spacer(Modifier.height(10.dp))
                     KindLine(t, center = true)
                     val facts = listOfNotNull(
@@ -120,6 +130,7 @@ fun DetailScreen(id: String, nav: Nav) {
                         if (!more && t.description.length > 190) Text("Ver más", style = ts(12.5f, FontWeight.Bold, C.accent), modifier = Modifier.padding(top = 4.dp).tap({ more = true }))
                     }
                 }
+                }
             }
             // temporadas y capítulos
             if (t.isSerie && t.seasons.isNotEmpty()) {
@@ -132,16 +143,16 @@ fun DetailScreen(id: String, nav: Nav) {
                     }
                 }
                 itemsIndexed(s.episodes, key = { i, e -> "ep-${s.number}-${e.number}-$i" }) { _, e ->
-                    EpisodeRow(t, s, e, prog) { if (!t.isSoon && isHttp(e.url)) nav.play(t, e.url, s.number, e.number) }
+                    EpisodeRow(t, s, e, prog) { if (!t.isSoon && !s.soon && e.ready) nav.play(t, e.url, s.number, e.number) }
                 }
                 if (s.extras.isNotEmpty()) item(key = "extras-${s.number}") { ExtrasShowcase(t, s, nav) }
             }
             if (related.isNotEmpty()) item(key = "rel") {
                 Column(Modifier.padding(top = 28.dp)) {
-                    Text("También te podría gustar", style = ts(15, FontWeight.Bold, Color.White.copy(alpha = .94f)), modifier = Modifier.padding(start = 20.dp, bottom = 10.dp))
-                    LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                    Text("Títulos similares", style = ts(19, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 20.dp, bottom = 12.dp))
+                    LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(related, key = { it.id }) { o ->
-                            PosterCard(o, Modifier.width(108.dp).aspectRatio(2f / 3f).tap({ nav.go(Screen.Detail(o.id)) }).clip(RoundedCornerShape(9.dp)))
+                            PosterCard(o, Modifier.width((cfg.screenWidthDp * .36f).coerceAtMost(200f).dp).aspectRatio(2f / 3f).tap({ nav.go(Screen.Detail(o.id)) }).clip(RoundedCornerShape(6.dp)))
                         }
                     }
                 }
@@ -169,7 +180,8 @@ private fun BackFab(nav: Nav) {
 @Composable
 private fun EpisodeRow(t: Title, s: Season, e: Episode, prog: Progress?, onClick: () -> Unit) {
     val seen = prog?.watched?.let { "${s.number}-${e.number}" in it || "${s.number}:${e.number}" in it } == true
-    val hasVideo = isHttp(e.url)
+    val soonEp = e.soon || s.soon
+    val hasVideo = isHttp(e.url) && !soonEp
     val pos = prog?.positions?.get(posKey(s.number, e.number))
     val frac = when {
         pos != null && pos.second > 0 -> (pos.first.toFloat() / pos.second).coerceIn(0f, 1f)
@@ -182,7 +194,10 @@ private fun EpisodeRow(t: Title, s: Season, e: Episode, prog: Progress?, onClick
             Box(Modifier.fillMaxWidth(.5f).widthIn(max = 300.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(C.surface)) {
                 val img = e.thumb.ifBlank { t.wide }
                 if (img.isNotBlank()) Img(img, Modifier.fillMaxSize()) else Placeholder(t, Modifier.fillMaxSize())
-                if (!hasVideo) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .45f)), contentAlignment = Alignment.Center) { Text("Sin video", style = ts(12, FontWeight.Bold, Color.White.copy(alpha = .85f))) }
+                if (!hasVideo) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .5f)), contentAlignment = Alignment.Center) {
+                    Text(if (soonEp) "Próximamente" else "Sin video", style = ts(12, FontWeight.Bold, if (soonEp) C.accent else Color.White.copy(alpha = .85f)),
+                        modifier = if (soonEp) Modifier.background(Color.Black.copy(alpha = .55f), RoundedCornerShape(99.dp)).padding(horizontal = 10.dp, vertical = 4.dp) else Modifier)
+                }
                 else Box(
                     Modifier.align(Alignment.Center).size(42.dp).background(Color.Black.copy(alpha = .42f), CircleShape).border(1.5.dp, Color.White.copy(alpha = .9f), CircleShape),
                     contentAlignment = Alignment.Center

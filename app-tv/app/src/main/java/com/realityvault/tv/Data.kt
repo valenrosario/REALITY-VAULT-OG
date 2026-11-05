@@ -18,8 +18,12 @@ import java.util.UUID
 data class Episode(
     val number: Int, val title: String, val description: String,
     val duration: String, val url: String, val thumb: String, val subs: String = "",
-    val skips: List<Skip> = emptyList()
-)
+    val skips: List<Skip> = emptyList(),
+    /** Marcado "Próximamente" en el panel: se ve en la lista pero todavía no se puede reproducir. */
+    val soon: Boolean = false
+) {
+    val ready get() = !soon && isHttp(url)
+}
 
 /** "Saltear intro / resumen" cargado en el panel: entre [fromMs] y [toMs] se muestra un botón que lleva a [toMs]. */
 data class Skip(val label: String, val fromMs: Long, val toMs: Long)
@@ -45,7 +49,7 @@ private fun skipsOf(o: JSONObject): List<Skip> {
 }
 
 /** extras: material adicional de la temporada (detrás de cámaras, escenas eliminadas…); no cuentan como capítulos. */
-data class Season(val number: Int, val name: String, val episodes: List<Episode>, val extras: List<Episode> = emptyList())
+data class Season(val number: Int, val name: String, val episodes: List<Episode>, val extras: List<Episode> = emptyList(), val soon: Boolean = false)
 
 data class CastMember(val name: String, val role: String, val photo: String)
 
@@ -136,7 +140,7 @@ fun parseTitle(o: JSONObject): Title {
             so.optJSONArray("episodes")?.let { ea ->
                 for (j in 0 until ea.length()) {
                     val eo = ea.optJSONObject(j) ?: continue
-                    eps += Episode(eo.i("number", j + 1), eo.s("title"), eo.s("description"), eo.s("duration"), tvUrl(eo), eo.s("thumb"), eo.s("subs").trim(), skipsOf(eo))
+                    eps += Episode(eo.i("number", j + 1), eo.s("title"), eo.s("description"), eo.s("duration"), tvUrl(eo), eo.s("thumb"), eo.s("subs").trim(), skipsOf(eo), eo.s("availability") == "proximamente")
                 }
             }
             val xs = mutableListOf<Episode>()
@@ -147,7 +151,7 @@ fun parseTitle(o: JSONObject): Title {
                     if (u.startsWith("http")) xs += Episode(j + 1, xo.s("title"), xo.s("description"), xo.s("duration"), u, xo.s("thumb"), xo.s("subs").trim(), skipsOf(xo))
                 }
             }
-            seasons += Season(so.i("number", i + 1), so.s("name").ifBlank { so.s("title") }, eps, xs)
+            seasons += Season(so.i("number", i + 1), so.s("name").ifBlank { so.s("title") }, eps, xs, so.s("availability") == "proximamente")
         }
     }
     return Title(
@@ -343,11 +347,36 @@ object Store {
         refreshUser()
     }
 
-    suspend fun signup(email: String, pass: String) {
-        val body = JSONObject().put("email", email).put("password", pass).toString()
+    /**
+     * Crea la cuenta (igual que la web: nombre y foto de perfil en los datos del usuario).
+     * Devuelve false si Supabase pide confirmar el email antes de poder entrar.
+     */
+    suspend fun signup(email: String, pass: String, name: String = "", avatar: String = ""): Boolean {
+        val body = JSONObject().put("email", email).put("password", pass)
+            .put("data", JSONObject().put("name", name).put("avatar", avatar)).toString()
         val r = JSONObject(Api.call("POST", "/auth/v1/signup", body))
-        if (r.s("access_token").isNotBlank()) { saveSession(r); refreshUser() }
-        else login(email, pass)
+        if (r.s("access_token").isNotBlank()) { saveSession(r); refreshUser(); return true }
+        return runCatching { login(email, pass); true }.getOrDefault(false)
+    }
+
+    /** Cambia la foto de perfil (la misma que se ve en la web). */
+    suspend fun setAvatar(avatar: String) {
+        val tk = token() ?: return
+        Api.call("PUT", "/auth/v1/user", JSONObject().put("data", JSONObject().put("avatar", avatar)).toString(), tk)
+        val cur = session ?: return
+        session = cur.copy(avatar = avatar)
+        prefs.edit().putString("session", JSONObject(prefs.getString("session", "{}") ?: "{}").put("avatar", avatar).toString()).apply()
+    }
+
+    /** Agrega varios títulos a Mi lista de una vez (los favoritos elegidos al crear la cuenta). */
+    suspend fun addToList(ids: List<String>) {
+        val tk = token() ?: return
+        val uid = session?.userId ?: return
+        val add = ids.filter { it !in myList }.distinct()
+        if (add.isEmpty()) return
+        myList = add + myList
+        val rows = org.json.JSONArray(); add.forEach { rows.put(JSONObject().put("user_id", uid).put("title_id", it)) }
+        runCatching { Api.call("POST", "/rest/v1/user_lists", rows.toString(), tk, "return=minimal") }
     }
 
     /* ---------- activar la tele desde el celular ---------- */
@@ -498,7 +527,7 @@ object Store {
             val res = posResumable(p?.positions?.get("m"))
             Target(t.url, null, null, if (res) "Continuar" else if (p != null) "Volver a ver" else "Ver", res)
         } else null
-        val eps = t.seasons.flatMap { s -> s.episodes.filter { isHttp(it.url) }.map { s to it } }
+        val eps = t.seasons.filter { !it.soon }.flatMap { s -> s.episodes.filter { it.ready }.map { s to it } }
         if (eps.isEmpty()) return null
         var i = 0; var cont = false
         if (p != null) {
@@ -512,7 +541,7 @@ object Store {
 
     /** Capítulos con enlace para reproducir, en orden. */
     fun flatPlayable(t: Title): List<Pair<Season, Episode>> =
-        t.seasons.sortedBy { it.number }.flatMap { s -> s.episodes.filter { isHttp(it.url) }.sortedBy { it.number }.map { s to it } }
+        t.seasons.filter { !it.soon }.sortedBy { it.number }.flatMap { s -> s.episodes.filter { it.ready }.sortedBy { it.number }.map { s to it } }
 
     /** El capítulo que sigue después de este (para pasar solo al terminar). */
     fun nextAfter(t: Title, season: Int?, episode: Int?): Pair<Season, Episode>? {

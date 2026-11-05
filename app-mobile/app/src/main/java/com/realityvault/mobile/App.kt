@@ -69,6 +69,7 @@ fun App(nav: Nav, onExit: () -> Unit) {
                 Screen.Series -> GridScreen(nav, "series")
                 Screen.Movies -> GridScreen(nav, "peliculas")
                 is Screen.Genre -> GridScreen(nav, "g:" + s.name)
+                Screen.Notifications -> NotificationsScreen(nav)
                 Screen.MyList -> GridScreen(nav, "milista")
                 Screen.Search -> SearchScreen(nav)
             }
@@ -76,6 +77,8 @@ fun App(nav: Nav, onExit: () -> Unit) {
         // la barra de abajo queda fija mientras se cambia de sección (no parpadea con la transición)
         AnimatedVisibility(nav.top.isTab, Modifier.align(Alignment.BottomCenter), enter = fadeIn(tween(200)), exit = fadeOut(tween(120))) { BottomBar(nav) }
         UpdateDialog(nav)
+        // al agregar/sacar series de Mi lista, la campanita toma nota de sus capítulos actuales
+        androidx.compose.runtime.LaunchedEffect(Store.myList, Store.titles) { Notifs.scan() }
     }
 }
 
