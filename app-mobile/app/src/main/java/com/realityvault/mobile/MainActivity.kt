@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
                     Store.refreshCatalog()
                     Store.refreshUser()
                     Notifs.scan()
+                    AdminData.checkAdmin()
                     autoCheckUpdates()
                     delay(3 * 60_000)
                 }

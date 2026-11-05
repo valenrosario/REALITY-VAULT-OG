@@ -25,9 +25,13 @@ sealed class Screen {
     /** Categoría del inicio (pestañas de arriba): todos los títulos de un género. */
     data class Genre(val name: String) : Screen()
     data object Notifications : Screen()
+    /** Pestaña "Mi Vault": perfil, Mi lista, seguir viendo, avisos y (si sos admin) el panel. */
+    data object Mine : Screen()
+    /** Panel de control (solo cuenta de administrador). page: inicio, catalogo, titulo, banners, banner, colecciones, coleccion, filas, fila, generos, sitio. */
+    data class Admin(val page: String = "inicio", val id: String = "") : Screen()
 
     /** Las pantallas que muestran la barra de abajo. */
-    val isTab get() = this is Home || this is Series || this is Movies || this is MyList || this is Search
+    val isTab get() = this is Home || this is Search || this is Mine
 }
 
 /** Guarda dónde estaba el scroll de cada pantalla para volver justo ahí. */

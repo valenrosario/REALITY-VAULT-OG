@@ -303,6 +303,10 @@ private fun Hero(all: List<Slide>, tabs: List<String>, tab: String, pick: (Strin
                 }
             }
         }
+        // difuminado oscuro desde arriba para que se lean el logo, los íconos y las pestañas
+        Box(Modifier.fillMaxWidth().height(230.dp).background(Brush.verticalGradient(
+            0f to Color.Black.copy(alpha = .82f), .45f to Color.Black.copy(alpha = .5f), .75f to Color.Black.copy(alpha = .18f), 1f to Color.Transparent
+        )))
         // arriba, sobre la portada: logo, íconos y pestañas
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 10.dp)) {
             TopIcons(nav); Spacer(Modifier.height(10.dp)); Tabs(tabs, tab, pick)

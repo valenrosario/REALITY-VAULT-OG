@@ -99,7 +99,7 @@ fun GridScreen(nav: Nav, kind: String) {
     val list = if (genre.isBlank()) base else base.filter { genre in it.genres }
     val title = when { kind == "series" -> "Series"; kind == "peliculas" -> "Películas"; kind.startsWith("g:") -> kind.removePrefix("g:"); else -> "Mi lista" }
     Column(Modifier.fillMaxSize()) {
-        ScreenHeader(title, nav, "${list.size} título${if (list.size == 1) "" else "s"}", back = kind.startsWith("g:"))
+        ScreenHeader(title, nav, "${list.size} título${if (list.size == 1) "" else "s"}", back = true)
         if (genres.isNotEmpty()) LazyRow(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item { Chip("Todos", genre.isBlank()) { genre = ""; nav.memory.text["genre-$kind"] = "" } }
             items(genres) { g -> Chip(g, genre == g) { genre = g; nav.memory.text["genre-$kind"] = g } }

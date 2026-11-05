@@ -205,7 +205,9 @@ fun LocalLogo(modifier: Modifier) {
 @Composable
 fun TitleLogo(t: Title, maxW: Dp, maxH: Dp, textSize: Int = 30, align: Alignment = Alignment.BottomCenter) {
     if (t.logo.isNotBlank()) Img(t.logo, Modifier.width(maxW).height(maxH), scale = ContentScale.Fit, alignment = align)
-    else Text(t.title, style = ts(textSize, FontWeight.Bold, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(maxW))
+    else Text(t.title, style = ts(textSize, FontWeight.Bold, Color.White).copy(
+        textAlign = if (align == Alignment.BottomStart || align == Alignment.CenterStart || align == Alignment.TopStart) androidx.compose.ui.text.style.TextAlign.Start else androidx.compose.ui.text.style.TextAlign.Center
+    ), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(maxW))
 }
 
 @Composable
