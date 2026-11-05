@@ -630,6 +630,16 @@ a.cast-card:hover strong{color:var(--accent-2)}
 .ep-ed-x{border-left:3px solid var(--accent)}
 .ex-feat{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-ink);background:var(--accent);border-radius:99px;padding:5px 9px;white-space:nowrap}
 /* siguiente episodio, estilo plataformas de streaming */
+.pl-skip{position:absolute;right:24px;bottom:118px;z-index:6;display:inline-flex;align-items:center;gap:10px;border:1px solid rgba(255,255,255,.5);border-radius:10px;background:rgba(10,8,9,.72);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);color:#fff;font-family:var(--display);font-weight:700;font-size:16px;padding:13px 20px;cursor:pointer;box-shadow:0 12px 34px rgba(0,0,0,.5);animation:ncIn .3s cubic-bezier(.2,.8,.2,1);transition:background .15s,color .15s,transform .15s}
+.pl-skip:hover,.pl-skip:focus-visible{background:#fff;color:#000;outline:0;transform:scale(1.03)}
+.pl-skip[hidden],.player:has(.pl-nc:not([hidden])) .pl-skip{display:none}
+.player.idle .pl-skip{bottom:calc(40px + env(safe-area-inset-bottom,0px))}
+@media (max-width:640px){.pl-skip{right:14px;bottom:96px;font-size:14px;padding:11px 16px}}
+.skips-ed{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px dashed var(--line-2,rgba(255,255,255,.18));border-radius:12px}
+.skips-h{display:flex;flex-direction:column;gap:2px}.skips-h small{color:var(--muted,#8d8d98);font-size:12px}
+.skip-row{display:grid;grid-template-columns:minmax(140px,1.6fr) minmax(80px,.7fr) minmax(80px,.7fr) auto;gap:8px;align-items:end}
+.skip-row .iconbtn{margin-bottom:4px}.skip-err{grid-column:1/-1;color:#ff8a8a;font-size:12px}.skip-err:empty{display:none}
+@media (max-width:640px){.skip-row{grid-template-columns:1fr 1fr auto}.skip-row .field:first-child{grid-column:1/-1}}
 .pl-nc{position:absolute;right:24px;bottom:118px;z-index:6;width:min(440px,calc(100% - 32px));display:flex;gap:14px;align-items:center;padding:12px 12px 15px;background:rgba(10,8,9,.88);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.16);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.6);overflow:hidden;animation:ncIn .35s cubic-bezier(.2,.8,.2,1)}
 .pl-nc[hidden]{display:none}
 @keyframes ncIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
@@ -1380,5 +1390,6 @@ body.sorting,body.sorting *{cursor:grabbing!important;user-select:none!important
 <script src="/config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="/app.js"></script>
+<datalist id="skipLabels"><option value="Saltear intro"><option value="Saltear resumen"><option value="Saltear créditos"><option value="Saltear avance"></datalist>
 </body>
 </html>

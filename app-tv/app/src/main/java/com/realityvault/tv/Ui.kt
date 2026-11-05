@@ -115,6 +115,7 @@ object Ic {
     val chevron = icon("M9 5l7 7l-7 7", width = 2.6f)
     val back = icon("M15 5l-7 7l7 7", width = 2.6f)
     val heart = icon("M12 20s-7.5 -4.6 -7.5 -10.2A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.8C19.5 15.4 12 20 12 20z")
+    val skipNext = icon("M5 5.5l7 6.5l-7 6.5z", "M13 5.5l7 6.5l-7 6.5z")
 }
 
 /* ---------------- elemento enfocable con el control ---------------- */

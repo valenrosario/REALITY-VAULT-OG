@@ -229,6 +229,25 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         else if (ended) { delay(1200); nav.back() }
     }
 
+    // "Saltear intro / resumen" cargado en el panel (capítulo, extra o película).
+    // Con los controles ocultos, OK del control salta directo (como Netflix); con los controles
+    // en pantalla, "abajo" lleva el foco al botón.
+    val skips = remember(s, t, episode) {
+        when {
+            s.trailer || t == null -> emptyList()
+            episode != null -> episode.skips
+            s.extra -> t.seasons.flatMap { it.extras }.firstOrNull { it.url == s.url }?.skips ?: emptyList()
+            !t.isSerie -> t.skips
+            else -> emptyList()
+        }
+    }
+    val skip = if (showNext) null else skips.firstOrNull { posMs >= it.fromMs && posMs < it.toMs - 500 }
+    val skipReq = remember { FocusRequester() }
+    fun doSkip(k: Skip) {
+        val target = if (durMs > 0) minOf(k.toMs, durMs - 1000) else k.toMs
+        player.seekTo(target); posMs = target; if (!player.playWhenReady) player.play()
+    }
+
     val playReq = remember { FocusRequester() }
     val contReq = remember { FocusRequester() }
     // Cada vez que aparecen los controles (al abrir el video, o al despertarlos de nuevo), el foco
@@ -269,6 +288,8 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                     Key.MediaPause -> { player.pause(); bump(); true }
                     Key.DirectionLeft, Key.MediaRewind -> { doSeekBack(); true }
                     Key.DirectionRight, Key.MediaFastForward -> { doSeekForward(); true }
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> if (skip != null && !controlsVisible) { doSkip(skip); true } else false
+                    Key.DirectionDown -> if (skip != null && controlsVisible) { runCatching { skipReq.requestFocus() }; bump(); true } else false
                     else -> false
                 }
             }
@@ -289,6 +310,29 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         )
         // capa invisible: cualquier botón del control despierta la interfaz
         if (!controlsVisible) WakeLayer(Modifier.fillMaxSize()) { bump() }
+
+        // botón "Saltear intro / resumen"
+        AnimatedVisibility(
+            skip != null, Modifier.align(Alignment.BottomEnd).padding(end = 64.dp, bottom = if (controlsVisible) 132.dp else 64.dp),
+            enter = fadeIn() + androidx.compose.animation.slideInHorizontally { it / 3 }, exit = fadeOut()
+        ) {
+            var last by remember { mutableStateOf(skip) }
+            if (skip != null) last = skip
+            val k = last ?: return@AnimatedVisibility
+            Focusable({ doSkip(k); bump() }, Modifier.height(54.dp), shape = RoundedCornerShape(12.dp), scale = 1.06f, ring = false, lift = true, requester = skipReq, onFocus = { bump() }) { f ->
+                // sin controles en pantalla se ve resaltado: OK lo activa
+                val hot = f || !controlsVisible
+                Row(
+                    Modifier.background(if (hot) Color.White else Color(0xD90A080B)).border(1.5.dp, Color.White.copy(alpha = if (hot) 1f else .6f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 24.dp).height(54.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(k.label, style = ts(17, FontWeight.Bold, if (hot) Color.Black else Color.White), maxLines = 1)
+                    Spacer(Modifier.width(12.dp))
+                    Icon(Ic.skipNext, null, tint = if (hot) Color.Black else Color.White, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
 
         if (showNext && next != null && t != null) NextEpisodeCard(
             t, next, remainMs, ended, nextReq,

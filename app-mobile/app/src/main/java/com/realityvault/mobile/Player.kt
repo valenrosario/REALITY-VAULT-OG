@@ -335,6 +335,16 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
             delay(400)
         }
     }
+    // "Saltear intro / resumen" cargado en el panel (capítulo, extra o película)
+    val skips = remember(s, t, episode) {
+        when {
+            s.trailer || t == null -> emptyList()
+            episode != null -> episode.skips
+            s.extra -> t.seasons.flatMap { it.extras }.firstOrNull { it.url == s.url }?.skips ?: emptyList()
+            !t.isSerie -> t.skips
+            else -> emptyList()
+        }
+    }
     // buffering eterno: si pasan 25 s sin avanzar, se ofrece reintentar
     LaunchedEffect(buffering, player) { if (buffering) { delay(25_000); if (buffering) stuck = true } else stuck = false }
 
@@ -513,6 +523,31 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PillButton("Reintentar", { val p = player.currentPosition; fatal = null; stuck = false; retries = 0; player.seekTo(p); player.prepare(); player.play() }, icon = null)
                     PillButton("Volver", { nav.back() }, icon = null, dark = true)
+                }
+            }
+
+            // botón "Saltear intro / resumen"
+            val skip = if (skips.isEmpty() || scrubbing) null else skips.firstOrNull { posMs >= it.fromMs && posMs < it.toMs - 500 }
+            AnimatedVisibility(
+                skip != null && !panel && !locked && fatal == null && !(showNext && next != null),
+                Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = if (controlsVisible) 104.dp else 30.dp),
+                enter = fadeIn() + androidx.compose.animation.slideInHorizontally { it / 3 }, exit = fadeOut()
+            ) {
+                var last by remember { mutableStateOf(skip) }
+                if (skip != null) last = skip
+                val k = last ?: return@AnimatedVisibility
+                Row(
+                    Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xD90A080B)).border(1.dp, Color.White.copy(alpha = .55f), RoundedCornerShape(12.dp))
+                        .tap({
+                            val target = if (durMs > 0) minOf(k.toMs, durMs - 1000) else k.toMs
+                            player.seekTo(target); posMs = target; if (!player.playWhenReady) { userPaused = false; player.play() }
+                        }, .95f)
+                        .padding(horizontal = 18.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(k.label, style = ts(15, FontWeight.Bold, Color.White))
+                    Spacer(Modifier.width(10.dp))
+                    Icon(Ic.next, null, tint = Color.White, modifier = Modifier.size(16.dp))
                 }
             }
 

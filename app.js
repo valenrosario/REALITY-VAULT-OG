@@ -825,7 +825,7 @@ function renderEditor(){
       <label class="field span2"><span>Enlace para ver la película</span><input class="input" id="f-url" data-k="url" value="${esc(E.url)}" placeholder="https://…"><span class="hint">Se reproduce dentro del sitio. Funciona con YouTube, Vimeo, Google Drive, Dailymotion, OK.ru, Internet Archive, archivos .mp4, .ts o .m3u8 y servicios como StreamHG: ahí copiá el <b>Embed code</b> completo y pegalo acá (el sitio se queda solo con el enlace).</span></label>
       <label class="field span2"><span>Enlace para la TV (4K, opcional)</span><input class="input" id="f-urltv" data-k="urlTv" value="${esc(E.urlTv)}" placeholder="https://…/pelicula-4k.mkv"><span class="hint">Solo lo usa la app de la TV (4K, Dolby, varios audios). Si lo dejás vacío, la TV usa el enlace de arriba. La web siempre usa el de arriba.</span></label>
       <label class="field span2"><span>Subtítulos en español (.vtt)</span><input class="input" id="f-subs" data-k="subs" value="${esc(E.subs)}" placeholder="https://…/pelicula.es.vtt"><span class="hint">Opcional. Enlace a un archivo .vtt. Solo se muestran con enlaces de archivo .mp4, .webm o .m3u8.</span></label>
-    </div></div>`}
+    </div>${skipsEd(E.skips, 'm')}</div>`}
     <div class="fs"><h3>Video del banner principal</h3>
       <p class="hint" style="margin:0 0 12px">Cuando esta serie aparece en el banner del inicio, se ve la imagen unos segundos y después arranca este video sin sonido (con un botón para activarlo). Al terminar, pasa al siguiente banner. Tiene que ser un archivo de video: los enlaces de YouTube no sirven acá.</p>
       <div class="vid-grid">
@@ -886,6 +886,48 @@ function vidField(E, key, label, size, note){
   </div>`;
 }
 const VIDEO_MAX_MB = 200;
+/* --- "Saltear intro / resumen": botón que lleva a un minuto elegido (opcional, por película, capítulo o extra) --- */
+// "1:30" = 1 min 30 s · "1:02:03" = 1 h 2 min 3 s · "2" = minuto 2. Devuelve segundos o null.
+function parseSkipTime(v){
+  const t = String(v ?? '').trim().replace(',', '.'); if (!t) return null;
+  if (/^\d+(\.\d+)?$/.test(t)) return Math.round(parseFloat(t) * 60);
+  if (!/^\d{1,2}(:\d{1,2}){1,2}$/.test(t)) return null;
+  const p = t.split(':').map(Number); if (p.slice(1).some(n => n > 59)) return null;
+  return p.reduce((a, n) => a * 60 + n, 0);
+}
+// Saltos válidos de un video, en segundos y ordenados
+function skipsOf(o){
+  return (Array.isArray(o?.skips) ? o.skips : []).map(k => {
+    const from = parseSkipTime(k?.from) ?? 0, to = parseSkipTime(k?.to);
+    return { label: String(k?.label || '').trim() || 'Saltear intro', from, to };
+  }).filter(k => k.to != null && k.to > k.from).sort((a, b) => a.from - b.from);
+}
+function skipTarget(path){
+  const [k, a, b] = path.split('.'); const E = S.editing;
+  if (k === 'm') return E;
+  return k === 'e' ? E.seasons[+a].episodes[+b] : E.seasons[+a].extras[+b];
+}
+function skipState(k){
+  const f = parseSkipTime(k.from), t = parseSkipTime(k.to);
+  if (!String(k.to || '').trim() && !String(k.from || '').trim()) return '';
+  if (String(k.from || '').trim() && f == null) return 'El minuto de inicio no es válido (usá 1:30).';
+  if (t == null) return 'Falta el minuto al que salta (usá 1:30).';
+  if (t <= (f ?? 0)) return 'El minuto al que salta tiene que ser después del inicio.';
+  return '';
+}
+function skipsEd(list, path){
+  const ks = Array.isArray(list) ? list : [];
+  return `<div class="skips-ed" data-skips="${path}">
+    <div class="skips-h"><b>Saltear intro / resumen</b><small>Opcional. Durante ese tramo aparece un botón que lleva al minuto que elijas. Escribí los minutos como 1:30.</small></div>
+    ${ks.map((k, i) => { const err = skipState(k); return `<div class="skip-row">
+      <label class="field"><span>Texto del botón</span><input class="input" list="skipLabels" id="sk-l-${path}-${i}" data-skip="${path}|${i}" data-f="label" value="${esc(k.label)}" placeholder="Saltear intro"></label>
+      <label class="field"><span>Aparece en</span><input class="input" id="sk-f-${path}-${i}" data-skip="${path}|${i}" data-f="from" value="${esc(k.from)}" placeholder="0:00" inputmode="numeric"></label>
+      <label class="field"><span>Salta a</span><input class="input" id="sk-t-${path}-${i}" data-skip="${path}|${i}" data-f="to" value="${esc(k.to)}" placeholder="1:30" inputmode="numeric"></label>
+      <button class="iconbtn" data-skip-x="${path}|${i}" aria-label="Quitar salto">✕</button>
+      <span class="skip-err" data-skip-err="${path}|${i}">${esc(err)}</span></div>`; }).join('')}
+    <div><button class="btn btn-line btn-sm" data-skip-add="${path}">+ Agregar salto</button></div>
+  </div>`;
+}
 /* --- aviso en el admin: ¿ya está lista la versión web (.web.mp4) de un MKV? --- */
 const webCopy = new Map(); // url -> { ok, t }
 const webAlt = u => u.replace(/\.(mkv|ts|m2ts|mts)(?=[?#]|$)/i, '.web.mp4');
@@ -979,6 +1021,7 @@ function renderSeasonsEd(E){
             <label class="field"><span>Sinopsis</span><textarea class="textarea" style="min-height:64px" id="e-s-${si}-${ei}" data-ep="${si}.${ei}" data-f="description">${esc(e.description)}</textarea></label>
             <label class="field"><span>Subtítulos en español (.vtt)</span><input class="input" id="e-v-${si}-${ei}" data-ep="${si}.${ei}" data-f="subs" value="${esc(e.subs)}" placeholder="Enlace al archivo .vtt (opcional)"></label>
             <label class="field"><span>Enlace para la TV (4K, opcional)</span><input class="input" id="e-t4-${si}-${ei}" data-ep="${si}.${ei}" data-f="urlTv" value="${esc(e.urlTv)}" placeholder="Solo para la app de la TV. Vacío = usa el enlace de abajo"></label>
+            ${skipsEd(e.skips, `e.${si}.${ei}`)}
             <div class="ep-ed-foot"><input class="input" id="e-u-${si}-${ei}" data-ep="${si}.${ei}" data-f="url" value="${esc(e.url)}" placeholder="Enlace o código de inserción (embed) del video" aria-label="Enlace del capítulo">
               <button class="pill-toggle btn-sm ${eSoon?'on':''}" data-ep-soon="${si}.${ei}" aria-pressed="${eSoon}">Próximamente</button>
               <button class="iconbtn" data-ep-x="${si}.${ei}" aria-label="Quitar capítulo">✕</button></div>
@@ -996,6 +1039,7 @@ function renderSeasonsEd(E){
               <label class="field"><span>Descripción</span><textarea class="textarea" style="min-height:56px" id="x-s-${si}-${xi}" data-ex="${si}.${xi}" data-f="description">${esc(x.description)}</textarea></label>
               <label class="field"><span>Subtítulos en español (.vtt)</span><input class="input" id="x-v-${si}-${xi}" data-ex="${si}.${xi}" data-f="subs" value="${esc(x.subs)}" placeholder="Enlace al archivo .vtt (opcional)"></label>
               <label class="field"><span>Enlace para la TV (4K, opcional)</span><input class="input" id="x-t4-${si}-${xi}" data-ex="${si}.${xi}" data-f="urlTv" value="${esc(x.urlTv)}" placeholder="Solo para la app de la TV. Vacío = usa el enlace de abajo"></label>
+              ${skipsEd(x.skips, `x.${si}.${xi}`)}
               <div class="ep-ed-foot"><input class="input" id="x-u-${si}-${xi}" data-ex="${si}.${xi}" data-f="url" value="${esc(x.url)}" placeholder="Enlace del video del extra" aria-label="Enlace del extra">
                 ${xi > 0 ? `<button class="iconbtn" data-ex-up="${si}.${xi}" aria-label="Subir (el primero es el destacado)" title="Subir (el primero es el destacado)">↑</button>` : '<span class="ex-feat">Destacado</span>'}
                 <button class="iconbtn" data-ex-x="${si}.${xi}" aria-label="Quitar extra">✕</button></div>
@@ -1868,6 +1912,10 @@ app.addEventListener('input', e => {
   else if (el.dataset.season){ E.seasons[+el.dataset.season][el.dataset.f] = el.value; markDirty(); if (el.dataset.f==='number'){ const n = el.closest('.season-h').querySelector('.num'); n.textContent = 'T'+el.value; } }
   else if (el.dataset.ep){ const [si,ei] = el.dataset.ep.split('.').map(Number); E.seasons[si].episodes[ei][el.dataset.f] = el.value; markDirty(); }
   else if (el.dataset.ex){ const [si,xi] = el.dataset.ex.split('.').map(Number); E.seasons[si].extras[xi][el.dataset.f] = el.value; markDirty(); }
+  else if (el.dataset.skip){
+    const [path, i] = el.dataset.skip.split('|'); const k = skipTarget(path).skips[+i]; k[el.dataset.f] = el.value.trim(); markDirty();
+    const er = app.querySelector(`[data-skip-err="${CSS.escape(el.dataset.skip)}"]`); if (er) er.textContent = skipState(k);
+  }
 });
 app.addEventListener('change', async e => {
   const el = e.target;
@@ -1945,6 +1993,12 @@ app.addEventListener('click', async e => {
   if (d.chipAdd){ addChip(d.chipAdd, d.v); return; }
   if (d.castAdd !== undefined){ E.cast.push({name:'',role:'',photo:''}); markDirty(); rerenderPanel(); document.getElementById('cast-n-'+(E.cast.length-1))?.focus(); return; }
   if (d.castX !== undefined){ E.cast.splice(+d.castX,1); markDirty(); rerenderPanel(); return; }
+  if (d.skipAdd !== undefined){
+    const o = skipTarget(d.skipAdd), ks = (o.skips = Array.isArray(o.skips) ? o.skips : []);
+    ks.push({ label: ks.length ? 'Saltear créditos' : 'Saltear intro', from: '', to: '' }); markDirty(); rerenderPanel();
+    document.getElementById(`sk-f-${d.skipAdd}-${ks.length - 1}`)?.focus(); return;
+  }
+  if (d.skipX !== undefined){ const [path, i] = d.skipX.split('|'); const o = skipTarget(path); o.skips.splice(+i, 1); if (!o.skips.length) delete o.skips; markDirty(); rerenderPanel(); return; }
   if (d.seasonAdd !== undefined){ const n = Math.max(0,...E.seasons.map(s=>+s.number||0))+1; E.seasons.push({id:uid('s'),number:n,title:'',episodes:[]}); S.openSeasons.add(E.seasons.length-1); markDirty(); rerenderPanel(); return; }
   if (d.seasonX !== undefined){ const si=+d.seasonX; inlineConfirm(t.closest('[data-row]'), '¿Quitar con sus capítulos?', ()=>{ E.seasons.splice(si,1); markDirty(); rerenderPanel(); }); return; }
   if (d.seasonToggle !== undefined){ const si=+d.seasonToggle; S.openSeasons.has(si) ? S.openSeasons.delete(si) : S.openSeasons.add(si); rerenderPanel(); return; }
@@ -3007,7 +3061,10 @@ function openPlayer({ url, tid, s: season, e: episode, x }){
     sub = `T${season}:E${episode}${ep?.title ? ' · ' + ep.title : ''}`;
     subsUrl = safeUrl(ep?.subs);
   } else if (t && t.type !== 'serie') subsUrl = safeUrl(t.subs);
-  if (x && t){ const xe = (t.seasons || []).find(z => +z.number === +xsn)?.extras?.[+xi]; sub = 'Extra' + (xe?.title ? ' · ' + xe.title : ''); subsUrl = safeUrl(xe?.subs); }
+  let skips = [];
+  if (t && t.type === 'serie' && season !== '' && season != null) skips = skipsOf(flatEpisodes(t).find(x => +x.s.number === +season && +x.e.number === +episode)?.e);
+  else if (t && t.type !== 'serie') skips = skipsOf(t);
+  if (x && t){ const xe = (t.seasons || []).find(z => +z.number === +xsn)?.extras?.[+xi]; sub = 'Extra' + (xe?.title ? ' · ' + xe.title : ''); subsUrl = safeUrl(xe?.subs); skips = skipsOf(xe); }
   const nx = x ? null : nextAfter(t, season, episode);
   if (!playerRoot){ playerRoot = document.createElement('div'); playerRoot.id = 'playerRoot'; document.body.appendChild(playerRoot); }
   const media = emb.type === 'iframe'
@@ -3054,6 +3111,19 @@ function openPlayer({ url, tid, s: season, e: episode, x }){
     const hidden = () => { if (document.hidden) save(); };
     v.addEventListener('pause', save); v.addEventListener('ended', save);
     document.addEventListener('visibilitychange', hidden); window.addEventListener('pagehide', save);
+    // botón "Saltear intro / resumen": visible durante el tramo, lleva al minuto elegido
+    if (skips.length){
+      const sk = document.createElement('button'); sk.className = 'pl-skip'; sk.hidden = true;
+      playerRoot.querySelector('.player').appendChild(sk);
+      let cur = null;
+      const upd = () => {
+        const tt = v.currentTime, k = skips.find(z => tt >= z.from && tt < z.to - 0.5) || null;
+        if (k === cur) return; cur = k; sk.hidden = !k;
+        if (k) sk.innerHTML = `${esc(k.label)}<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 5l8 7-8 7zM14 5l8 7-8 7z" fill="currentColor"/></svg>`;
+      };
+      v.addEventListener('timeupdate', upd); v.addEventListener('seeked', upd);
+      sk.addEventListener('click', e => { e.stopPropagation(); if (cur){ v.currentTime = Math.min(cur.to, (v.duration || Infinity) - 1); cur = null; sk.hidden = true; v.play().catch(() => {}); } });
+    }
     if (nx){
       const stageEl = playerRoot.querySelector('.player');
       const nc = document.createElement('div'); nc.className = 'pl-nc'; nc.hidden = true;

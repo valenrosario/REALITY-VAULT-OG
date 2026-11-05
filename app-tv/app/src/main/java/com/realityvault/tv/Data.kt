@@ -17,8 +17,32 @@ import java.util.UUID
 
 data class Episode(
     val number: Int, val title: String, val description: String,
-    val duration: String, val url: String, val thumb: String, val subs: String = ""
+    val duration: String, val url: String, val thumb: String, val subs: String = "",
+    val skips: List<Skip> = emptyList()
 )
+
+/** "Saltear intro / resumen" cargado en el panel: entre [fromMs] y [toMs] se muestra un botón que lleva a [toMs]. */
+data class Skip(val label: String, val fromMs: Long, val toMs: Long)
+
+/** Mismo formato que la web: "1:30" = 1 min 30 s · "1:02:03" · "2" = minuto 2. Devuelve segundos o null. */
+fun parseSkipTime(v: String): Long? {
+    val t = v.trim().replace(',', '.'); if (t.isEmpty()) return null
+    if (Regex("^\\d+(\\.\\d+)?$").matches(t)) return Math.round(t.toDouble() * 60)
+    if (!Regex("^\\d{1,2}(:\\d{1,2}){1,2}$").matches(t)) return null
+    val p = t.split(':').map { it.toLong() }
+    if (p.drop(1).any { it > 59 }) return null
+    return p.fold(0L) { a, n -> a * 60 + n }
+}
+
+private fun skipsOf(o: JSONObject): List<Skip> {
+    val a = o.optJSONArray("skips") ?: return emptyList()
+    return (0 until a.length()).mapNotNull { i ->
+        val k = a.optJSONObject(i) ?: return@mapNotNull null
+        val from = parseSkipTime(k.s("from")) ?: 0L
+        val to = parseSkipTime(k.s("to")) ?: return@mapNotNull null
+        if (to <= from) null else Skip(k.s("label").trim().ifBlank { "Saltear intro" }, from * 1000, to * 1000)
+    }.sortedBy { it.fromMs }
+}
 
 /** extras: material adicional de la temporada (detrás de cámaras, escenas eliminadas…); no cuentan como capítulos. */
 data class Season(val number: Int, val name: String, val episodes: List<Episode>, val extras: List<Episode> = emptyList())
@@ -44,7 +68,8 @@ data class Title(
     // (ese puede ser un link de YouTube y se abre aparte, en una ventana).
     val previewVideo: String = "",
     // Imágenes pensadas para el celular (las mismas que usa la web en pantallas chicas).
-    val bannerMobile: String = "", val backdropMobile: String = ""
+    val bannerMobile: String = "", val backdropMobile: String = "",
+    val skips: List<Skip> = emptyList()
 ) {
     val isSerie get() = type == "serie"
     val isSoon get() = availability == "proximamente"
@@ -111,7 +136,7 @@ fun parseTitle(o: JSONObject): Title {
             so.optJSONArray("episodes")?.let { ea ->
                 for (j in 0 until ea.length()) {
                     val eo = ea.optJSONObject(j) ?: continue
-                    eps += Episode(eo.i("number", j + 1), eo.s("title"), eo.s("description"), eo.s("duration"), tvUrl(eo), eo.s("thumb"), eo.s("subs").trim())
+                    eps += Episode(eo.i("number", j + 1), eo.s("title"), eo.s("description"), eo.s("duration"), tvUrl(eo), eo.s("thumb"), eo.s("subs").trim(), skipsOf(eo))
                 }
             }
             val xs = mutableListOf<Episode>()
@@ -119,7 +144,7 @@ fun parseTitle(o: JSONObject): Title {
                 for (j in 0 until xa.length()) {
                     val xo = xa.optJSONObject(j) ?: continue
                     val u = tvUrl(xo)
-                    if (u.startsWith("http")) xs += Episode(j + 1, xo.s("title"), xo.s("description"), xo.s("duration"), u, xo.s("thumb"), xo.s("subs").trim())
+                    if (u.startsWith("http")) xs += Episode(j + 1, xo.s("title"), xo.s("description"), xo.s("duration"), u, xo.s("thumb"), xo.s("subs").trim(), skipsOf(xo))
                 }
             }
             seasons += Season(so.i("number", i + 1), so.s("name").ifBlank { so.s("title") }, eps, xs)
@@ -137,7 +162,8 @@ fun parseTitle(o: JSONObject): Title {
         bannerTv = o.s("bannerImageTv"), backdropTv = o.s("backdropTv"), subs = o.s("subs").trim(),
         formats = o.optJSONObject("formats")?.let { f -> Formats(f.optBoolean("uhd4k"), f.optBoolean("hdr"), f.optBoolean("atmos"), f.optBoolean("surround51"), f.optBoolean("hd")) } ?: Formats(),
         previewVideo = o.s("previewVideo").trim(),
-        bannerMobile = o.s("bannerImageMobile"), backdropMobile = o.s("backdropMobile")
+        bannerMobile = o.s("bannerImageMobile"), backdropMobile = o.s("backdropMobile"),
+        skips = skipsOf(o)
     )
 }
 
