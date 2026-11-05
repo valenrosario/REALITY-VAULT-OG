@@ -28,6 +28,7 @@ android {
         targetSdk = 34
         versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         versionName = "1." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
+        buildConfigField("boolean", "TV_LINKS", "true")
         buildConfigField("String", "SUPABASE_URL", "\"${cfg("supabaseUrl")}\"")
         buildConfigField("String", "SUPABASE_KEY", "\"${cfg("supabaseAnonKey")}\"")
         buildConfigField("String", "SITE_URL", "\"https://reality-vault.vercel.app/\"")

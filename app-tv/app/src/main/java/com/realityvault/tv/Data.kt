@@ -42,7 +42,9 @@ data class Title(
     // El mismo video silencioso que se reproduce en los banners de la versión web al
     // quedarse encima de un título (campo "previewVideo" del panel) — NO es el tráiler
     // (ese puede ser un link de YouTube y se abre aparte, en una ventana).
-    val previewVideo: String = ""
+    val previewVideo: String = "",
+    // Imágenes pensadas para el celular (las mismas que usa la web en pantallas chicas).
+    val bannerMobile: String = "", val backdropMobile: String = ""
 ) {
     val isSerie get() = type == "serie"
     val isSoon get() = availability == "proximamente"
@@ -65,7 +67,7 @@ data class Title(
 
 data class Banner(
     val id: String, val titleId: String, val image: String, val headline: String,
-    val text: String, val active: Boolean, val order: Int
+    val text: String, val active: Boolean, val order: Int, val imageMobile: String = ""
 )
 
 data class FeatItem(val titleId: String, val label: String, val image: String)
@@ -95,7 +97,8 @@ private fun JSONObject.strs(k: String): List<String> {
 
 /** Enlace que usa la tele: el "Enlace para la TV" (4K) si está cargado y es válido; si no, el normal de la web. */
 private fun tvUrl(o: JSONObject): String {
-    val tv = o.s("urlTv").trim()
+    // En el celular (BuildConfig.TV_LINKS = false) se usa siempre el enlace normal, el mismo que la web.
+    val tv = if (BuildConfig.TV_LINKS) o.s("urlTv").trim() else ""
     return if (tv.startsWith("http://") || tv.startsWith("https://")) tv else o.s("url").trim()
 }
 
@@ -133,7 +136,8 @@ fun parseTitle(o: JSONObject): Title {
         cast = o.optJSONArray("cast")?.let { a -> (0 until a.length()).mapNotNull { k -> a.optJSONObject(k)?.let { c -> CastMember(c.s("name"), c.s("role"), c.s("photo")).takeIf { it.name.isNotBlank() } } } } ?: emptyList(),
         bannerTv = o.s("bannerImageTv"), backdropTv = o.s("backdropTv"), subs = o.s("subs").trim(),
         formats = o.optJSONObject("formats")?.let { f -> Formats(f.optBoolean("uhd4k"), f.optBoolean("hdr"), f.optBoolean("atmos"), f.optBoolean("surround51"), f.optBoolean("hd")) } ?: Formats(),
-        previewVideo = o.s("previewVideo").trim()
+        previewVideo = o.s("previewVideo").trim(),
+        bannerMobile = o.s("bannerImageMobile"), backdropMobile = o.s("backdropMobile")
     )
 }
 
@@ -233,7 +237,7 @@ object Store {
         banners = (0 until bs.length()).mapNotNull { k ->
             val d = bs.optJSONObject(k)?.optJSONObject("data") ?: return@mapNotNull null
             Banner(d.s("id").ifBlank { bs.optJSONObject(k)?.s("id") ?: "" }, d.s("titleId"), d.s("image"), d.s("headline"), d.s("text"),
-                d.opt("active") != false, d.i("order"))
+                d.opt("active") != false, d.i("order"), d.s("imageMobile"))
         }.filter { it.active }.sortedBy { it.order }
         val site = j.optJSONArray("site") ?: JSONArray()
         var rows = emptyList<FeatRow>()
