@@ -97,7 +97,9 @@ private class Pick(ctx: Context) {
 
 @Composable
 fun LoginScreen(s: Screen.Login, nav: Nav) {
-    var signup by remember { mutableStateOf(false) }
+    // "choose": primero se elige entre iniciar sesión o crear cuenta, como en cualquier app
+    var mode by remember { mutableStateOf("choose") }
+    val signup = mode == "signup"
     var step by remember { mutableIntStateOf(1) }      // crear cuenta: 1 email · 2 foto · 3 nombre y contraseña · 4 favoritos
     var email by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
@@ -111,9 +113,10 @@ fun LoginScreen(s: Screen.Login, nav: Nav) {
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
     val kb = LocalSoftwareKeyboardController.current
-    val side = remember { Store.published().filter { it.backdropMobile.isNotBlank() || it.backdrop.isNotBlank() }.shuffled().firstOrNull() }
+    val wall = remember { Store.published().filter { it.poster.isNotBlank() }.shuffled().take(24) }
 
     fun done() {
+        nav.memory.clear()  // cuenta nueva u otra cuenta: el inicio arranca desde arriba
         when {
             s.then != null -> nav.replace(s.then)
             s.required -> nav.section(Screen.Home)
@@ -148,31 +151,70 @@ fun LoginScreen(s: Screen.Login, nav: Nav) {
         kb?.hide(); busy = true; err = ""
         scope.launch {
             try {
-                if (Store.signup(email.trim(), pass, name.trim(), avatar)) step = 4 else confirmMail = true
+                if (Store.signup(email.trim(), pass, name.trim(), avatar)) { nav.memory.clear(); step = 4 } else confirmMail = true
             } catch (e: Exception) { err = errText(e, false) }
             busy = false
         }
     }
 
+    // atrás del sistema: vuelve un paso (o a la pantalla de elegir); en la elección, cierra si se puede
+    androidx.activity.compose.BackHandler(enabled = !busy && (mode != "choose" || !s.required)) {
+        when {
+            confirmMail -> { confirmMail = false; mode = "login"; step = 1 }
+            mode == "signup" && step in 2..3 -> { step--; err = "" }
+            mode == "signup" && step == 4 -> done()
+            mode != "choose" -> { mode = "choose"; err = "" }
+            else -> nav.back()
+        }
+    }
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        // portada de fondo, difuminada hacia abajo
-        if (side != null) {
-            Img(side.backdropMobile.ifBlank { side.backdrop }, Modifier.fillMaxWidth().aspectRatio(.9f), crossfade = false)
-            Box(Modifier.fillMaxWidth().aspectRatio(.9f).background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .45f), .45f to Color.Black.copy(alpha = .55f), 1f to Color.Black)))
+        // fondo: muro de pósters del catálogo que se mueve solo, oscurecido
+        if (wall.isNotEmpty()) PosterWall(wall, Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize().background(
+            if (mode == "choose") Brush.verticalGradient(0f to Color.Black.copy(alpha = .55f), .35f to Color.Black.copy(alpha = .35f), .62f to Color.Black.copy(alpha = .88f), 1f to Color.Black)
+            else Brush.verticalGradient(0f to Color.Black.copy(alpha = .86f), 1f to Color.Black.copy(alpha = .94f))
+        ))
+        if (mode == "choose") {
+            Column(
+                Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 26.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                    if (!s.required) GlassButton(Ic.close, "Cerrar", { nav.back() }, size = 40.dp) else Spacer(Modifier.size(40.dp))
+                }
+                Spacer(Modifier.weight(1f))
+                if (Store.siteLogo.isNotBlank()) Img(Store.siteLogo, Modifier.width(260.dp).height(52.dp), scale = ContentScale.Fit)
+                else LocalLogo(Modifier.width(260.dp).height(52.dp))
+                Text(
+                    if (s.then != null) "Para ver necesitás una cuenta. Es gratis y tarda un minuto." else "El lugar donde viven tus realities favoritos",
+                    style = ts(21, FontWeight.Bold, Color.White).copy(textAlign = TextAlign.Center, lineHeight = 27.sp), modifier = Modifier.padding(top = 18.dp)
+                )
+                Text("Series, películas y especiales en un solo lugar.", style = ts(14.5f, color = C.fg2).copy(textAlign = TextAlign.Center), modifier = Modifier.padding(top = 8.dp))
+                Spacer(Modifier.height(30.dp))
+                PillButton("Crear cuenta gratis", { mode = "signup"; step = 1; err = "" }, Modifier.fillMaxWidth().widthIn(max = 460.dp), icon = null)
+                Spacer(Modifier.height(12.dp))
+                PillButton("Iniciar sesión", { mode = "login"; err = "" }, Modifier.fillMaxWidth().widthIn(max = 460.dp), icon = null, dark = true)
+                Spacer(Modifier.height(if (s.required) 34.dp else 10.dp))
+                if (!s.required) Text("Ahora no", style = ts(13.5f, FontWeight.Bold, C.muted), modifier = Modifier.tap({ nav.back() }).padding(14.dp))
+            }
+            return@Box
         }
         Column(
             Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (signup && step in 2..3 && !confirmMail) GlassButton(Ic.back, "Volver", { step--; err = "" }, size = 40.dp)
-                else if (!s.required) GlassButton(Ic.close, "Cerrar", { nav.back() }, size = 40.dp)
-                else Spacer(Modifier.size(40.dp))
+                when {
+                    confirmMail || (signup && step == 4) -> Spacer(Modifier.size(40.dp))
+                    signup && step in 2..3 -> GlassButton(Ic.back, "Volver", { step--; err = "" }, size = 40.dp)
+                    else -> GlassButton(Ic.back, "Volver", { mode = "choose"; err = "" }, size = 40.dp)
+                }
             }
-            Spacer(Modifier.height(if (signup && step == 4) 6.dp else 34.dp))
-            if (Store.siteLogo.isNotBlank()) Img(Store.siteLogo, Modifier.width(220.dp).height(42.dp), scale = ContentScale.Fit)
-            else LocalLogo(Modifier.width(220.dp).height(42.dp))
-            Spacer(Modifier.height(26.dp))
+            Spacer(Modifier.height(if (signup && step == 4) 4.dp else 28.dp))
+            if (Store.siteLogo.isNotBlank()) Img(Store.siteLogo, Modifier.width(200.dp).height(38.dp), scale = ContentScale.Fit)
+            else LocalLogo(Modifier.width(200.dp).height(38.dp))
+            Spacer(Modifier.height(if (signup && step == 4) 16.dp else 34.dp))
 
             AnimatedContent(
                 targetState = Triple(signup, step, confirmMail),
@@ -184,7 +226,7 @@ fun LoginScreen(s: Screen.Login, nav: Nav) {
                         cm -> {
                             Title("¡Listo, ${name.trim().split(" ").first()}!", "Te mandamos un email para confirmar tu cuenta. Abrilo, tocá el enlace y después ingresá.")
                             Spacer(Modifier.height(22.dp))
-                            PillButton("Ingresar", { confirmMail = false; signup = false; step = 1; pass = "" }, Modifier.fillMaxWidth(), icon = null)
+                            PillButton("Ingresar", { confirmMail = false; mode = "login"; step = 1; pass = "" }, Modifier.fillMaxWidth(), icon = null)
                         }
                         !su -> {
                             Title("Qué bueno verte de nuevo", if (s.then != null) "Entrá con tu cuenta para ver este video." else "Entrá con tu cuenta.")
@@ -199,7 +241,7 @@ fun LoginScreen(s: Screen.Login, nav: Nav) {
                             Spacer(Modifier.height(18.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("¿No tenés cuenta? ", style = ts(13.5f, color = C.fg2))
-                                Text("Creá una gratis", style = ts(13.5f, FontWeight.Bold, C.accent), modifier = Modifier.tap({ signup = true; step = 1; err = "" }).padding(vertical = 8.dp))
+                                Text("Creá una gratis", style = ts(13.5f, FontWeight.Bold, C.accent), modifier = Modifier.tap({ mode = "signup"; step = 1; err = "" }).padding(vertical = 8.dp))
                             }
                         }
                         st == 1 -> {
@@ -215,7 +257,7 @@ fun LoginScreen(s: Screen.Login, nav: Nav) {
                             Spacer(Modifier.height(18.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("¿Ya tenés cuenta? ", style = ts(13.5f, color = C.fg2))
-                                Text("Ingresá", style = ts(13.5f, FontWeight.Bold, C.accent), modifier = Modifier.tap({ signup = false; err = "" }).padding(vertical = 8.dp))
+                                Text("Ingresá", style = ts(13.5f, FontWeight.Bold, C.accent), modifier = Modifier.tap({ mode = "login"; err = "" }).padding(vertical = 8.dp))
                             }
                         }
                         st == 2 -> {
@@ -436,7 +478,7 @@ fun AccountScreen(nav: Nav) {
                 }
             }
             Spacer(Modifier.height(26.dp))
-            PillButton("Cerrar sesión", { Store.logout(); nav.section(Screen.Login(required = true)) }, icon = null, dark = true)
+            PillButton("Cerrar sesión", { Store.logout(); nav.memory.clear(); nav.section(Screen.Login(required = true)) }, icon = null, dark = true)
         } else {
             Text("Con tu cuenta podés ver capítulos, guardar series en Mi lista y seguir donde dejaste.", style = ts(15, color = C.fg2))
             Spacer(Modifier.height(22.dp))

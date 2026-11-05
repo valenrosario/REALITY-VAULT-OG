@@ -37,6 +37,8 @@ class Memory {
     val text = HashMap<String, String>()
     fun list(k: String) = lists.getOrPut(k) { LazyListState() }
     fun grid(k: String) = grids.getOrPut(k) { LazyGridState() }
+    /** Al entrar con otra cuenta (o una nueva) todo arranca desde arriba. */
+    fun clear() { lists.clear(); grids.clear(); text.clear() }
 }
 
 class Nav {

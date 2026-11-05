@@ -150,10 +150,21 @@ fun homeRows(tab: String = "Para vos"): List<RowSpec> {
         val ts = c.items.mapNotNull { i -> pub.firstOrNull { it.id == i } }
         if (ts.isEmpty()) null else RowSpec("c-" + c.id, c.name, "coll", ts, coll = c)
     }
-    val gap = maxOf(1, rest.size / (colls.size + 1)); var ci = 0
-    rest.forEachIndexed { i, r -> rows += r; if (ci < colls.size && (i + 1) % gap == 0) rows += colls[ci++] }
-    while (ci < colls.size) rows += colls[ci++]
-    return rows
+    return rows + spread(rest, colls)
+}
+
+/**
+ * Reparte las colecciones entre las filas comunes: nunca dos colecciones seguidas.
+ * Si hay más colecciones que lugares, las que sobran no se muestran en esa pestaña.
+ */
+private fun spread(rows: List<RowSpec>, colls: List<RowSpec>): List<RowSpec> {
+    if (colls.isEmpty()) return rows
+    if (rows.isEmpty()) return colls.take(1)
+    val gap = maxOf(2, (rows.size + 1) / (colls.size + 1))
+    val out = mutableListOf<RowSpec>(); var ci = 0
+    rows.forEachIndexed { i, r -> out += r; if (ci < colls.size && (i + 1) % gap == 0 && i < rows.lastIndex) out += colls[ci++] }
+    if (ci < colls.size && out.lastOrNull()?.kind != "coll") out += colls[ci]
+    return out
 }
 
 /** Filas de una pestaña (Series, Películas o un género): todo se arma ahí mismo, sin salir del inicio. */
@@ -174,12 +185,14 @@ private fun tabRows(tab: String): List<RowSpec> {
     pub.flatMap { t -> t.genres.filter { it != tab }.map { it to t } }.groupBy({ it.first }, { it.second })
         .entries.filter { it.value.size >= 2 }.sortedByDescending { it.value.size }.take(8)
         .forEach { (g, l) -> rows += RowSpec("g-$g", g, "poster", l) }
-    Store.colls.forEach { c ->
+    val colls = Store.colls.mapNotNull { c ->
         val ts = c.items.mapNotNull { i -> pub.firstOrNull { it.id == i } }
-        if (ts.size >= 2) rows += RowSpec("c-" + c.id, c.name, "coll", ts, coll = c)
+        if (ts.size >= 2) RowSpec("c-" + c.id, c.name, "coll", ts, coll = c) else null
     }
     if (rows.none { it.key == "new" } && pub.isNotEmpty()) rows += RowSpec("all", tab, "poster", pub)
-    return rows
+    // "Seguir viendo" y "Recomendado" van arriba; las colecciones se reparten en el resto
+    val head = rows.takeWhile { it.key == "cont" || it.key == "rec" }
+    return head + spread(rows.drop(head.size), colls)
 }
 
 /* ---------------- pantalla de inicio (diseño tipo discovery+) ---------------- */
@@ -244,7 +257,7 @@ fun HomeScreen(nav: Nav) {
                 if (all.isNotEmpty()) Hero(all, tabs, tab, pick, nav)
                 else Column(Modifier.statusBarsPadding().padding(top = 10.dp)) { TopIcons(nav); Spacer(Modifier.height(10.dp)); Tabs(tabs, tab, pick) }
             }
-            items(rows, key = { "$tab-" + it.key }) { r -> RowSection(r, nav) }
+            items(rows, key = { "$tab-" + it.key }) { r -> RowSection(r, nav, tab) }
         }
         // al bajar, la barra de arriba queda fija con fondo
         val pinned by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 420 } }
@@ -318,13 +331,14 @@ fun ListToggle(t: Title, nav: Nav, size: androidx.compose.ui.unit.Dp = 46.dp) {
 /* ---------------- filas ---------------- */
 
 @Composable
-private fun RowSection(r: RowSpec, nav: Nav) {
+private fun RowSection(r: RowSpec, nav: Nav, tab: String) {
     if (r.kind == "coll") { CollBanner(r, nav); return }
     val cardW = (LocalConfiguration.current.screenWidthDp * .4f).coerceAtMost(220f).dp
     Column(Modifier.padding(top = 26.dp)) {
         Text(r.title, style = ts(19, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 20.dp, bottom = 12.dp))
         LazyRow(
-            state = nav.memory.list("row-" + r.key),
+            // cada pestaña tiene su propio scroll por fila (compartirlo trababa las filas al cambiar de género)
+            state = nav.memory.list("row-$tab-" + r.key),
             contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(if (r.kind == "top") 6.dp else 12.dp)
         ) {

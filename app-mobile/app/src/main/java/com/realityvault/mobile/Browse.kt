@@ -167,7 +167,7 @@ fun CollectionScreen(id: String, nav: Nav) {
 
 /** Muro de pósters inclinado que se desliza solo (cuando la colección no tiene imagen propia). */
 @Composable
-private fun PosterWall(list: List<Title>, modifier: Modifier) {
+fun PosterWall(list: List<Title>, modifier: Modifier) {
     val ps = list.filter { it.poster.isNotBlank() }.ifEmpty { return }
     val inf = rememberInfiniteTransition(label = "wall")
     val f by inf.animateFloat(0f, 1f, infiniteRepeatable(tween(60000, easing = LinearEasing)), label = "w")
