@@ -136,7 +136,8 @@ fun CollectionScreen(id: String, nav: Nav) {
     }
     val cfg = LocalConfiguration.current
     val heroH = minOf(cfg.screenWidthDp * 1.15f, cfg.screenHeightDp * .62f).dp
-    val tint = rememberTint(c.image.ifBlank { list.first().poster })
+    val auto = rememberTint(c.image.ifBlank { list.first().poster })
+    val tint = c.colorArgb?.let { Color(it) } ?: auto
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val series = list.count { it.isSerie }; val movies = list.size - series
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to tint.darken(.35f), .35f to tint.darken(.55f), 1f to C.bg))) {
@@ -150,7 +151,8 @@ fun CollectionScreen(id: String, nav: Nav) {
                     )))
                     Column(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 18.dp)) {
                         Text("COLECCIÓN", style = ts(11, FontWeight.Bold, C.accent).copy(letterSpacing = 2.5.sp))
-                        Text(c.name, style = ts(34, FontWeight.Bold, Color.White).copy(lineHeight = 38.sp), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                        if (c.logo.isNotBlank()) Img(c.logo, Modifier.padding(top = 8.dp).fillMaxWidth(.75f).height(90.dp), scale = androidx.compose.ui.layout.ContentScale.Fit, alignment = Alignment.BottomStart)
+                        else Text(c.name, style = ts(34, FontWeight.Bold, Color.White).copy(lineHeight = 38.sp), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
                         if (c.tagline.isNotBlank()) Text(c.tagline, style = ts(14.5f, color = Color.White.copy(alpha = .85f)).copy(lineHeight = 20.sp), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                         Text(listOfNotNull(
                             if (series > 0) "$series serie${if (series == 1) "" else "s"}" else null,

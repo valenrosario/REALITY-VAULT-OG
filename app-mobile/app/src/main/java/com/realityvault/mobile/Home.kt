@@ -336,7 +336,7 @@ fun ListToggle(t: Title, nav: Nav, size: androidx.compose.ui.unit.Dp = 46.dp) {
 
 @Composable
 private fun RowSection(r: RowSpec, nav: Nav, tab: String) {
-    if (r.kind == "coll") { CollBanner(r, nav); return }
+    if (r.kind == "coll") { if (r.coll?.full == true) CollFull(r, nav, tab) else CollBanner(r, nav); return }
     val cardW = (LocalConfiguration.current.screenWidthDp * .4f).coerceAtMost(220f).dp
     Column(Modifier.padding(top = 26.dp)) {
         Text(r.title, style = ts(19, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 20.dp, bottom = 12.dp))
@@ -395,6 +395,42 @@ fun FeatCard(t: Title, item: FeatItem, modifier: Modifier = Modifier) {
             if (t.logo.isNotBlank()) Img(t.logo, Modifier.fillMaxWidth(.8f).height(32.dp), scale = ContentScale.Fit, alignment = Alignment.BottomCenter)
             else Text(t.title, style = ts(12, FontWeight.Bold, Color.White), maxLines = 2)
             if (item.label.isNotBlank()) { Spacer(Modifier.height(4.dp)); Text(item.label, style = ts(9, FontWeight.Bold, C.fg2), maxLines = 1) }
+        }
+    }
+}
+
+/* ---------------- colección "de borde a borde" con su fila (opcional, se elige en el panel) ---------------- */
+
+@Composable
+fun CollFull(r: RowSpec, nav: Nav, tab: String) {
+    val c = r.coll ?: return
+    val rowTs = c.rowItems.mapNotNull { id -> r.titles.firstOrNull { it.id == id } }.ifEmpty { r.titles }
+    val col = c.colorArgb?.let { Color(it) } ?: Color(0xFF0D0B0C)
+    val w = LocalConfiguration.current.screenWidthDp
+    Column(Modifier.padding(top = 30.dp).fillMaxWidth().background(col)) {
+        Box(Modifier.fillMaxWidth().height((w * 1.05f).dp).tap({ nav.go(Screen.Collection(c.id)) }, 1f)) {
+            if (c.image.isNotBlank()) Img(c.image, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
+            else PosterWall(r.titles, Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+                0f to col.copy(alpha = .35f), .25f to Color.Transparent, .45f to col.copy(alpha = .15f), .7f to col.copy(alpha = .85f), 1f to col
+            )))
+            Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 14.dp)) {
+                Text("COLECCIÓN", style = ts(10.5f, FontWeight.Bold, C.accent).copy(letterSpacing = 2.5.sp))
+                if (c.logo.isNotBlank()) Img(c.logo, Modifier.padding(top = 8.dp).fillMaxWidth(.72f).height(84.dp), scale = ContentScale.Fit, alignment = Alignment.BottomStart)
+                else Text(c.name, style = ts(32, FontWeight.Bold, Color.White).copy(lineHeight = 35.sp), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                if (c.tagline.isNotBlank()) Text(c.tagline, style = ts(14, color = Color.White.copy(alpha = .85f)), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                Text("Ver colección", style = ts(13, FontWeight.Bold, Color.Black),
+                    modifier = Modifier.padding(top = 14.dp).background(Color.White, RoundedCornerShape(99.dp)).padding(horizontal = 18.dp, vertical = 9.dp))
+            }
+        }
+        LazyRow(
+            state = nav.memory.list("row-$tab-" + r.key),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            itemsIndexed(rowTs, key = { _, t -> t.id }) { _, t ->
+                PosterCard(t, Modifier.width((w * .4f).coerceAtMost(220f).dp).aspectRatio(2f / 3f).tap({ nav.go(Screen.Detail(t.id)) }).clip(RoundedCornerShape(5.dp)))
+            }
         }
     }
 }

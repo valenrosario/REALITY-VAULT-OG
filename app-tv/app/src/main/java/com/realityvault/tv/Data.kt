@@ -102,7 +102,17 @@ data class Banner(
 data class FeatItem(val titleId: String, val label: String, val image: String)
 data class FeatRow(val id: String, val title: String, val items: List<FeatItem>)
 /** Colección armada desde el panel de la web (site/collections). */
-data class Coll(val id: String, val name: String, val tagline: String, val image: String, val items: List<String>)
+data class Coll(
+    val id: String, val name: String, val tagline: String, val image: String, val items: List<String>,
+    /** Opcionales del panel: "full" = de borde a borde con fila; logo PNG; color de fondo (#rrggbb); títulos de la fila. */
+    val style: String = "", val logo: String = "", val color: String = "", val row: List<String> = emptyList()
+) {
+    val full get() = style == "full"
+    /** Los títulos de la fila: los marcados (en el orden de la colección) o, si no hay, todos. */
+    val rowItems get() = if (row.isEmpty()) items else items.filter { it in row }
+    /** Color elegido o null (automático). */
+    val colorArgb: Long? get() = Regex("^#[0-9a-fA-F]{6}$").takeIf { it.matches(color) }?.let { 0xFF000000L or color.substring(1).toLong(16) }
+}
 
 data class Progress(val titleId: String, val season: Int?, val episode: Int?, val watched: List<String>, val updated: String,
     /** Minuto por el que vas en cada capítulo/película (mismo formato que la web): clave "m" o "T-E" → (segundo, duración). */
@@ -281,7 +291,8 @@ object Store {
                     val la = d.optJSONArray("list") ?: JSONArray()
                     cl = (0 until la.length()).mapNotNull { x ->
                         val co = la.optJSONObject(x) ?: return@mapNotNull null
-                        Coll(co.s("id"), co.s("name"), co.s("tagline").trim(), co.s("image").trim(), co.strs("items"))
+                        Coll(co.s("id"), co.s("name"), co.s("tagline").trim(), co.s("image").trim(), co.strs("items"),
+                            co.s("style"), co.s("logo").trim(), co.s("color").trim(), co.strs("row"))
                     }
                 }
                 "rows" -> {

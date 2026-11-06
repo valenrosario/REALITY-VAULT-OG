@@ -1130,7 +1130,27 @@ function collArt(c, items){
   const rowH = (a) => { const html = fill(a).map(t => `<span class="coll-p" data-src="${esc(t.poster)}"></span>`).join(''); return `<span class="coll-prow"><span class="coll-trk">${html}${html}</span></span>`; };
   return `<span class="coll-wall">${rowH(r1)}${rowH(r2)}</span>`;
 }
+/* Colección "de borde a borde" (opcional, se elige en el panel): portada grande a todo el ancho,
+   logo propio, color de fondo/difuminado y una fila con los títulos marcados (en el orden de la colección). */
+const hexOk = v => /^#[0-9a-f]{6}$/i.test(String(v || ''));
+function collRowItems(c){ const items = collItems(c); const pick = new Set(c.row || []); const l = pick.size ? items.filter(t => pick.has(t.id)) : items; return l.slice(0, 24); }
+function collFull(c){
+  const items = collItems(c); if (!items.length) return '';
+  const col = hexOk(c.color) ? c.color : '#0d0b0c';
+  const rgb = [1,3,5].map(i => parseInt(col.slice(i, i+2), 16)).join(',');
+  const href = '/coleccion/' + esc(collSlug(c));
+  return `<section class="cfull" style="--cf:${col};--cf-rgb:${rgb}">
+    <a class="cf-top" href="${href}" aria-label="Ver la colección ${esc(c.name || '')}">
+      <span class="cf-bg">${collArt(c, items)}</span><span class="cf-shade"></span>
+      <span class="cf-txt"><span class="coll-k">Colección</span>
+        ${safeUrl(c.logo) ? `<img class="cf-logo" alt="${esc(c.name || '')}" data-img="${esc(c.logo)}" hidden><span class="cf-name logo-fallback" hidden>${esc(c.name || 'Colección')}</span>` : `<span class="cf-name">${esc(c.name || 'Colección')}</span>`}
+        ${c.tagline ? `<span class="cf-tag">${esc(c.tagline)}</span>` : ''}<span class="btn coll-btn">Ver colección</span></span>
+    </a>
+    <div class="cf-row row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button><div class="rail">${collRowItems(c).map(card).join('')}</div><button class="rail-btn r" data-scroll="1" aria-label="Siguiente">›</button></div>
+  </section>`;
+}
 function collBanner(c, big){
+  if (!big && c.style === 'full') return collFull(c);
   const items = collItems(c);
   if (!items.length) return '';
   const n = items.length;
@@ -1178,11 +1198,17 @@ function renderCollsAdmin(){
               <label class="field"><span>Nombre</span><input class="input" id="co-n-${esc(c.id)}" data-coll-f="name" data-coll-id="${esc(c.id)}" value="${esc(c.name||'')}" placeholder="Ej: Las chicas de los 2000"></label>
               <label class="field"><span>Frase corta (opcional)</span><textarea class="textarea" rows="3" id="co-t-${esc(c.id)}" data-coll-f="tagline" data-coll-id="${esc(c.id)}" placeholder="Ej: Las herederas, las fiestas y los realities que marcaron una época.">${esc(c.tagline||'')}</textarea></label>
             </div>
+            <div class="field"><span>Cómo se ve en el inicio</span>
+              <div class="cstyle"><button type="button" class="pill-toggle ${c.style !== 'full' ? 'on' : ''}" data-coll-style="${esc(c.id)}" data-v="">Banner</button><button type="button" class="pill-toggle ${c.style === 'full' ? 'on' : ''}" data-coll-style="${esc(c.id)}" data-v="full">De borde a borde + fila</button></div>
+              <span class="hint">“De borde a borde” ocupa todo el ancho, con una fila de títulos abajo. Igual en la web, la TV y el celular.</span></div>
+            ${c.style === 'full' ? `<div class="field"><span>Logo (opcional · PNG transparente)</span>${slot('logo', 'colllogo:' + c.id, c.logo, 'r31 contain', 'Subir logo')}<span class="hint">Si no cargás uno, se muestra el nombre escrito.</span></div>
+            <div class="field"><span>Color de fondo y difuminado</span><div class="ccolor"><label class="check"><input type="checkbox" data-coll-auto="${esc(c.id)}" ${hexOk(c.color) ? '' : 'checked'}> Automático</label>${hexOk(c.color) ? `<input type="color" data-coll-color="${esc(c.id)}" value="${esc(c.color)}">` : ''}</div><span class="hint">Automático usa un negro suave. Elegí un color para que el difuminado combine con la imagen.</span></div>` : ''}
             <div class="field"><span>Imagen de fondo (opcional)</span>${slot('coll', 'coll:' + c.id, c.image, 'r31', 'Subir imagen de fondo')}<span class="hint">${c.image ? 'Tocá la imagen para cambiarla.' : 'Sin imagen, el banner muestra los pósters de sus títulos.'} <b>1800 × 600 px</b></span></div>
           </div>
-          <div class="field"><span>Títulos · arrastralos para ordenarlos</span>
+          <div class="field"><span>Títulos · arrastralos para ordenarlos${c.style === 'full' ? ' · ★ = aparece en la fila (si no marcás ninguno, aparecen todos)' : ''}</span>
             ${items.length ? `<div class="ctiles" data-sort="citems:${esc(c.id)}">${items.map(t => `<div class="ctile" data-sort-item data-id="${esc(t.id)}" title="${esc(t.title||'')}">
               <span class="ctile-p" ${t.poster ? `data-src="${esc(t.poster)}"` : ''}></span><span class="ctile-t">${esc(t.title || 'Sin título')}</span>
+              ${c.style === 'full' ? `<button class="ctile-star${(c.row || []).includes(t.id) ? ' on' : ''}" data-coll-star="${esc(c.id)}" data-tid="${esc(t.id)}" aria-pressed="${(c.row || []).includes(t.id)}" aria-label="Mostrar ${esc(t.title||'')} en la fila" title="Mostrar en la fila">★</button>` : ''}
               <button class="ctile-x" data-coll-rm="${esc(c.id)}" data-tid="${esc(t.id)}" aria-label="Quitar ${esc(t.title||'')} de la colección">✕</button></div>`).join('')}</div>` : '<p class="empty-note" style="padding:4px 0 8px">Todavía no tiene títulos. Buscalos acá abajo.</p>'}
             <div class="csearch"><input class="input" id="co-q-${esc(c.id)}" data-coll-search="${esc(c.id)}" autocomplete="off" placeholder="Buscar un título para agregar…" aria-label="Buscar un título para agregar"><div class="csearch-res" hidden></div></div>
           </div>
@@ -1212,6 +1238,11 @@ document.addEventListener('input', e => {
   c[el.dataset.collF] = el.value; saveColls();
   if (el.dataset.collF === 'name'){ const b = el.closest('.coll-card')?.querySelector('.coll-bar-main b'); if (b) b.textContent = el.value || 'Sin nombre'; }
 });
+document.addEventListener('change', e => {
+  const el = e.target; if (!S.owner || !el.dataset) return;
+  if (el.dataset.collAuto){ const c = S.colls.find(x => x.id === el.dataset.collAuto); if (!c) return; if (el.checked) delete c.color; else c.color = '#3a1230'; saveColls(true); rerenderPanel(); return; }
+  if (el.dataset.collColor){ const c = S.colls.find(x => x.id === el.dataset.collColor); if (!c) return; c.color = el.value; saveColls(true); rerenderPanel(); }
+});
 document.addEventListener('keydown', e => {
   const el = e.target; if (!S.owner || !el.dataset || !el.dataset.collSearch) return;
   if (e.key === 'Enter'){ e.preventDefault(); const f = el.nextElementSibling?.querySelector('[data-coll-pick]'); if (f) collAdd(f.dataset.collPick, f.dataset.tid); }
@@ -1221,8 +1252,10 @@ let sortDrop = 0;
 document.addEventListener('click', e => {
   if (!S.owner) return;
   if (Date.now() - sortDrop < 250 && e.target.closest('[data-sort-item]')){ e.preventDefault(); e.stopPropagation(); return; }
-  const b = e.target.closest('[data-coll-add],[data-coll-open],[data-coll-del],[data-coll-rm],[data-coll-pick]'); if (!b) return;
+  const b = e.target.closest('[data-coll-add],[data-coll-open],[data-coll-del],[data-coll-rm],[data-coll-pick],[data-coll-style],[data-coll-star]'); if (!b) return;
   const d = b.dataset, find = id => S.colls.find(x => x.id === id);
+  if (d.collStyle !== undefined){ const c = find(d.collStyle); if (c){ if (d.v) c.style = d.v; else delete c.style; saveColls(true); rerenderPanel(); } return; }
+  if (d.collStar){ e.preventDefault(); e.stopPropagation(); const c = find(d.collStar); if (!c) return; const r = new Set(c.row || []); r.has(d.tid) ? r.delete(d.tid) : r.add(d.tid); c.row = (c.items || []).filter(x => r.has(x)); saveColls(true); rerenderPanel(); return; }
   if (d.collAdd !== undefined){ const id = uid('c'); S.colls.push({ id, name: 'Nueva colección', tagline: '', image: '', items: [] }); S.collOpen = id; saveColls(true); rerenderPanel(); setTimeout(() => { const i = document.getElementById('co-n-' + id); if (i){ i.focus(); i.select(); i.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }, 50); return; }
   if (d.collOpen){ S.collOpen = S.collOpen === d.collOpen ? null : d.collOpen; rerenderPanel(); return; }
   if (d.collDel){ inlineConfirm(b.closest('[data-row]'), '¿Eliminar la colección?', () => { S.colls = S.colls.filter(x => x.id !== d.collDel); saveColls(true); rerenderPanel(); toast('Colección eliminada'); }); return; }
@@ -1801,6 +1834,7 @@ async function importBackup(){
 
 /* --- admin interactions --- */
 async function applyImage(path, ref){
+  if (path.startsWith('colllogo:')){ const c = S.colls.find(x => x.id === path.slice(9)); if (c){ c.logo = ref; await saveColls(true); rerenderPanel(); } return; }
   if (path.startsWith('coll:')){ const c = S.colls.find(x => x.id === path.slice(5)); if (c){ c.image = ref; await saveColls(true); rerenderPanel(); } return; }
   if (path.startsWith('frow:')){ const [, rid, idx] = path.split(':'); const r = S.frows.find(x => x.id === rid); if (r && r.items[+idx]){ r.items[+idx].image = ref; await saveFrows(true); rerenderPanel(); } return; }
   if (path.startsWith('site:')){ await S.db.doc('site/config').set({ ...S.site, [path.slice(5)]:ref, updatedAt:Date.now() }); toast('Imagen actualizada'); }
@@ -2010,6 +2044,7 @@ app.addEventListener('click', async e => {
   if (d.exX){ const [si,xi]=d.exX.split('.').map(Number); E.seasons[si].extras.splice(xi,1); markDirty(); rerenderPanel(); return; }
   if (d.exUp){ const [si,xi]=d.exUp.split('.').map(Number); const a = E.seasons[si].extras; [a[xi-1], a[xi]] = [a[xi], a[xi-1]]; markDirty(); rerenderPanel(); return; }
   if (d.clear){ e.stopPropagation();
+    if (d.clear.startsWith('colllogo:')){ const c = S.colls.find(x => x.id === d.clear.slice(9)); if (c){ c.logo = ''; await saveColls(true); rerenderPanel(); } return; }
     if (d.clear.startsWith('coll:')){ const c = S.colls.find(x => x.id === d.clear.slice(5)); if (c){ c.image = ''; await saveColls(true); rerenderPanel(); } return; }
     if (d.clear.startsWith('frow:')){ const [, rid, idx] = d.clear.split(':'); const r = S.frows.find(x => x.id === rid); if (r && r.items[+idx]){ r.items[+idx].image = ''; await saveFrows(true); rerenderPanel(); } return; }
     if (d.clear.startsWith('site:')){ await S.db.doc('site/config').set({ ...S.site, [d.clear.slice(5)]:'' }).catch(()=>toast('No se pudo quitar',true)); return; }

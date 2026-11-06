@@ -909,6 +909,58 @@ private fun CollPreview(name: String, tagline: String, image: String, items: Lis
     }
 }
 
+/** Colores sugeridos + automático (negro suave). */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun ColorPick(cur: String, onPick: (String) -> Unit) {
+    val opts = listOf("", "#0d0b0c", "#3a1230", "#5a1638", "#1d1240", "#0f2a4a", "#0f3d1f", "#3d2a0f", "#4a0f14", "#2b2b2e", "#123f3f", "#40123d")
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        opts.forEach { h ->
+            val on = cur.equals(h, true)
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(if (h.isBlank()) Brush.sweepGradient(listOf(Color(0xFF333333), Color(0xFF111111), Color(0xFF333333))) else Brush.linearGradient(listOf(Color(android.graphics.Color.parseColor(h)), Color(android.graphics.Color.parseColor(h)))))
+                    .border(if (on) 3.dp else 1.dp, if (on) C.accent else Color.White.copy(alpha = .2f), CircleShape).tap({ onPick(h) }, .9f),
+                contentAlignment = Alignment.Center
+            ) { if (h.isBlank()) Text("Auto", style = ts(9, FontWeight.Bold, Color.White)) }
+        }
+    }
+    var hex by remember(cur) { mutableStateOf(cur) }
+    Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.Bottom) {
+        AField("Otro color (#rrggbb)", hex, { hex = it.trim() }, "#3a1230", modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.padding(bottom = 10.dp)) { AButton("Usar", { if (Regex("^#[0-9a-fA-F]{6}$").matches(hex)) onPick(hex.lowercase()) else AdminToast.show("Escribilo así: #3a1230", true) }) }
+    }
+}
+
+/** Vista previa del estilo "de borde a borde". */
+@Composable
+private fun CollFullPreview(doc: Doc, items: List<JSONObject>) {
+    val o = doc.o
+    val col = Regex("^#[0-9a-fA-F]{6}$").takeIf { it.matches(doc.str("color")) }?.let { Color(android.graphics.Color.parseColor(doc.str("color"))) } ?: Color(0xFF0D0B0C)
+    val ids = o.optJSONArray("row")?.strs() ?: emptyList()
+    val rowTs = items.filter { ids.isEmpty() || it.optString("id") in ids }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(col)) {
+        Box(Modifier.fillMaxWidth().height(200.dp)) {
+            if (doc.str("image").isNotBlank()) Img(doc.str("image"), Modifier.fillMaxSize())
+            else Row(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items.filter { it.optString("poster").isNotBlank() }.take(5).forEach { Img(it.optString("poster"), Modifier.width(54.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(6.dp))) }
+            }
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .45f to col.copy(alpha = .2f), .75f to col.copy(alpha = .9f), 1f to col)))
+            Column(Modifier.align(Alignment.BottomStart).padding(14.dp)) {
+                Text("COLECCIÓN", style = ts(9, FontWeight.Bold, C.accent).copy(letterSpacing = 2.sp))
+                if (doc.str("logo").isNotBlank()) Img(doc.str("logo"), Modifier.padding(top = 4.dp).width(170.dp).height(52.dp), scale = ContentScale.Fit, alignment = Alignment.BottomStart)
+                else Text(doc.str("name").ifBlank { "Sin nombre" }, style = ts(20, FontWeight.Bold, Color.White), maxLines = 2)
+                if (doc.str("tagline").isNotBlank()) Text(doc.str("tagline"), style = ts(11, color = Color.White.copy(alpha = .8f)), maxLines = 2)
+            }
+        }
+        Row(Modifier.padding(start = 14.dp, bottom = 14.dp, top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            rowTs.take(5).forEach { t ->
+                Box(Modifier.width(56.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(5.dp)).background(Color.White.copy(alpha = .12f))) { if (t.optString("poster").isNotBlank()) Img(t.optString("poster"), Modifier.fillMaxSize()) }
+            }
+        }
+    }
+}
+
 @Composable
 private fun AdminColl(id: String, nav: Nav) {
     val src = AdminData.colls.objs().firstOrNull { it.optString("id") == id }
@@ -934,7 +986,22 @@ private fun AdminColl(id: String, nav: Nav) {
     Box(Modifier.fillMaxSize()) {
         LazyColumn(contentPadding = PaddingValues(bottom = bottomPad + 110.dp)) {
             item { AdminTop(doc.str("name").ifBlank { "Colección" }, "${items.size} títulos", nav, onBack = { if (doc.dirty) askLeave = true else nav.back() }) }
-            item { ACard("Así se ve en el inicio") { CollPreview(doc.str("name"), doc.str("tagline"), doc.str("image"), items) } }
+            item {
+                ACard("Así se ve en el inicio") {
+                    if (doc.str("style") == "full") CollFullPreview(doc, items) else CollPreview(doc.str("name"), doc.str("tagline"), doc.str("image"), items)
+                }
+            }
+            item {
+                ACard("Estilo", "Igual en la web, la TV y el celular.") {
+                    ASegment(listOf("" to "Banner", "full" to "Borde a borde + fila"), doc.str("style")) { v -> if (v.isBlank()) { c.remove("style"); doc.touch() } else doc.set("style", v) }
+                    if (doc.str("style") == "full") {
+                        Spacer(Modifier.height(14.dp))
+                        AImage("Logo (opcional)", "logo", doc.str("logo"), "PNG transparente · si no hay, se muestra el nombre", ratio = 3f, contain = true) { doc.set("logo", it) }
+                        Text("COLOR DE FONDO Y DIFUMINADO", style = ts(10.5f, FontWeight.Bold, C.muted), modifier = Modifier.padding(bottom = 8.dp))
+                        ColorPick(doc.str("color")) { v -> if (v.isBlank()) { c.remove("color"); doc.touch() } else doc.set("color", v) }
+                    }
+                }
+            }
             item {
                 ACard("Datos") {
                     AField("Nombre", doc.str("name"), { doc.set("name", it) }, "Ej: Las chicas de los 2000")
@@ -943,11 +1010,19 @@ private fun AdminColl(id: String, nav: Nav) {
                 }
             }
             item {
-                ACard("Títulos", "En este orden aparecen en la colección.") {
+                ACard("Títulos", if (doc.str("style") == "full") "En este orden aparecen. Marcá con ★ los que van en la fila del inicio (si no marcás ninguno, van todos)." else "En este orden aparecen en la colección.") {
                     items.forEachIndexed { i, t ->
                         Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.width(42.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(5.dp)).background(C.surface)) { if (t.optString("poster").isNotBlank()) Img(t.optString("poster"), Modifier.fillMaxSize()) }
                             Text(t.optString("title"), style = ts(14, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp).weight(1f))
+                            if (doc.str("style") == "full") {
+                                val row = c.optJSONArray("row")?.strs() ?: emptyList()
+                                val on = t.optString("id") in row
+                                Box(Modifier.padding(start = 6.dp).size(32.dp).clip(CircleShape).background(if (on) Color(0xFFFFD36B) else Color.White.copy(alpha = .1f))
+                                    .tap({ val n = if (on) row - t.optString("id") else row + t.optString("id"); c.put("row", JSONArray(ids.filter { it in n })); doc.touch() }, .9f), contentAlignment = Alignment.Center) {
+                                    Text("★", style = ts(14, FontWeight.Bold, if (on) Color.Black else Color.White.copy(alpha = .5f)))
+                                }
+                            }
                             if (i > 0) MiniBtn("↑") { val l = ids.toMutableList(); l.add(i - 1, l.removeAt(ids.indexOf(t.optString("id")))); c.put("items", JSONArray(l)); doc.touch() }
                             if (i < items.size - 1) MiniBtn("↓") { val l = ids.toMutableList(); val k = ids.indexOf(t.optString("id")); l.add(k + 1, l.removeAt(k)); c.put("items", JSONArray(l)); doc.touch() }
                             MiniBtn("✕", danger = true) { c.put("items", JSONArray(ids - t.optString("id"))); doc.touch() }

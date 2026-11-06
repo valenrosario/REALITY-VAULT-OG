@@ -598,7 +598,7 @@ fun GlassButton(icon: ImageVector, onFocus: (() -> Unit)? = null, onClick: () ->
 @Composable
 fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
     val restore = nav.memory.focus[screenKey]
-    if (r.kind == "coll") { CollBannerRow(r, nav, screenKey, restore); return }
+    if (r.kind == "coll") { if (r.coll?.full == true) CollFullRow(r, nav, screenKey, state, restore) else CollBannerRow(r, nav, screenKey, restore); return }
     // Espacio de sobra antes del título: la tarjeta enfocada de la fila de ARRIBA crece hacia
     // abajo al agrandarse (ver pivotTop en Focusable), y sin este margen terminaba pisando el
     // título de la fila siguiente ("Novedades", "Series", etc).
@@ -644,6 +644,72 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
                 }
             }
         }
+        }
+    }
+}
+
+/* ---------------- colección "de borde a borde" (opcional, se elige en el panel) ---------------- */
+
+/** Muro de pósters inclinado que se desliza solo (igual que en la web). */
+@Composable
+private fun CollWall(ps: List<Title>, posterW: Dp, modifier: Modifier) {
+    if (ps.isEmpty()) return
+    val k = if (ps.size >= 4) (ps.size + 1) / 2 else ps.size
+    val r1 = ps.take(k); val r2 = if (ps.size >= 4) ps.drop(k) else ps
+    fun fill(a: List<Title>): List<Title> { val o = mutableListOf<Title>(); while (o.size < 8) o += a; return o.take(8) }
+    val setPx = with(LocalDensity.current) { (8 * (posterW.value + 14)).dp.toPx() }
+    val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "cwall")
+    val f1 by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(70000, easing = androidx.compose.animation.core.LinearEasing)), label = "w1")
+    val f2 by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(85000, easing = androidx.compose.animation.core.LinearEasing)), label = "w2")
+    Column(
+        modifier.graphicsLayer { rotationZ = -9f; scaleX = 1.2f; scaleY = 1.2f }.wrapContentSize(Alignment.CenterStart, unbounded = true),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(Modifier.graphicsLayer { translationX = -f1 * setPx }, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            val l = fill(r1); (l + l).forEach { t -> Img(t.poster, Modifier.width(posterW).aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)), crossfade = false) }
+        }
+        Row(Modifier.padding(start = posterW / 2).graphicsLayer { translationX = -(1f - f2) * setPx }, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            val l = fill(r2); (l + l).forEach { t -> Img(t.poster, Modifier.width(posterW).aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)), crossfade = false) }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CollFullRow(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState, restore: String?) {
+    val c = r.coll ?: return
+    val rowTs = c.rowItems.mapNotNull { id -> r.titles.firstOrNull { it.id == id } }.ifEmpty { r.titles }
+    val col = c.colorArgb?.let { Color(it) } ?: Color(0xFF0D0B0C)
+    val density = LocalDensity.current
+    val rowSpec = remember { PivotSpec(with(density) { 48.dp.toPx() }) { false } }
+    Column(Modifier.padding(top = 26.dp, bottom = 6.dp).fillMaxWidth().background(col)) {
+        Box(Modifier.fillMaxWidth().height(250.dp)) {
+            Box(Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(.72f)) {
+                if (c.image.isNotBlank()) Img(c.image, Modifier.fillMaxSize(), alignment = Alignment.CenterEnd)
+                else CollWall(r.titles.filter { it.poster.isNotBlank() }, 104.dp, Modifier.fillMaxHeight().fillMaxWidth())
+            }
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to col, .28f to col.copy(alpha = .95f), .48f to col.copy(alpha = .55f), .66f to col.copy(alpha = .1f), 1f to Color.Transparent)))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to col.copy(alpha = .55f), .2f to Color.Transparent, .7f to Color.Transparent, 1f to col)))
+            Column(Modifier.align(Alignment.CenterStart).padding(start = 48.dp).fillMaxWidth(.46f)) {
+                Text("COLECCIÓN", style = ts(10, FontWeight.Bold, C.accent).copy(letterSpacing = 2.sp))
+                if (c.logo.isNotBlank()) Img(c.logo, Modifier.padding(top = 8.dp).width(300.dp).height(92.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
+                else Text(c.name, style = ts(34, FontWeight.Bold, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                if (c.tagline.isNotBlank()) Text(c.tagline, style = ts(13, color = Color.White.copy(alpha = .82f)), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                Box(Modifier.padding(top = 14.dp)) {
+                    CardA("${r.key}/ver", restore, nav, screenKey, { nav.go(Screen.Collection(c.id)) }, Modifier.height(36.dp), scale = 1.06f) { f ->
+                        Box(Modifier.fillMaxHeight().background(if (f) Color.White else Color.White.copy(alpha = .9f)).padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                            Text("Ver colección", style = ts(12.5f, FontWeight.Bold, Color.Black))
+                        }
+                    }
+                }
+            }
+        }
+        CompositionLocalProvider(LocalBringIntoViewSpec provides rowSpec) {
+            LazyRow(state = state, contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 4.dp, bottom = 22.dp), horizontalArrangement = Arrangement.spacedBy(15.dp)) {
+                itemsIndexed(rowTs, key = { _, t -> t.id }) { _, t ->
+                    ExpandPoster(t, 152.dp, "${r.key}/${t.id}", restore, nav, screenKey) { nav.go(Screen.Detail(t.id)) }
+                }
+            }
         }
     }
 }
