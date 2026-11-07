@@ -932,30 +932,26 @@ private fun ColorPick(cur: String, onPick: (String) -> Unit) {
     }
 }
 
-/** Vista previa del estilo "de borde a borde". */
+/** Vista previa del estilo "de borde a borde" (franja tipo HBO Max). */
 @Composable
 private fun CollFullPreview(doc: Doc, items: List<JSONObject>) {
     val o = doc.o
-    val col = Regex("^#[0-9a-fA-F]{6}$").takeIf { it.matches(doc.str("color")) }?.let { Color(android.graphics.Color.parseColor(doc.str("color"))) } ?: Color(0xFF0D0B0C)
+    val col = Regex("^#[0-9a-fA-F]{6}$").takeIf { it.matches(doc.str("color")) }?.let { Color(android.graphics.Color.parseColor(doc.str("color"))) } ?: Color(0xFF3A1230)
     val ids = o.optJSONArray("row")?.strs() ?: emptyList()
     val rowTs = items.filter { ids.isEmpty() || it.optString("id") in ids }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(col)) {
-        Box(Modifier.fillMaxWidth().height(200.dp)) {
-            if (doc.str("image").isNotBlank()) Img(doc.str("image"), Modifier.fillMaxSize())
-            else Row(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items.filter { it.optString("poster").isNotBlank() }.take(5).forEach { Img(it.optString("poster"), Modifier.width(54.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(6.dp))) }
-            }
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .45f to col.copy(alpha = .2f), .75f to col.copy(alpha = .9f), 1f to col)))
-            Column(Modifier.align(Alignment.BottomStart).padding(14.dp)) {
-                Text("COLECCIÓN", style = ts(9, FontWeight.Bold, C.accent).copy(letterSpacing = 2.sp))
-                if (doc.str("logo").isNotBlank()) Img(doc.str("logo"), Modifier.padding(top = 4.dp).width(170.dp).height(52.dp), scale = ContentScale.Fit, alignment = Alignment.BottomStart)
-                else Text(doc.str("name").ifBlank { "Sin nombre" }, style = ts(20, FontWeight.Bold, Color.White), maxLines = 2)
-                if (doc.str("tagline").isNotBlank()) Text(doc.str("tagline"), style = ts(11, color = Color.White.copy(alpha = .8f)), maxLines = 2)
-            }
-        }
-        Row(Modifier.padding(start = 14.dp, bottom = 14.dp, top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            rowTs.take(5).forEach { t ->
-                Box(Modifier.width(56.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(5.dp)).background(Color.White.copy(alpha = .12f))) { if (t.optString("poster").isNotBlank()) Img(t.optString("poster"), Modifier.fillMaxSize()) }
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(col)) {
+        if (doc.str("image").isNotBlank()) Img(doc.str("image"), Modifier.matchParentSize().graphicsLayer { alpha = .3f })
+        Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(Color.White.copy(alpha = .26f), Color.Transparent), center = androidx.compose.ui.geometry.Offset(120f, 100f), radius = 600f)))
+        Column(Modifier.padding(14.dp)) {
+            Text("COLECCIÓN", style = ts(9, FontWeight.Bold, Color.White.copy(alpha = .8f)).copy(letterSpacing = 2.sp))
+            if (doc.str("logo").isNotBlank()) Img(doc.str("logo"), Modifier.padding(top = 4.dp).width(160.dp).height(46.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
+            else Text(doc.str("name").ifBlank { "Sin nombre" }, style = ts(18, FontWeight.Bold, Color.White), maxLines = 2)
+            if (doc.str("tagline").isNotBlank()) Text(doc.str("tagline"), style = ts(11, color = Color.White.copy(alpha = .85f)), maxLines = 2)
+            Text("Ver colección", style = ts(10, FontWeight.Bold, Color.Black), modifier = Modifier.padding(top = 8.dp).background(Color.White, RoundedCornerShape(99.dp)).padding(horizontal = 10.dp, vertical = 5.dp))
+            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                rowTs.take(5).forEach { t ->
+                    Box(Modifier.width(52.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(5.dp)).background(Color.White.copy(alpha = .12f))) { if (t.optString("poster").isNotBlank()) Img(t.optString("poster"), Modifier.fillMaxSize()) }
+                }
             }
         }
     }

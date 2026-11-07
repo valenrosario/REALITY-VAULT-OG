@@ -405,31 +405,32 @@ fun FeatCard(t: Title, item: FeatItem, modifier: Modifier = Modifier) {
 fun CollFull(r: RowSpec, nav: Nav, tab: String) {
     val c = r.coll ?: return
     val rowTs = c.rowItems.mapNotNull { id -> r.titles.firstOrNull { it.id == id } }.ifEmpty { r.titles }
-    val col = c.colorArgb?.let { Color(it) } ?: Color(0xFF0D0B0C)
-    val w = LocalConfiguration.current.screenWidthDp
-    Column(Modifier.padding(top = 30.dp).fillMaxWidth().background(col)) {
-        Box(Modifier.fillMaxWidth().height((w * 1.05f).dp).tap({ nav.go(Screen.Collection(c.id)) }, 1f)) {
-            if (c.image.isNotBlank()) Img(c.image, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
-            else PosterWall(r.titles, Modifier.fillMaxSize())
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-                0f to col.copy(alpha = .35f), .25f to Color.Transparent, .45f to col.copy(alpha = .15f), .7f to col.copy(alpha = .85f), 1f to col
-            )))
-            Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 14.dp)) {
-                Text("COLECCIÓN", style = ts(10.5f, FontWeight.Bold, C.accent).copy(letterSpacing = 2.5.sp))
-                if (c.logo.isNotBlank()) Img(c.logo, Modifier.padding(top = 8.dp).fillMaxWidth(.72f).height(84.dp), scale = ContentScale.Fit, alignment = Alignment.BottomStart)
-                else Text(c.name, style = ts(32, FontWeight.Bold, Color.White).copy(lineHeight = 35.sp), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
-                if (c.tagline.isNotBlank()) Text(c.tagline, style = ts(14, color = Color.White.copy(alpha = .85f)), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+    val col = c.colorArgb?.let { Color(it) } ?: Color(0xFF3A1230)
+    // franja tipo HBO Max: color de fondo con un resplandor detrás del texto, y los pósters chicos en fila
+    Box(Modifier.padding(top = 28.dp).fillMaxWidth().background(col)) {
+        if (c.image.isNotBlank()) Img(c.image, Modifier.matchParentSize().graphicsLayer { alpha = .3f })
+        Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(Color.White.copy(alpha = .26f), Color.Transparent), center = androidx.compose.ui.geometry.Offset(160f, 140f), radius = 900f)))
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Transparent, .6f to Color.Transparent, 1f to Color.Black.copy(alpha = .4f))))
+        Column(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().tap({ nav.go(Screen.Collection(c.id)) }, 1f).padding(start = 20.dp, end = 20.dp, top = 24.dp)) {
+                Text("COLECCIÓN", style = ts(10.5f, FontWeight.Bold, Color.White.copy(alpha = .8f)).copy(letterSpacing = 2.5.sp))
+                if (c.logo.isNotBlank()) Img(c.logo, Modifier.padding(top = 8.dp).fillMaxWidth(.65f).height(64.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
+                else Text(c.name, style = ts(26, FontWeight.Bold, Color.White).copy(lineHeight = 29.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                if (c.tagline.isNotBlank()) Text(c.tagline, style = ts(13.5f, color = Color.White.copy(alpha = .88f)).copy(lineHeight = 19.sp), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                 Text("Ver colección", style = ts(13, FontWeight.Bold, Color.Black),
                     modifier = Modifier.padding(top = 14.dp).background(Color.White, RoundedCornerShape(99.dp)).padding(horizontal = 18.dp, vertical = 9.dp))
             }
-        }
-        LazyRow(
-            state = nav.memory.list("row-$tab-" + r.key),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            itemsIndexed(rowTs, key = { _, t -> t.id }) { _, t ->
-                PosterCard(t, Modifier.width((w * .4f).coerceAtMost(220f).dp).aspectRatio(2f / 3f).tap({ nav.go(Screen.Detail(t.id)) }).clip(RoundedCornerShape(5.dp)))
+            LazyRow(
+                state = nav.memory.list("row-$tab-" + r.key),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 22.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                itemsIndexed(rowTs, key = { _, t -> t.id }) { _, t ->
+                    Column(Modifier.width(112.dp).tap({ nav.go(Screen.Detail(t.id)) })) {
+                        PosterCard(t, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(6.dp)))
+                        Text(t.title, style = ts(12, FontWeight.Bold, Color.White.copy(alpha = .9f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                    }
+                }
             }
         }
     }

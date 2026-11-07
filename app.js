@@ -1136,17 +1136,15 @@ const hexOk = v => /^#[0-9a-f]{6}$/i.test(String(v || ''));
 function collRowItems(c){ const items = collItems(c); const pick = new Set(c.row || []); const l = pick.size ? items.filter(t => pick.has(t.id)) : items; return l.slice(0, 24); }
 function collFull(c){
   const items = collItems(c); if (!items.length) return '';
-  const col = hexOk(c.color) ? c.color : '#0d0b0c';
+  const col = hexOk(c.color) ? c.color : '#3a1230';
   const rgb = [1,3,5].map(i => parseInt(col.slice(i, i+2), 16)).join(',');
   const href = '/coleccion/' + esc(collSlug(c));
   return `<section class="cfull" style="--cf:${col};--cf-rgb:${rgb}">
-    <a class="cf-top" href="${href}" aria-label="Ver la colección ${esc(c.name || '')}">
-      <span class="cf-bg">${collArt(c, items)}</span><span class="cf-shade"></span>
-      <span class="cf-txt"><span class="coll-k">Colección</span>
-        ${safeUrl(c.logo) ? `<img class="cf-logo" alt="${esc(c.name || '')}" data-img="${esc(c.logo)}" hidden><span class="cf-name logo-fallback" hidden>${esc(c.name || 'Colección')}</span>` : `<span class="cf-name">${esc(c.name || 'Colección')}</span>`}
-        ${c.tagline ? `<span class="cf-tag">${esc(c.tagline)}</span>` : ''}<span class="btn coll-btn">Ver colección</span></span>
-    </a>
-    <div class="cf-row row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button><div class="rail">${collRowItems(c).map(card).join('')}</div><button class="rail-btn r" data-scroll="1" aria-label="Siguiente">›</button></div>
+    ${c.image ? `<span class="cf-img" data-src="${esc(c.image)}"></span>` : ''}<span class="cf-glow"></span>
+    <a class="cf-txt" href="${href}" aria-label="Ver la colección ${esc(c.name || '')}"><span class="coll-k">Colección</span>
+      ${safeUrl(c.logo) ? `<img class="cf-logo" alt="${esc(c.name || '')}" data-img="${esc(c.logo)}" hidden><span class="cf-name logo-fallback" hidden>${esc(c.name || 'Colección')}</span>` : `<span class="cf-name">${esc(c.name || 'Colección')}</span>`}
+      ${c.tagline ? `<span class="cf-tag">${esc(c.tagline)}</span>` : ''}<span class="btn cf-btn">Ver colección</span></a>
+    <div class="cf-row row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button><div class="rail">${collRowItems(c).map(t => `<div class="cf-it">${card(t)}<span class="cf-t">${esc(t.title || '')}</span></div>`).join('')}</div><button class="rail-btn r" data-scroll="1" aria-label="Siguiente">›</button></div>
   </section>`;
 }
 function collBanner(c, big){
@@ -1202,7 +1200,7 @@ function renderCollsAdmin(){
               <div class="cstyle"><button type="button" class="pill-toggle ${c.style !== 'full' ? 'on' : ''}" data-coll-style="${esc(c.id)}" data-v="">Banner</button><button type="button" class="pill-toggle ${c.style === 'full' ? 'on' : ''}" data-coll-style="${esc(c.id)}" data-v="full">De borde a borde + fila</button></div>
               <span class="hint">“De borde a borde” ocupa todo el ancho, con una fila de títulos abajo. Igual en la web, la TV y el celular.</span></div>
             ${c.style === 'full' ? `<div class="field"><span>Logo (opcional · PNG transparente)</span>${slot('logo', 'colllogo:' + c.id, c.logo, 'r31 contain', 'Subir logo')}<span class="hint">Si no cargás uno, se muestra el nombre escrito.</span></div>
-            <div class="field"><span>Color de fondo y difuminado</span><div class="ccolor"><label class="check"><input type="checkbox" data-coll-auto="${esc(c.id)}" ${hexOk(c.color) ? '' : 'checked'}> Automático</label>${hexOk(c.color) ? `<input type="color" data-coll-color="${esc(c.id)}" value="${esc(c.color)}">` : ''}</div><span class="hint">Automático usa un negro suave. Elegí un color para que el difuminado combine con la imagen.</span></div>` : ''}
+            <div class="field"><span>Color de fondo y difuminado</span><div class="ccolor"><label class="check"><input type="checkbox" data-coll-auto="${esc(c.id)}" ${hexOk(c.color) ? '' : 'checked'}> Automático</label>${hexOk(c.color) ? `<input type="color" data-coll-color="${esc(c.id)}" value="${esc(c.color)}">` : ''}</div><span class="hint">Automático usa el rosa oscuro de Reality Vault. Elegí un color para que combine con los pósters.</span></div>` : ''}
             <div class="field"><span>Imagen de fondo (opcional)</span>${slot('coll', 'coll:' + c.id, c.image, 'r31', 'Subir imagen de fondo')}<span class="hint">${c.image ? 'Tocá la imagen para cambiarla.' : 'Sin imagen, el banner muestra los pósters de sus títulos.'} <b>1800 × 600 px</b></span></div>
           </div>
           <div class="field"><span>Títulos · arrastralos para ordenarlos${c.style === 'full' ? ' · ★ = aparece en la fila (si no marcás ninguno, aparecen todos)' : ''}</span>

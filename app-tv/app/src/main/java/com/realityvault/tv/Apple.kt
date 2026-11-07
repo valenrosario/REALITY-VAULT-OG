@@ -679,22 +679,21 @@ private fun CollWall(ps: List<Title>, posterW: Dp, modifier: Modifier) {
 private fun CollFullRow(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState, restore: String?) {
     val c = r.coll ?: return
     val rowTs = c.rowItems.mapNotNull { id -> r.titles.firstOrNull { it.id == id } }.ifEmpty { r.titles }
-    val col = c.colorArgb?.let { Color(it) } ?: Color(0xFF0D0B0C)
+    val col = c.colorArgb?.let { Color(it) } ?: Color(0xFF3A1230)
     val density = LocalDensity.current
-    val rowSpec = remember { PivotSpec(with(density) { 48.dp.toPx() }) { false } }
-    Column(Modifier.padding(top = 26.dp, bottom = 6.dp).fillMaxWidth().background(col)) {
-        Box(Modifier.fillMaxWidth().height(250.dp)) {
-            Box(Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(.72f)) {
-                if (c.image.isNotBlank()) Img(c.image, Modifier.fillMaxSize(), alignment = Alignment.CenterEnd)
-                else CollWall(r.titles.filter { it.poster.isNotBlank() }, 104.dp, Modifier.fillMaxHeight().fillMaxWidth())
-            }
-            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to col, .28f to col.copy(alpha = .95f), .48f to col.copy(alpha = .55f), .66f to col.copy(alpha = .1f), 1f to Color.Transparent)))
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to col.copy(alpha = .55f), .2f to Color.Transparent, .7f to Color.Transparent, 1f to col)))
-            Column(Modifier.align(Alignment.CenterStart).padding(start = 48.dp).fillMaxWidth(.46f)) {
-                Text("COLECCIÓN", style = ts(10, FontWeight.Bold, C.accent).copy(letterSpacing = 2.sp))
-                if (c.logo.isNotBlank()) Img(c.logo, Modifier.padding(top = 8.dp).width(300.dp).height(92.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
-                else Text(c.name, style = ts(34, FontWeight.Bold, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
-                if (c.tagline.isNotBlank()) Text(c.tagline, style = ts(13, color = Color.White.copy(alpha = .82f)), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+    // la fila empieza justo después del texto: ahí se clava la tarjeta enfocada
+    val rowSpec = remember { PivotSpec(with(density) { 0.dp.toPx() }) { false } }
+    // franja tipo HBO Max: texto a la izquierda con un resplandor detrás, pósters chicos a la derecha
+    Box(Modifier.padding(top = 26.dp, bottom = 8.dp).fillMaxWidth().height(272.dp).background(col)) {
+        if (c.image.isNotBlank()) Img(c.image, Modifier.fillMaxSize().graphicsLayer { alpha = .3f })
+        Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color.White.copy(alpha = .3f), Color.Transparent), center = androidx.compose.ui.geometry.Offset(330f, 260f), radius = 620f)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .3f), .25f to Color.Transparent, .75f to Color.Transparent, 1f to Color.Black.copy(alpha = .35f))))
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.padding(start = 48.dp, end = 24.dp).width(270.dp)) {
+                Text("COLECCIÓN", style = ts(10, FontWeight.Bold, Color.White.copy(alpha = .8f)).copy(letterSpacing = 2.sp))
+                if (c.logo.isNotBlank()) Img(c.logo, Modifier.padding(top = 8.dp).width(250.dp).height(76.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
+                else Text(c.name, style = ts(28, FontWeight.Bold, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                if (c.tagline.isNotBlank()) Text(c.tagline, style = ts(12.5f, color = Color.White.copy(alpha = .85f)), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                 Box(Modifier.padding(top = 14.dp)) {
                     CardA("${r.key}/ver", restore, nav, screenKey, { nav.go(Screen.Collection(c.id)) }, Modifier.height(36.dp), scale = 1.06f) { f ->
                         Box(Modifier.fillMaxHeight().background(if (f) Color.White else Color.White.copy(alpha = .9f)).padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
@@ -703,11 +702,11 @@ private fun CollFullRow(r: RowSpec, nav: Nav, screenKey: String, state: LazyList
                     }
                 }
             }
-        }
-        CompositionLocalProvider(LocalBringIntoViewSpec provides rowSpec) {
-            LazyRow(state = state, contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 4.dp, bottom = 22.dp), horizontalArrangement = Arrangement.spacedBy(15.dp)) {
-                itemsIndexed(rowTs, key = { _, t -> t.id }) { _, t ->
-                    ExpandPoster(t, 152.dp, "${r.key}/${t.id}", restore, nav, screenKey) { nav.go(Screen.Detail(t.id)) }
+            CompositionLocalProvider(LocalBringIntoViewSpec provides rowSpec) {
+                LazyRow(state = state, modifier = Modifier.weight(1f), contentPadding = PaddingValues(start = 4.dp, end = 48.dp, top = 14.dp, bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    itemsIndexed(rowTs, key = { _, t -> t.id }) { _, t ->
+                        ExpandPoster(t, 118.dp, "${r.key}/${t.id}", restore, nav, screenKey) { nav.go(Screen.Detail(t.id)) }
+                    }
                 }
             }
         }
