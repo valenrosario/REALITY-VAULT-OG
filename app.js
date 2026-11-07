@@ -1147,6 +1147,11 @@ function collFull(c){
     <div class="cf-row row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button><div class="rail">${collRowItems(c).map(t => `<div class="cf-it">${card(t)}<span class="cf-t">${esc(t.title || '')}</span></div>`).join('')}</div><button class="rail-btn r" data-scroll="1" aria-label="Siguiente">›</button></div>
   </section>`;
 }
+// franja de colección: según el desplazamiento se muestran las flechas y el difuminado de cada lado
+document.addEventListener('scroll', e => {
+  const r = e.target; if (!(r instanceof Element) || !r.matches('.cfull .rail')) return;
+  const w = r.parentElement; w.classList.toggle('scrolled', r.scrollLeft > 8); w.classList.toggle('at-end', r.scrollLeft + r.clientWidth >= r.scrollWidth - 8);
+}, true);
 function collBanner(c, big){
   if (!big && c.style === 'full') return collFull(c);
   const items = collItems(c);

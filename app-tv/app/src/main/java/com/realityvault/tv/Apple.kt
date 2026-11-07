@@ -682,7 +682,7 @@ private fun CollFullRow(r: RowSpec, nav: Nav, screenKey: String, state: LazyList
     val col = c.colorArgb?.let { Color(it) } ?: Color(0xFF3A1230)
     val density = LocalDensity.current
     // la fila empieza justo después del texto: ahí se clava la tarjeta enfocada
-    val rowSpec = remember { PivotSpec(with(density) { 0.dp.toPx() }) { false } }
+    val rowSpec = remember { PivotSpec(with(density) { 18.dp.toPx() }) { false } }
     // franja tipo HBO Max: texto a la izquierda con un resplandor detrás, pósters chicos a la derecha
     Box(Modifier.padding(top = 26.dp, bottom = 8.dp).fillMaxWidth().height(272.dp).background(col)) {
         if (c.image.isNotBlank()) Img(c.image, Modifier.fillMaxSize().graphicsLayer { alpha = .3f })
@@ -703,7 +703,7 @@ private fun CollFullRow(r: RowSpec, nav: Nav, screenKey: String, state: LazyList
                 }
             }
             CompositionLocalProvider(LocalBringIntoViewSpec provides rowSpec) {
-                LazyRow(state = state, modifier = Modifier.weight(1f), contentPadding = PaddingValues(start = 4.dp, end = 48.dp, top = 14.dp, bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                LazyRow(state = state, modifier = Modifier.weight(1f), contentPadding = PaddingValues(start = 18.dp, end = 48.dp, top = 14.dp, bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     itemsIndexed(rowTs, key = { _, t -> t.id }) { _, t ->
                         ExpandPoster(t, 118.dp, "${r.key}/${t.id}", restore, nav, screenKey) { nav.go(Screen.Detail(t.id)) }
                     }

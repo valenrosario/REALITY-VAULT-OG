@@ -1148,7 +1148,14 @@ body.in-landing .mchips,body.in-landing .mobile-chips{display:none}
 .cf-btn{margin-top:12px;background:#fff;color:#000;padding:11px 24px;font-size:13.5px;letter-spacing:.04em}
 .cf-txt:hover .cf-btn{background:var(--accent-strong,#ffb3d0)}
 .cf-row{min-width:0;padding:26px 0}
-.cfull .cf-row .rail{grid-auto-columns:clamp(120px,10.6vw,176px);padding-left:0;scroll-padding:0}
+.cfull .cf-row .rail{grid-auto-columns:clamp(120px,10.6vw,176px);padding-left:14px;padding-right:var(--gutter);scroll-padding:0 14px;
+  -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 70px),transparent);mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 70px),transparent)}
+.cfull .cf-row.at-end .rail{-webkit-mask-image:none;mask-image:none}
+/* flechas sobre el color de la franja (no negras) y sin tapar el primer póster */
+.cfull .rail-btn{top:50%;bottom:auto;width:42px;min-width:42px;height:42px;margin-top:-34px;border-radius:50%;background:rgba(0,0,0,.5);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);font-size:24px;line-height:1}
+.cfull .rail-btn.l{left:6px}.cfull .rail-btn.r{right:14px}
+.cfull .rail-btn.l{display:none}.cfull .cf-row.scrolled .rail-btn.l{display:block}
+.cfull .cf-row.at-end .rail-btn.r{display:none}
 .cf-it{min-width:0;display:flex;flex-direction:column;gap:8px}
 .cf-it .card{width:100%}
 .cf-t{color:rgba(255,255,255,.9);font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1157,7 +1164,7 @@ body.in-landing .mchips,body.in-landing .mobile-chips{display:none}
   .cf-glow{background:radial-gradient(ellipse 90% 60% at 20% 18%,rgba(255,255,255,.26),rgba(255,255,255,0) 70%),linear-gradient(0deg,rgba(0,0,0,.4),rgba(0,0,0,0) 40%)}
   .cf-img{-webkit-mask-image:linear-gradient(0deg,transparent 0,#000 70%);mask-image:linear-gradient(0deg,transparent 0,#000 70%)}
   .cf-txt{padding:26px var(--gutter) 6px}
-  .cf-row{padding:12px 0 22px}.cfull .cf-row .rail{padding-left:var(--gutter);scroll-padding:0 var(--gutter);grid-auto-columns:118px}
+  .cf-row{padding:12px 0 22px}.cfull .cf-row .rail{padding-left:var(--gutter);scroll-padding:0 var(--gutter);grid-auto-columns:118px;-webkit-mask-image:none;mask-image:none}
 }
 .cstyle{display:flex;gap:8px;flex-wrap:wrap}
 .ccolor{display:flex;align-items:center;gap:14px}.ccolor input[type=color]{width:46px;height:32px;border:0;padding:0;background:none;cursor:pointer}
