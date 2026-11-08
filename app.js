@@ -291,7 +291,7 @@ function renderHero(){
           ${t ? `<div class="meta">${metaLine(t)}</div><div class="meta-m">${t.rating ? `<span class="rating">${esc(t.rating)}</span>` : ''}${esc([t.year, (t.genres||[])[0]].filter(Boolean).join(' • '))}${fmtBadges(t).join('')}</div>` : ''}
           ${text ? `<p>${esc(text.length>220 ? text.slice(0,217)+'…' : text)}</p>` : ''}
           <div class="hero-actions">
-            ${t && isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-primary hero-play" ${t ? watchAttrs(t, target?.season, target?.episode) : 'data-watch'} href="${esc(link)}" target="_blank" rel="noopener"><span class="lbl-d">▶ ${esc(target?.cont ? target.label : (b.cta || 'Ver ahora'))}</span><span class="lbl-m">${ICONS.play} ${target?.cont ? 'Continuar' : 'Reproducir'}</span></a>` : ''}
+            ${t && isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-primary hero-play" ${t ? watchAttrs(t, target?.season, target?.episode) : 'data-watch'} href="${esc(t ? watchHref(t, target?.season, target?.episode) : link)}" ${t ? '' : 'target="_blank" rel="noopener"'}><span class="lbl-d">▶ ${esc(target?.cont ? target.label : (b.cta || 'Ver ahora'))}</span><span class="lbl-m">${ICONS.play} ${target?.cont ? 'Continuar' : 'Reproducir'}</span></a>` : ''}
             ${t ? `<button class="btn btn-ghost hero-more" data-open="${esc(t.id)}">Más información</button>${listBtn(t.id,'round')}${listWide(t.id)}` : ''}
           </div>
         </div></div>`;
@@ -575,7 +575,7 @@ function showDetail(id, seasonIdx){
         ${t.logo ? `<img class="hero-logo" alt="${esc(t.title)}" data-img="${esc(t.logo)}" hidden><h2 class="logo-fallback" hidden>${esc(t.title)}</h2>` : `<h2>${esc(t.title)}</h2>`}
         <div class="meta">${metaLine(t)}</div>
         <div class="hero-actions">
-          ${link ? `<a class="btn btn-primary" href="${esc(link)}" target="_blank" rel="noopener">▶ ${t.type==='serie'?'Ver T'+(seasons[0]?.number||1)+' E1':'Ver ahora'}</a>` : isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : ''}
+          ${link ? (() => { const tg = playTarget(t); return `<a class="btn btn-primary" ${watchAttrs(t, tg?.season, tg?.episode)} href="${esc(watchHref(t, tg?.season, tg?.episode))}">▶ ${tg?.label ? esc(tg.label) : 'Ver ahora'}</a>`; })() : isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : ''}
           ${safeUrl(t.trailer) ? `<button class="btn btn-ghost" data-trailer="${esc(t.id)}">Tráiler</button>` : ''}
         </div>
       </div>
@@ -600,7 +600,7 @@ function showDetail(id, seasonIdx){
         </div>
         <div class="eps">${(s.episodes||[]).slice().sort((a,b)=>(a.number||0)-(b.number||0)).map(e => {
           const soon = itemSoon(t, s, e); const u = soon ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
-          return `<${tag} class="ep ${soon?'ep-soon':''}" ${u?`data-watch href="${esc(u)}" target="_blank" rel="noopener"`:''}>
+          return `<${tag} class="ep ${soon?'ep-soon':''}" ${u?`${watchAttrs(t, s.number, e.number)} href="${esc(watchHref(t, s.number, e.number))}"`:''}>
             <span class="ep-n">${esc(e.number)}</span>
             <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number, t.logo)}</div>
             <div class="ep-info"><strong>${esc(e.title || 'Episodio '+e.number)}<span>${soon?'Próximamente':esc(e.duration||'')}</span></strong>${e.description?`<p>${esc(e.description)}</p>`:''}</div>
@@ -615,7 +615,12 @@ function showDetail(id, seasonIdx){
   // avatars with photos: clear initials once loaded
   overlayRoot.querySelector('.sheet-close')?.focus();
 }
-function closeDetail(){ overlayRoot.innerHTML=''; document.body.style.overflow=''; }
+function closeDetail(){
+  // si entró por un enlace compartido y cierra sin crear la cuenta, vuelve al inicio (el contenido queda detrás de la cuenta)
+  const gated = S.authCtx?.gate && !S.session && overlayRoot.querySelector('.au-full');
+  overlayRoot.innerHTML=''; document.body.style.overflow='';
+  if (gated){ S.authCtx = null; navigate('/'); }
+}
 overlayRoot.addEventListener('click', e => {
   if (e.target.closest('[data-close]') || e.target.hasAttribute('data-close-bg')) return closeDetail();
   const o = e.target.closest('[data-open]'); if (o){ showDetail(o.dataset.open); overlayRoot.querySelector('.overlay')?.scrollTo(0,0); }
@@ -2138,7 +2143,7 @@ function renderTitlePage(id){
       ${isSerie && firstEp ? `<div class="tp-ep"><strong>T${esc(firstSeason.number)}:E${esc(firstEp.number)} ${esc(firstEp.title||'')}</strong>${firstEp.description?`<p>${esc(firstEp.description)}</p>`:''}</div>`
         : `<div class="tp-ep">${t.tagline?`<strong>${esc(t.tagline)}</strong>`:''}${t.description?`<p>${esc(t.description.length>180?t.description.slice(0,177)+'…':t.description)}</p>`:''}</div>`}
       <div class="tp-actions">
-        ${isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-play" ${watchAttrs(t, target?.season, target?.episode)} href="${esc(link)}" target="_blank" rel="noopener">${ICONS.play} ${esc(playLabel)}</a>` : ''}
+        ${isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-play" ${watchAttrs(t, target?.season, target?.episode)} href="${esc(watchHref(t, target?.season, target?.episode))}">${ICONS.play} ${esc(playLabel)}</a>` : ''}
         ${listBtn(t.id,'round')}
         ${safeUrl(t.trailer) ? `<button class="round" data-trailer="${esc(t.id)}" aria-label="Ver tráiler" title="Tráiler">${ICONS.trailer}</button>` : ''}
       </div>
@@ -2152,7 +2157,7 @@ const extrasOf = s => (s.extras || []).map((x, xi) => ({ ...x, xi })).filter(x =
 function extrasPanel(t, s){
   const xs = extrasOf(s); if (!xs.length) return '';
   const f = xs[0], mins = xs.reduce((a, x) => a + (parseInt(x.duration) || 0), 0);
-  const attrs = x => `data-watch data-x="${esc(t.id)}:${esc(s.number)}:${x.xi}" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener"`;
+  const attrs = x => `data-watch data-x="${esc(t.id)}:${esc(s.number)}:${x.xi}" href="${esc(watchHref(t, null, null, { s: s.number, i: x.xi }))}"`;
   const cut = (txt, n) => txt && txt.length > n ? txt.slice(0, n - 1) + '…' : (txt || '');
   return `<section class="xv" aria-label="Extras de la temporada ${esc(s.number)}">
     ${f.thumb ? `<span class="xv-bg" data-src="${esc(f.thumb)}"></span>` : ''}
@@ -2171,7 +2176,7 @@ function renderEpisodesTab(t, seasons){
     ${s.episodes.length ? `<div class="row-wrap ep-row"><button class="rail-btn l" data-scroll="-1" aria-label="Anteriores">‹</button><div class="rail rail-eps">${s.episodes.map(e => {
       const soon = itemSoon(t, s, e); const u = soon ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
       const seen = (S.progress.get(t.id)?.watched || []).includes(epKey(s.number, e.number));
-      return `<${tag} class="ep-card ${seen?'seen':''} ${soon?'ep-soon':''}" ${u?`${watchAttrs(t, s.number, e.number)} href="${esc(u)}" target="_blank" rel="noopener"`:''}>
+      return `<${tag} class="ep-card ${seen?'seen':''} ${soon?'ep-soon':''}" ${u?`${watchAttrs(t, s.number, e.number)} href="${esc(watchHref(t, s.number, e.number))}"`:''}>
         <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number, t.logo)}${seen?'<span class="seen-tag">✓ Visto</span>':soon?'<span class="seen-tag soon-tag">Próximamente</span>':''}</div>
         <div class="ep-meta"><span class="ep-label">Episodio ${esc(e.number)}</span><strong>${esc(e.title || 'Episodio '+e.number)}</strong></div>
         ${e.description?`<p>${esc(e.description)}</p>`:''}
@@ -2348,6 +2353,25 @@ function playTarget(t){
 function watchAttrs(t, season, episode){
   return `data-watch data-tid="${esc(t.id)}" ${season != null ? `data-s="${esc(season)}" data-e="${esc(episode)}"` : ''}`;
 }
+/* El reproductor tiene su propia dirección (/ver/…): los botones de "Ver" nunca llevan el enlace del archivo. */
+function watchHref(t, season, episode, x){
+  if (!t) return '/';
+  let p = '/ver/' + (t.type === 'serie' ? 'serie' : 'pelicula') + '/' + encodeURIComponent(slugOf(t));
+  if (x) p += '/extra/' + x.s + '/' + x.i;
+  else if (season != null && season !== '') p += '/' + season + '/' + episode;
+  return p;
+}
+// el enlace real del video sale del catálogo recién al reproducir
+function playUrl({ tid, s, e, x }){
+  if (x){ const [xt, xs, xi] = String(x).split(':'); const t = byId(xt); return safeUrl((t?.seasons || []).find(z => +z.number === +xs)?.extras?.[+xi]?.url); }
+  const t = byId(tid); if (!t || isSoon(t)) return '';
+  if (t.type === 'serie'){
+    if (s === '' || s == null){ const tg = playTarget(t); return tg ? safeUrl(tg.url) : ''; }
+    const ep = flatEpisodes(t).find(z => +z.s.number === +s && +z.e.number === +e);
+    return ep && !itemSoon(t, ep.s, ep.e) ? safeUrl(ep.e.url) : '';
+  }
+  return safeUrl(t.url);
+}
 async function recordWatch(tid, season, episode){
   if (!S.session || !S.sb || !tid) return;
   const prev = S.progress.get(tid);
@@ -2436,7 +2460,7 @@ function continueRow(){
       const sub = t.type === 'serie' ? (target ? (target.cont ? 'Sigue ' : '') + `T${target.season}:E${target.episode}${target.ep?.title ? ' · ' + target.ep.title : ''}` : `${seen} de ${total} episodios`) : 'Película';
       const inner = wideArt(t, `<span class="cw-play">${ICONS.play}</span><span class="cw-bar"><i style="width:${pct}%"></i></span>`);
       return `<div class="cw-card">
-        ${target ? `<a class="cw-main" ${watchAttrs(t, target.season, target.episode)} href="${esc(target.url)}" target="_blank" rel="noopener" aria-label="${esc(target.label + ' · ' + t.title)}">${inner}</a>` : `<button class="cw-main" data-open="${esc(t.id)}">${inner}</button>`}
+        ${target ? `<a class="cw-main" ${watchAttrs(t, target.season, target.episode)} href="${esc(watchHref(t, target.season, target.episode))}" aria-label="${esc(target.label + ' · ' + t.title)}">${inner}</a>` : `<button class="cw-main" data-open="${esc(t.id)}">${inner}</button>`}
         <div class="cw-info"><button class="cw-title" data-open="${esc(t.id)}">${esc(t.title)}</button><span class="cw-sub">${esc(sub)}</span></div>
         <button class="cw-x" data-cw-remove="${esc(t.id)}" aria-label="Quitar de Seguir viendo" title="Quitar">✕</button>
       </div>`; }).join('')}</div>
@@ -2659,7 +2683,7 @@ function showWelcome(name, long){
   });
 }
 function openAuth(opts = {}){
-  S.authCtx = { mode: opts.mode || 'signup', step: 1, email:'', name:'', favs:[], reason: opts.reason || '', href: opts.href || '', titleId: opts.titleId || '', tid: opts.tid || '', s: opts.s ?? '', e: opts.e ?? '', msg:'' };
+  S.authCtx = { mode: opts.mode || 'signup', step: 1, email:'', name:'', favs:[], reason: opts.reason || '', href: opts.href || '', titleId: opts.titleId || '', tid: opts.tid || '', s: opts.s ?? '', e: opts.e ?? '', x: opts.x || '', gate: !!opts.gate, shareName: opts.shareName || '', msg:'' };
   renderAuth();
 }
 function authSideTitle(){
@@ -2669,11 +2693,11 @@ function authSideTitle(){
 function renderAuth(){
   const c = S.authCtx; const signup = c.mode === 'signup';
   const side = c._side || (c._side = authSideTitle());
-  const lead = c.reason === 'watch' ? 'Para ver necesitás una cuenta. Es gratis y tarda un minuto.' : c.reason === 'list' ? 'Creá una cuenta gratis para guardar tus series y películas en Mi lista.' : '';
+  const lead = c.reason === 'share' ? `Te compartieron ${c.shareName ? '“' + c.shareName + '”' : 'esto'}. Creá tu cuenta gratis para verlo: tarda un minuto.` : c.reason === 'watch' ? 'Para ver necesitás una cuenta. Es gratis y tarda un minuto.' : c.reason === 'list' ? 'Creá una cuenta gratis para guardar tus series y películas en Mi lista.' : '';
   let body;
   if (c.done){
     body = `<h2>¡Listo${c.doneName ? ', ' + esc(c.doneName) : ''}!</h2><p class="au-sub">${esc(c.doneMsg)}</p>
-      ${c.href ? `<a class="btn btn-primary au-btn" data-watch ${c.tid ? `data-tid="${esc(c.tid)}"` : ''} ${c.s !== '' ? `data-s="${esc(c.s)}" data-e="${esc(c.e)}"` : ''} href="${esc(c.href)}" target="_blank" rel="noopener">▶ Ver ahora</a>` : `<button class="btn btn-primary au-btn" data-close>Seguir</button>`}`;
+      ${c.href ? `<a class="btn btn-primary au-btn" data-watch ${c.tid ? `data-tid="${esc(c.tid)}"` : ''} ${c.s !== '' ? `data-s="${esc(c.s)}" data-e="${esc(c.e)}"` : ''} ${c.x ? `data-x="${esc(c.x)}"` : ''} href="${esc(c.href)}">▶ Ver ahora</a>` : `<button class="btn btn-primary au-btn" data-close>Seguir</button>`}`;
   } else if (signup && c.step === 4){
     const pool = shuffled(published().filter(t => t.poster), 'au-fav').slice(0, 12);
     body = `<div class="au-step">PASO 4 DE 4</div><div class="au-prog"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
@@ -3150,9 +3174,13 @@ function endPlayerSession(){
   if (ready() && tid && v.duration) savePos(tid, s, e, v.currentTime, v.duration);
   rv?.destroy(); v._hls?.destroy();
 }
-function openPlayer({ url, tid, s: season, e: episode, x }){
+function openPlayer({ url, tid, s: season, e: episode, x, direct }){
   const [xt, xsn, xi] = x ? String(x).split(':') : [];
   const t = tid ? byId(tid) : xt ? byId(xt) : null;
+  if (!S.session && S.sb){ openAuth({ reason:'watch', href: t ? watchHref(t, season, episode, x ? { s: xsn, i: xi } : null) : '/', tid: tid || '', s: season ?? '', e: episode ?? '', x: x || '' }); return; }
+  if (!url) url = playUrl({ tid, s: season, e: episode, x });
+  if (t && t.type === 'serie' && !x && (season === '' || season == null)){ const tg = playTarget(t); if (tg){ season = tg.season; episode = tg.episode; } }
+  if (!url){ toast('Este video todavía no está disponible.', true); return; }
   const emb = embedFor(url); if (!emb) return;
   endPlayerSession();
   const native = emb.type !== 'iframe';
@@ -3182,7 +3210,9 @@ function openPlayer({ url, tid, s: season, e: episode, x }){
     ${emb.generic && !/\.r2\.dev\//i.test(url) ? `<p class="pl-note">Si el video no carga, <a href="${esc(url)}" target="_blank" rel="noopener">abrilo en otra pestaña</a>.</p>` : ''}
   </div>`;
   document.body.style.overflow = 'hidden';
-  if (!S.playerOpen){ history.pushState({ player:true }, '', location.pathname); }
+  const vpath = t ? watchHref(t, season, episode, x ? { s: xsn, i: xi } : null) : location.pathname;
+  if (direct) S.playerDirect = true;
+  if (!S.playerOpen && !direct) history.pushState({ player:true }, '', vpath); else history.replaceState(direct ? null : { player:true }, '', vpath);
   S.playerOpen = true;
   const v = playerRoot.querySelector('#plVideo');
   if (v){
@@ -3267,6 +3297,7 @@ function openPlayer({ url, tid, s: season, e: episode, x }){
 }
 function closePlayer(fromPop){
   if (!S.playerOpen) return;
+  if (S.playerDirect){ S.playerDirect = false; history.replaceState(null, '', location.pathname.replace(/^\/ver\/(serie|pelicula)\/([^/]+).*$/, '/$1/$2')); fromPop = true; }
   S.playerOpen = false;
   const hadSess = !!plSess, tid = plSess?.tid;
   endPlayerSession();
@@ -3314,21 +3345,23 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.querySelector('.trailer-pop')) closeTrailer(); });
 
 // signed-in viewers: play inside the site instead of leaving it
+const newTab = e => e.metaKey || e.ctrlKey || e.shiftKey || e.button > 0;
 document.addEventListener('click', e => {
   const a = e.target.closest('a[data-watch]');
-  if (!a || !S.session) return;
+  if (!a || !S.session || newTab(e)) return;
   e.preventDefault();
-  if (a.closest('.auth-card')) closeDetail();
-  openPlayer({ url: a.getAttribute('href'), tid: a.dataset.tid || '', s: a.dataset.s ?? '', e: a.dataset.e ?? '', x: a.dataset.x || '' });
+  if (a.closest('.auth-card, .au-full')) closeDetail();
+  const href = a.getAttribute('href') || '';
+  openPlayer({ url: href.startsWith('/ver/') ? '' : href, tid: a.dataset.tid || '', s: a.dataset.s ?? '', e: a.dataset.e ?? '', x: a.dataset.x || '' });
 }, true);
 
 // gate every "watch" link behind an account (capture phase, before navigation)
 document.addEventListener('click', e => {
   const a = e.target.closest('a[data-watch]');
-  if (!a || S.session || !S.sb) return;
+  if (!a || S.session || !S.sb || newTab(e)) return;
   if (a.closest('.auth-card')) return;
   e.preventDefault(); e.stopPropagation();
-  openAuth({ reason:'watch', href: a.getAttribute('href'), tid: a.dataset.tid || '', s: a.dataset.s ?? '', e: a.dataset.e ?? '' });
+  openAuth({ reason:'watch', href: a.getAttribute('href'), tid: a.dataset.tid || '', s: a.dataset.s ?? '', e: a.dataset.e ?? '', x: a.dataset.x || '' });
 }, true);
 document.addEventListener('click', e => {
   const cw = e.target.closest('[data-cw-remove]'); if (cw){ e.preventDefault(); e.stopPropagation(); removeProgress(cw.dataset.cwRemove); return; }
@@ -3444,6 +3477,12 @@ function routeFromPath(){
   }
   const parts = decodeURIComponent(location.pathname).replace(/\/+$/,'').split('/').filter(Boolean);
   if (S.pendingId){ S.titleSlug = null; S.titleKind = null; return 'title'; }
+  // /ver/serie/<slug>/<temporada>/<capítulo> · /ver/pelicula/<slug> · /ver/serie/<slug>/extra/<t>/<n>: la página propia del reproductor
+  if (parts[0] === 'ver' && parts.length >= 3 && (parts[1] === 'serie' || parts[1] === 'pelicula')){
+    S.titleKind = parts[1]; S.titleSlug = parts[2];
+    S.watchReq = parts[3] === 'extra' ? { x: [parts[4], parts[5]] } : parts.length >= 5 ? { s: parts[3], e: parts[4] } : {};
+    return 'title';
+  }
   if (parts.length === 2 && parts[0] === 'persona'){ S.personSlug = parts[1]; return 'persona'; }
   if (parts.length === 2 && parts[0] === 'coleccion'){ S.collSlug = parts[1]; return 'coleccion'; }
   if (parts.length === 2 && (parts[0] === 'serie' || parts[0] === 'pelicula')){ S.titleKind = parts[0]; S.titleSlug = parts[1]; return 'title'; }
@@ -3466,7 +3505,7 @@ function navigate(path){
 }
 document.addEventListener('click', e => {
   const a = e.target.closest('a[href]');
-  if (!a || a.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+  if (e.defaultPrevented || !a || a.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
   const href = a.getAttribute('href');
   if (!href.startsWith('/') || href.startsWith('//')) return;
   if (/^\/tv([?#]|$)/.test(href)) return; // la página de la app de TV es un archivo aparte
@@ -3486,7 +3525,28 @@ function renderBrand(){
   if (!ref){ img.hidden = true; txt.style.display = (S.siteLoaded || S.noDb) ? 'contents' : 'none'; return; }
   mediaUrl(ref).then(u => { if (u && brandRef === key){ img.src = u; img.hidden = false; txt.style.display = 'none'; } });
 }
+/* Enlaces compartidos: el reproductor (/ver/…) abre directo si hay cuenta; si no, pide crearla. Igual con una ficha o colección. */
+S.shareCheck = true;
+function deepLinks(){
+  if (!S.authReady || !S.loaded.t || !S.sb) return;
+  if (S.watchReq){
+    const w = S.watchReq; S.watchReq = null;
+    const t = findBySlug(S.titleKind, S.titleSlug); if (!t) return;
+    S.shareCheck = false;
+    const x = w.x ? `${t.id}:${w.x[0]}:${w.x[1]}` : '';
+    if (S.session) openPlayer({ tid: t.id, s: w.s ?? '', e: w.e ?? '', x, direct: true });
+    else openAuth({ reason: 'share', gate: true, shareName: t.title, href: watchHref(t, w.s, w.e, w.x ? { s: w.x[0], i: w.x[1] } : null), tid: t.id, s: w.s ?? '', e: w.e ?? '', x });
+    return;
+  }
+  if (S.shareCheck){
+    S.shareCheck = false;
+    if (S.session || overlayRoot.querySelector('.au-full')) return;
+    if (S.route === 'title'){ const id = currentTitleId(), t = id && byId(id); if (t) openAuth({ reason: 'share', gate: true, shareName: t.title, href: watchHref(t, null, null), tid: t.id }); }
+    else if (S.route === 'coleccion'){ const c = (S.colls || []).find(x => collSlug(x) === S.collSlug || x.id === S.collSlug); openAuth({ reason: 'share', gate: true, shareName: c?.name || '' }); }
+  }
+}
 function render(){
+  queueMicrotask(deepLinks);
   clearInterval(S.heroTimer); renderBrand();
   document.body.classList.toggle('home', S.route==='home' && !S.q.trim() && !S.noDb);
   document.body.classList.toggle('in-admin', S.route==='admin');

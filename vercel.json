@@ -2,6 +2,10 @@
   "cleanUrls": false,
   "rewrites": [
     {
+      "source": "/ver/:path*",
+      "destination": "/index.html"
+    },
+    {
       "source": "/coleccion/:slug",
       "destination": "/index.html"
     },
