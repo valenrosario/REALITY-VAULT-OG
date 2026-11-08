@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
                     Notifs.scan()
                     AdminData.checkAdmin()
                     autoCheckUpdates()
-                    delay(3 * 60_000)
+                    delay(15 * 60_000)
                 }
             }
         }

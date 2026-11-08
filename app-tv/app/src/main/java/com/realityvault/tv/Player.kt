@@ -136,6 +136,8 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     var userPaused by remember { mutableStateOf(false) }
     var ended by remember { mutableStateOf(false) }
     var buffering by remember { mutableStateOf(true) }
+    // el video no se pudo abrir (enlace caído, sin internet, formato que la tele no lee…)
+    var failed by remember { mutableStateOf(false) }
     var posMs by remember { mutableLongStateOf(0L) }
     var durMs by remember { mutableLongStateOf(0L) }
     var controlsVisible by remember { mutableStateOf(true) }
@@ -181,10 +183,12 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                     .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, 0)).build()
             }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) { failed = true; buffering = false }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { userPaused = !playWhenReady }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == M3Player.STATE_BUFFERING
                 if (state == M3Player.STATE_READY) {
+                    failed = false
                     durMs = player.duration.coerceAtLeast(0)
                     if (!resumed) {
                         resumed = true
@@ -212,7 +216,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     }
     // oculta los controles solos si está reproduciendo de verdad (no mientras bufferea o adelanta)
     LaunchedEffect(lastTouch, userPaused, controlsVisible) {
-        if (controlsVisible && !userPaused) { delay(4000); if (System.currentTimeMillis() - lastTouch >= 3900) controlsVisible = false }
+        if (controlsVisible && !userPaused && !failed) { delay(4000); if (System.currentTimeMillis() - lastTouch >= 3900) controlsVisible = false }
     }
     fun bump() { lastTouch = System.currentTimeMillis(); controlsVisible = true }
     // Siguiente episodio, como las plataformas de streaming: en los últimos 20 s aparece una tarjeta
@@ -282,6 +286,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                 // (adelantar/atrasar/pausa) funciona siempre, esté lo que esté enfocado,
                 // y la tele no muestra su propia ventanita de reproducción encima.
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                if (failed) return@onPreviewKeyEvent false // con el aviso de error, las flechas mueven entre sus botones
                 when (e.key) {
                     Key.MediaPlayPause -> { doToggle(); true }
                     Key.MediaPlay -> { player.play(); bump(); true }
@@ -309,7 +314,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
             }
         )
         // capa invisible: cualquier botón del control despierta la interfaz
-        if (!controlsVisible) WakeLayer(Modifier.fillMaxSize()) { bump() }
+        if (!controlsVisible && !failed) WakeLayer(Modifier.fillMaxSize()) { bump() }
 
         // botón "Saltear intro / resumen"
         AnimatedVisibility(
@@ -428,7 +433,22 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                 }
             }
         }
-        if (buffering && !ended) Box(Modifier.align(Alignment.Center)) {
+        if (failed) {
+            val retryReq = remember { FocusRequester() }
+            LaunchedEffect(Unit) { AutoFocusOnce(retryReq) }
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .78f)), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("No se pudo reproducir este video.", style = ts(22, FontWeight.Bold, Color.White))
+                    Text("Revisá la conexión de la tele y probá de nuevo.", style = ts(15, color = C.fg2), modifier = Modifier.padding(top = 6.dp))
+                    Spacer(Modifier.height(22.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        PillButton("Reintentar", { failed = false; buffering = true; player.prepare(); player.play() }, requester = retryReq)
+                        TextButtonTv("Volver", { nav.back() })
+                    }
+                }
+            }
+        }
+        if (buffering && !ended && !failed) Box(Modifier.align(Alignment.Center)) {
             androidx.compose.material3.CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp)
         }
     }

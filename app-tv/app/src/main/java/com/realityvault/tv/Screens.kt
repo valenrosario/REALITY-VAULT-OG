@@ -343,7 +343,14 @@ fun EmailLogin(nav: Nav, done: () -> Unit, note: String?, required: Boolean = fa
         if (!email.contains("@") || pass.length < 6) { err = "Escribí tu email y una contraseña de al menos 6 caracteres."; return }
         busy = true; err = ""
         scope.launch {
-            try { if (signup) Store.signup(email.trim(), pass) else Store.login(email.trim(), pass); done() }
+            try {
+                if (signup) {
+                    val ok = Store.signup(email.trim(), pass)
+                    // si el proyecto pide confirmar el email, no hay sesión todavía: se lo decimos en vez de seguir como si nada
+                    if (!ok && Store.session == null) { err = "Te mandamos un email para confirmar la cuenta. Confirmalo y después tocá Entrar."; busy = false; return@launch }
+                } else Store.login(email.trim(), pass)
+                done()
+            }
             catch (e: Exception) {
                 err = when {
                     e is Api.HttpError && e.code == 400 && !signup -> "Email o contraseña incorrectos."
@@ -431,7 +438,6 @@ private fun AboutSection() {
             // Herramienta de prueba: muestra el aviso real (con el manifiesto/APK publicados de
             // verdad) sin esperar a que exista una versión nueva. Pensada para verificar el
             // diálogo y la descarga/instalación sin tener que subir una build falsa.
-            TextButtonTv("Probar aviso de actualización", { scope.launch { Updater.simulateForTesting() } })
         }
         Updater.lastResult?.let {
             Spacer(Modifier.height(10.dp))

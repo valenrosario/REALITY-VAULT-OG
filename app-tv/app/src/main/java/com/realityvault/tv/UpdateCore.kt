@@ -112,7 +112,7 @@ object Updater {
         if (checking) return
         checking = true
         if (manual) lastResult = null
-        withContext(Dispatchers.IO) {
+        try { withContext(Dispatchers.IO) {
             try {
                 val url = BuildConfig.UPDATE_URL
                 if (url.isBlank()) {
@@ -143,8 +143,7 @@ object Updater {
                 if (manual) lastResult = "No se pudo comprobar: revisá la conexión a internet."
                 // si no es manual, queda en silencio — nunca bloquea ni molesta al usuario
             }
-        }
-        checking = false
+        } } finally { checking = false }
     }
 
     fun dismiss() {

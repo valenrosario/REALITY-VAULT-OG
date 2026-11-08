@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -416,17 +417,27 @@ object Store {
     }
 
     /** Token válido (lo renueva si está por vencer). */
+    // Un solo pedido de renovación a la vez: si dos partes de la app (lista, progreso, catálogo…)
+    // renuevan al mismo tiempo con el mismo refresh_token, el segundo pedido falla y antes eso
+    // cerraba la sesión sola.
+    private val tokenLock = kotlinx.coroutines.sync.Mutex()
+
     suspend fun token(): String? {
-        val s = session ?: return null
-        if (s.expiresAt - 60 > System.currentTimeMillis() / 1000) return s.access
-        return try {
-            val body = JSONObject().put("refresh_token", s.refresh).toString()
-            saveSession(JSONObject(Api.call("POST", "/auth/v1/token?grant_type=refresh_token", body)))
-            session?.access
-        } catch (e: Api.HttpError) {
-            if (e.code in 400..499) logout()
-            null
-        } catch (e: Exception) { null }
+        val first = session ?: return null
+        if (first.expiresAt - 60 > System.currentTimeMillis() / 1000) return first.access
+        return tokenLock.withLock {
+            val s = session ?: return@withLock null
+            if (s.expiresAt - 60 > System.currentTimeMillis() / 1000) return@withLock s.access // otro ya lo renovó
+            try {
+                val body = JSONObject().put("refresh_token", s.refresh).toString()
+                saveSession(JSONObject(Api.call("POST", "/auth/v1/token?grant_type=refresh_token", body)))
+                session?.access
+            } catch (e: Api.HttpError) {
+                // solo si Supabase dice de verdad que la sesión ya no sirve (no por límite de pedidos, etc.)
+                if (e.code == 400 || e.code == 401 || e.code == 403) logout()
+                null
+            } catch (e: Exception) { null }
+        }
     }
 
     suspend fun refreshUser() {

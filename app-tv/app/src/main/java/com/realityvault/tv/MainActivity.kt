@@ -39,7 +39,9 @@ class MainActivity : ComponentActivity() {
                     // No bloquea el arranque ni la pantalla: si falla o no hay internet, sigue
                     // normal. checkSilently() ya evita comprobar más de 1 vez cada 4 horas.
                     Updater.checkSilently()
-                    delay(3 * 60_000)
+                    // cada 15 min (antes 3): el catálogo pesa ~200 KB y una tele prendida todo el día
+                    // lo bajaba cientos de veces — eso gasta el cupo de datos de Supabase
+                    delay(15 * 60_000)
                 }
             }
         }
