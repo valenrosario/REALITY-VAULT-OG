@@ -128,7 +128,7 @@ fun homeRows(tab: String = "Para vos"): List<RowSpec> {
     val rec = recommended()
     if (rec.isNotEmpty()) rows += RowSpec("rec", "Recomendado para vos", "poster", rec)
     val top = Store.top10.mapNotNull { id -> pub.firstOrNull { it.id == id } }.take(10)
-    if (top.isNotEmpty()) rows += RowSpec("top", "Top 10 hoy", "top", top)
+    if (top.isNotEmpty()) rows += RowSpec("top", "Top 10 de la semana", "top", top)
     val list = Store.myList.mapNotNull { id -> pub.firstOrNull { it.id == id } }
     if (list.isNotEmpty()) rows += RowSpec("list", "Mi lista", "wide", list)
     Store.featRows.forEach { r ->
@@ -177,7 +177,7 @@ private fun tabRows(tab: String): List<RowSpec> {
     val rec = recommended().filter(match)
     if (rec.size >= 3) rows += RowSpec("rec", "Recomendado para vos", "poster", rec)
     val top = Store.top10.mapNotNull { id -> pub.firstOrNull { it.id == id } }.take(10)
-    if (top.size >= 3) rows += RowSpec("top", "Top 10 hoy", "top", top)
+    if (top.size >= 3) rows += RowSpec("top", "Top 10 de la semana", "top", top)
     val newest = pub.sortedByDescending { it.createdAt }.take(20)
     if (newest.isNotEmpty()) rows += RowSpec("new", "Novedades", "poster", newest)
     val feat = pub.filter { it.featured }

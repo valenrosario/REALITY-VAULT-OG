@@ -356,7 +356,7 @@ fun homeRows(): List<RowSpec> {
     val cont = Store.progress.mapNotNull { p -> Store.byId(p.titleId)?.takeIf { it.status != "borrador" } }
     if (cont.isNotEmpty()) rows += RowSpec("cont", "Seguir viendo", "wide", cont)
     val top = Store.top10.mapNotNull { id -> pub.firstOrNull { it.id == id } }.take(10)
-    if (top.isNotEmpty()) rows += RowSpec("top", "Top 10 hoy", "top", top)
+    if (top.isNotEmpty()) rows += RowSpec("top", "Top 10 de la semana", "top", top)
     val list = Store.myList.mapNotNull { id -> pub.firstOrNull { it.id == id } }
     if (list.isNotEmpty()) rows += RowSpec("list", "Mi lista", "wide", list)
     Store.featRows.forEach { r ->

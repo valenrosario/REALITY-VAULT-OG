@@ -2409,7 +2409,7 @@ function wideCard(t){
   return `<div class="wide-card"><button class="wide-main" data-open="${esc(t.id)}" aria-label="${esc(t.title)}">${wideArt(t)}</button>
     <button class="wa-heart" data-mylist="${esc(t.id)}" data-heart="1" aria-label="Quitar de Mi lista" title="Quitar de Mi lista">${ICON_HEART_FILL}</button></div>`;
 }
-/* --- Top 10 hoy --- */
+/* --- Top 10 de la semana --- */
 S.top10 = [];
 async function loadTop10(){
   if (!S.sb) return;
@@ -2420,7 +2420,7 @@ async function loadTop10(){
   S.top10 = ids;
   if (S.route === 'home' && !S.q.trim() && !S.playerOpen){ const y = window.scrollY; render(); window.scrollTo(0, y); }
 }
-// count a visit to a title page (once per title every 10 minutes in this browser) for "Top 10 hoy"
+// count a visit to a title page (once per title every 10 minutes in this browser) for "Top 10 de la semana"
 function viewerId(){
   if (S.session?.user?.id) return S.session.user.id;
   try { let v = localStorage.getItem('rv-viewer'); if (!v){ v = 'a-' + uid(''); localStorage.setItem('rv-viewer', v); } return v; } catch { return 'a-' + uid(''); }
@@ -2437,7 +2437,7 @@ function trackView(tid){
 function top10Row(){
   const list = S.top10.map(byId).filter(t => t && t.status !== 'borrador').slice(0, 10);
   if (!list.length) return '';
-  return `<section class="row top10"><div class="row-head"><h2>Top 10 hoy</h2></div>
+  return `<section class="row top10"><div class="row-head"><h2>Top 10 de la semana</h2></div>
     <div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button>
     <div class="rail rail-top">${list.map((t, i) => `<button class="t10" data-open="${esc(t.id)}" aria-label="${i+1}. ${esc(t.title)}">
       <span class="t10-num ${i===9?'ten':''}" aria-hidden="true">${i+1}</span>
