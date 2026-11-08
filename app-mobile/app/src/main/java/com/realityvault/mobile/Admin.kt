@@ -458,6 +458,7 @@ private fun TitleImages(doc: Doc) {
         }
         AImage("Fondo de la ficha", "backdrop", doc.str("backdrop"), "16:9 · computadora y TV si no hay otra") { doc.set("backdrop", it) }
         AImage("Miniatura ancha", "thumb", doc.str("thumbWide"), "16:9 · tarjetas de \"Seguir viendo\" y búsquedas") { doc.set("thumbWide", it) }
+        AImage("Fondo del reproductor (opcional)", "backdrop", doc.str("playerBg"), "16:9 · solo en el reproductor de la web (carga y pausa). Vacío = fondo de la ficha", fallback = doc.str("backdrop")) { doc.set("playerBg", it) }
     }
     ACard("Celular", "Las que usa la app del celular y la web en pantallas chicas.") {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -796,6 +796,7 @@ function renderEditor(){
       <div class="imgs">
         <div class="field"><span>Póster</span>${slot('poster','poster',E.poster,'r23','Subir póster')}<span class="hint"><b>1000 × 1500 px</b> (vertical 2:3)</span></div>
         <div class="field"><span>Fondo de la ficha</span>${slot('backdrop','backdrop',E.backdrop,'r169','Subir fondo de la ficha')}<span class="hint"><b>1920 × 1080 px</b> (16:9). Se ve detrás del logo al abrir el título. Dejá libre el lado izquierdo, ahí va el texto.</span></div>
+        <div class="field"><span>Fondo del reproductor (opcional)</span>${slot('backdrop','playerBg',E.playerBg,'r169','Subir fondo del reproductor')}<span class="hint"><b>1920 × 1080 px</b> (16:9). Solo se ve en el reproductor de la web: en la pantalla de carga (difuminado) y en la pausa. Si lo dejás vacío, se usa el fondo de la ficha.</span></div>
         <div class="field"><span>Logo del título</span>${slot('logo','logo',E.logo,'r31 contain','Subir logo')}<span class="hint"><b>1000 × 400 px</b> aprox., PNG con fondo transparente y recortado al borde. Reemplaza al título escrito.</span></div>
         <div class="field"><span>Miniatura horizontal</span>${slot('thumb','thumbWide',E.thumbWide,'r169','Subir miniatura')}<span class="hint"><b>1280 × 720 px</b> (16:9). Se muestra tal cual en Mi lista y Seguir viendo. Si no la cargás, se usa el fondo del título.</span></div>
         <div class="field span3"><span>Imagen del banner principal</span>${slot('banner','bannerImage',E.bannerImage,'r31','Subir imagen para el banner')}<span class="hint"><b>2400 × 800 px</b> (3:1). Dejá lo importante en el centro y la derecha: a la izquierda va el logo y el texto, y en pantallas angostas se recortan un poco los costados. La que se ve en la portada cuando este título está en el banner. Distinta del fondo de la ficha.</span></div>
@@ -2874,7 +2875,7 @@ function nextAfter(t, season, episode){
   return i >= 0 && i + 1 < eps.length ? eps[i + 1] : null;
 }
 /* ============ Reproductor propio de Reality Vault ============ */
-function rvPlayer(video){
+function rvPlayer(video, o = {}){
   const rvp = video.parentElement, root = video.closest('.player') || rvp;
   video.controls = false; video.removeAttribute('controls');
   const I = {
@@ -2889,9 +2890,24 @@ function rvPlayer(video){
     speed:'<svg viewBox="0 0 24 24"><path d="M4.6 17.6a8.4 8.4 0 1 1 14.8 0"/><path d="M12 13.4l3.9-4.4"/><circle cx="12" cy="13.6" r="1.1" fill="currentColor" stroke="none"/></svg>',
     fs:'<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
     fsx:'<svg viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>',
-    big:'<svg viewBox="0 0 24 24"><path d="M7 4.8v14.4a.7.7 0 0 0 1 .6l12-7.2a.7.7 0 0 0 0-1.2L8 4.2a.7.7 0 0 0-1 .6z"/></svg>'
+    big:'<svg viewBox="0 0 24 24"><path d="M7 4.8v14.4a.7.7 0 0 0 1 .6l12-7.2a.7.7 0 0 0 0-1.2L8 4.2a.7.7 0 0 0-1 .6z"/></svg>',
+    next:'<svg viewBox="0 0 24 24"><path d="M6 5l9 7-9 7z"/><path d="M18 5v14"/></svg>',
+    eps:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="4" rx="1"/><rect x="3" y="11" width="18" height="4" rx="1"/><rect x="3" y="17" width="12" height="3" rx="1"/></svg>'
   };
+  const fmt0=t=>{t=Math.floor(t||0);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')};
   rvp.insertAdjacentHTML('beforeend', `
+    <div class="rvp-load">${o.bg ? `<span class="rvp-load-bg" style="background-image:url('${esc(o.bg)}')"></span>` : ''}
+      <div class="rvp-load-c">${o.logo ? `<img class="rvp-load-logo" src="${esc(o.logo)}" alt="${esc(o.name || '')}">` : `<strong class="rvp-load-name">${esc(o.name || '')}</strong>`}
+        ${o.line ? `<span class="rvp-load-ep">${esc(o.line)}</span>` : ''}<span class="rvp-ring"></span>
+        <span class="rvp-load-h">${o.resumeAt ? 'Cargando · retomando en ' + fmt0(o.resumeAt) : 'Cargando'}</span></div></div>
+    <button class="rvp-sound" hidden>${'<svg viewBox="0 0 24 24"><path d="M4 9.6h3.4L12 5.6v12.8l-4.6-4H4z"/><path d="M16 9.6l5 4.8M21 9.6l-5 4.8"/></svg>'} Activar sonido</button>
+    <div class="rvp-pinfo" aria-hidden="true">${o.bg ? `<span class="rvp-pinfo-bg" style="background-image:url('${esc(o.bg)}')"></span>` : ''}<div class="rvp-pinfo-c"><span class="rvp-pinfo-k">Estás viendo</span>
+      ${o.logo ? `<img src="${esc(o.logo)}" alt="">` : `<strong class="rvp-load-name">${esc(o.name || '')}</strong>`}${o.line ? `<h3>${esc(o.line)}</h3>` : ''}${o.desc ? `<p>${esc(o.desc)}</p>` : ''}</div></div>
+    <div class="rvp-flash" aria-hidden="true"></div>
+    ${o.eps && o.eps.length ? `<aside class="rvp-eps" hidden><div class="rvp-eps-h"><b>${esc(o.epsTitle || 'Capítulos')}</b><button class="rvp-b" data-a="epsx" aria-label="Cerrar">✕</button></div>
+      <div class="rvp-eps-l">${o.eps.map(e => `<button class="rvp-ep${e.cur ? ' cur' : ''}" ${e.cur || !e.ok ? 'disabled' : ''} data-pl-next="${esc(o.tid)}" data-s="${esc(e.s)}" data-e="${esc(e.n)}">
+        <span class="rvp-ep-t" ${e.thumb ? `style="background-image:url('${esc(e.thumb)}')"` : ''}>${e.cur ? '<i>Viendo</i>' : e.soon ? '<i>Próximamente</i>' : ''}</span>
+        <span class="rvp-ep-x"><b>${esc(e.n + '. ' + (e.title || 'Episodio ' + e.n))}</b>${e.dur ? `<small>${esc(e.dur)}</small>` : ''}${e.desc ? `<em>${esc(e.desc)}</em>` : ''}</span></button>`).join('')}</div></aside>` : ''}
     <div class="rvp-hit"></div>
     <div class="rvp-subs" aria-hidden="true"></div>
     <div class="rvp-spin"></div>
@@ -2901,7 +2917,7 @@ function rvPlayer(video){
     <div class="rvp-menu" data-menu="speed" role="menu" hidden></div>
     <div class="rvp-ui">
       <div class="rvp-prog" role="slider" aria-label="Progreso del video" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-        <div class="rvp-track"><i class="buf"></i><i class="played"></i></div><b class="rvp-thumb"></b><span class="rvp-tip">0:00</span>
+        <div class="rvp-track"><i class="buf"></i><span class="rvp-marks"></span><i class="played"></i></div><b class="rvp-thumb"></b><span class="rvp-tip"><video class="rvp-pv" muted playsinline preload="none"></video><b>0:00</b></span>
       </div>
       <div class="rvp-row">
         <button class="rvp-b" data-a="play" aria-label="Reproducir"></button>
@@ -2909,7 +2925,9 @@ function rvPlayer(video){
         <button class="rvp-b" data-a="fwd" aria-label="Adelantar 10 segundos">${I.fwd}</button>
         <div class="rvp-vol"><button class="rvp-b" data-a="mute" aria-label="Silenciar"></button><input type="range" min="0" max="1" step="0.02" value="1" aria-label="Volumen"></div>
         <span class="rvp-time">0:00 / 0:00</span>
-        <span class="rvp-sp"></span>
+        <span class="rvp-sp">${o.mid ? `<span class="rvp-mid">${o.mid}</span>` : ''}</span>
+        ${o.next ? `<button class="rvp-b" data-a="next" data-pl-next="${esc(o.tid)}" data-s="${esc(o.next.s)}" data-e="${esc(o.next.e)}" aria-label="Siguiente episodio" title="Siguiente episodio">${I.next}</button>` : ''}
+        ${o.eps && o.eps.length ? `<button class="rvp-b" data-a="eps" aria-label="Capítulos" title="Capítulos">${I.eps}</button>` : ''}
         <button class="rvp-b" data-a="cc" aria-label="Subtítulos" hidden>${I.cc}</button>
         <button class="rvp-b" data-a="speed" aria-label="Velocidad">${I.speed}</button>
         <button class="rvp-b" data-a="full" aria-label="Pantalla completa"></button>
@@ -2933,13 +2951,23 @@ function rvPlayer(video){
   const loop=()=>{tick();raf=requestAnimationFrame(loop)};
   const buffered=()=>{const b=video.buffered,t=video.currentTime,d=dur();let end=0;for(let i=0;i<b.length;i++){if(b.start(i)<=t+.5&&b.end(i)>=t)end=Math.max(end,b.end(i))}buf.style.width=(d?Math.min(100,end/d*100):0)+'%'};
   const rOf=e=>{const r=prog.getBoundingClientRect();return Math.min(1,Math.max(0,(e.clientX-r.left)/r.width))};
-  const moveTip=e=>{const r=rOf(e),w=prog.clientWidth;tip.textContent=fmt(r*dur());tip.style.left=Math.min(w-30,Math.max(30,r*w))+'px'};
+  const tipT=tip.querySelector('b'), pv=tip.querySelector('video');
+  // vista previa al pasar por la barra: una copia silenciosa del video que salta al minuto (solo archivos directos)
+  let pvOk=false, pvT=0, pvWant=-1;
+  const pvSrc=()=>{const u=video.currentSrc||'';return /^https?:/.test(u)&&!/\.(mkv|ts|m2ts|mts)([?#]|$)/i.test(u)?u:''};
+  on(video,'loadedmetadata',()=>{const u=pvSrc();pvOk=!!u&&matchMedia('(hover:hover)').matches;tip.classList.toggle('pv',pvOk);if(pvOk&&pv.src!==u){pv.src=u}});
+  const pvSeek=t=>{pvWant=t;clearTimeout(pvT);pvT=setTimeout(()=>{if(pvOk&&pv.readyState>=1)try{pv.currentTime=pvWant}catch(_){}else if(pvOk){pv.preload='metadata';pv.load()}},90)};
+  on(pv,'loadedmetadata',()=>{if(pvWant>=0)try{pv.currentTime=pvWant}catch(_){}});
+  const moveTip=e=>{const r=rOf(e),w=prog.clientWidth,half=pvOk?88:30;tipT.textContent=fmt(r*dur());tip.style.left=Math.min(w-half,Math.max(half,r*w))+'px';if(pvOk&&dur())pvSeek(r*dur())};
   on(prog,'pointerdown',e=>{if(e.button>0)return;dragging=true;prog.classList.add('drag');try{prog.setPointerCapture(e.pointerId)}catch(_){}dragRatio=rOf(e);tick();moveTip(e)});
   on(prog,'pointermove',e=>{moveTip(e);if(dragging){dragRatio=rOf(e);tick()}});
   on(prog,'pointerup',e=>{if(!dragging)return;dragging=false;prog.classList.remove('drag');if(dur())video.currentTime=rOf(e)*dur();tick()});
   on(prog,'pointercancel',()=>{dragging=false;prog.classList.remove('drag')});
   on(video,'progress',buffered); on(video,'timeupdate',buffered);
   on(video,'loadedmetadata',()=>{tick();buffered()}); on(video,'durationchange',tick);
+  const marks=$('.rvp-marks');
+  const drawMarks=()=>{const d=dur();marks.innerHTML=d?(o.skips||[]).map(k=>`<i style="left:${Math.min(100,k.from/d*100)}%;width:${Math.max(.4,Math.min(100,(k.to-k.from)/d*100))}%" title="${esc(k.label)}"></i>`).join(''):''};
+  on(video,'durationchange',drawMarks); on(video,'loadedmetadata',drawMarks);
 
   /* --- reproducir / pausar --- */
   const toggle=()=>{if(video.ended)video.currentTime=0;video.paused?video.play().catch(()=>{}):video.pause()};
@@ -3014,7 +3042,7 @@ function rvPlayer(video){
 
   /* --- controles se esconden solos --- */
   const wake=()=>{root.classList.remove('idle');clearTimeout(idleT);idleT=setTimeout(maybeIdle,2800)};
-  const maybeIdle=()=>{if(video.paused||dragging||menuOpen()||rvp.querySelector('.rvp-ui:hover')){idleT=setTimeout(maybeIdle,1500);return}root.classList.add('idle')};
+  const maybeIdle=()=>{if(video.paused||dragging||menuOpen()||rvp.querySelector('.rvp-ui:hover')||(eps&&!eps.hidden)){idleT=setTimeout(maybeIdle,1500);return}root.classList.add('idle')};
   on(root,'pointermove',wake);on(root,'pointerdown',wake);on(root,'keydown',wake);
 
   /* --- botones --- */
@@ -3024,15 +3052,19 @@ function rvPlayer(video){
     if(a==='play')toggle();else if(a==='back')seek(-10);else if(a==='fwd')seek(10);else if(a==='mute')mute();
     else if(a==='full')toggleFS();else if(a==='speed')openMenu(mSp);
     else if(a==='cc'){if(tracks.length===1)toggleCC();else openMenu(mCC)}
+    else if(a==='eps')epsOpen(eps&&eps.hidden);else if(a==='epsx')epsOpen(false);
     if(e.detail)b.blur();
   });
   on(big,'click',()=>{toggle();if(big.blur)big.blur()});
 
   /* --- clic sobre el video --- */
   on(hit,'pointerdown',e=>{lastType=e.pointerType;wasIdle=root.classList.contains('idle')});
-  on(hit,'click',()=>{
+  on(hit,'click',event=>{
     if(menuOpen()){closeMenus();return}
     if(lastType==='touch'){
+      const now=Date.now(),x=(event&&event.clientX)||0;
+      if(now-lastTap<320&&Math.abs(x-lastX)<120){const d=x<rvp.clientWidth/2?-10:10;seek(d);flashIt(d);lastTap=0;return}
+      lastTap=now;lastX=x;
       if(wasIdle)wake();
       else if(!video.paused){root.classList.add('idle');clearTimeout(idleT)}
       return;
@@ -3057,16 +3089,42 @@ function rvPlayer(video){
       case 'm':case 'M':mute();break;
       case 'f':case 'F':toggleFS();break;
       case 'c':case 'C':if(tracks.length)toggleCC();break;
+      case 'Escape':if(eps&&!eps.hidden){epsOpen(false);break}used=false;break;
       default:used=false;
     }
     if(used){e.preventDefault();wake()}
   });
 
+  /* --- pantalla de carga: se va recién cuando el video arranca de verdad (nunca más la imagen quieta en pausa) --- */
+  const load=$('.rvp-load'), sound=$('.rvp-sound'), pinfo=$('.rvp-pinfo'), flash=$('.rvp-flash'), eps=$('.rvp-eps');
+  let started=false, autoTried=false, pinfoT=0;
+  rvp.classList.add('starting');
+  const ready=()=>{if(started)return;started=true;rvp.classList.remove('starting');load.classList.add('out');setTimeout(()=>load.remove(),700)};
+  on(video,'playing',ready);
+  on(video,'timeupdate',()=>{if(!started&&video.currentTime>0&&!video.paused)ready()});
+  // si el navegador no deja arrancar con sonido, arranca en silencio y ofrece activarlo
+  const tryPlay=()=>{if(autoTried||started)return;autoTried=true;
+    const p=video.play(); if(!p||!p.catch)return;
+    p.catch(err=>{ if(err&&err.name==='NotAllowedError'){ video.muted=true; video.play().then(()=>{sound.hidden=false}).catch(()=>{ready();rvp.classList.add('paused')}) } });
+  };
+  on(video,'canplay',tryPlay); on(video,'loadeddata',tryPlay);
+  on(sound,'click',e=>{e.stopPropagation();video.muted=false;if(video.volume===0)video.volume=.8;sound.hidden=true});
+  on(video,'volumechange',()=>{if(!video.muted)sound.hidden=true});
+  // en pausa, a los segundos aparece "Estás viendo" con la sinopsis (como Netflix); cualquier movimiento lo esconde
+  const pinfoArm=()=>{clearTimeout(pinfoT);pinfo.classList.remove('on');if(started&&video.paused&&!video.ended&&(o.desc||o.line))pinfoT=setTimeout(()=>{if(video.paused&&!menuOpen()&&!dragging)pinfo.classList.add('on')},4000)};
+  on(video,'pause',pinfoArm);on(video,'play',()=>{clearTimeout(pinfoT);pinfo.classList.remove('on')});
+  on(root,'pointermove',()=>{if(video.paused)pinfoArm()});
+  // lista de capítulos
+  const epsOpen=v=>{if(!eps)return;eps.hidden=!v;rvp.classList.toggle('eps-on',v);if(v){const c=eps.querySelector('.cur');if(c)c.scrollIntoView({block:'center'})}};
+  // doble toque a los costados en el celular: ±10 s
+  let lastTap=0,lastX=0;
+  const flashIt=d=>{flash.className='rvp-flash '+(d<0?'l':'r');flash.textContent=(d<0?'−':'+')+'10 s';void flash.offsetWidth;flash.classList.add('go')};
+
   /* --- cargando / error --- */
   const busy=v=>{clearTimeout(busyT);if(v)busyT=setTimeout(()=>rvp.classList.add('busy'),350);else rvp.classList.remove('busy')};
   on(video,'waiting',()=>busy(true));on(video,'seeking',()=>busy(true));
   ['playing','canplay','seeked','pause','loadeddata'].forEach(ev=>on(video,ev,()=>busy(false)));
-  on(video,'error',()=>{busy(false);err.textContent = /\.mkv(\?|#|$)/i.test(video.currentSrc||video.src||'') ? 'Este navegador no puede reproducir este archivo MKV (o su códec de video o audio). Probá con Chrome o Edge en la compu, o mirá en la app de la TV.' : 'No se pudo cargar el video.'; err.hidden=false});
+  on(video,'error',()=>{ready();busy(false);err.textContent = /\.mkv(\?|#|$)/i.test(video.currentSrc||video.src||'') ? 'Este navegador no puede reproducir este archivo MKV (o su códec de video o audio). Probá con Chrome o Edge en la compu, o mirá en la app de la TV.' : 'No se pudo cargar el video.'; err.hidden=false});
   on(video,'loadeddata',()=>{err.hidden=true});
   // Si el video corre pero el navegador no decodifica el audio (AC3 / E-AC3 / DTS / TrueHD), avisa claro en vez de quedar mudo.
   let audioChecked = false;
@@ -3076,7 +3134,7 @@ function rvPlayer(video){
   }, 3500); });
 
   syncVol();sync();bFull.innerHTML=I.fs;loadTracks();wake();
-  return {destroy(){L.forEach(([t,e,f,o])=>t.removeEventListener(e,f,o));cancelAnimationFrame(raf);clearTimeout(idleT);clearTimeout(clickT);clearTimeout(busyT);tracks.forEach(t=>{t.oncuechange=null});root.classList.remove('idle')}};
+  return {destroy(){L.forEach(([t,e,f,oo])=>t.removeEventListener(e,f,oo));cancelAnimationFrame(raf);clearTimeout(idleT);clearTimeout(clickT);clearTimeout(busyT);clearTimeout(pinfoT);clearTimeout(pvT);try{pv.removeAttribute('src');pv.load()}catch(_){}tracks.forEach(t=>{t.oncuechange=null});root.classList.remove('idle')}};
 }
 let playerRoot = null;
 let plSess = null;
@@ -3107,12 +3165,12 @@ function openPlayer({ url, tid, s: season, e: episode, x }){
   if (!playerRoot){ playerRoot = document.createElement('div'); playerRoot.id = 'playerRoot'; document.body.appendChild(playerRoot); }
   const media = emb.type === 'iframe'
     ? `<iframe src="${esc(emb.src)}" title="${esc(t?.title || 'Video')}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
-    : `<div class="rvp"><video id="plVideo" autoplay playsinline preload="metadata" ${subsUrl ? 'crossorigin="anonymous"' : ''} ${t?.backdrop ? `poster="${esc(t.backdrop)}"` : ''}>${subsUrl ? `<track kind="subtitles" src="${esc(subsUrl)}" srclang="es" label="Español" default>` : ''}</video></div>`;
+    : `<div class="rvp"><video id="plVideo" autoplay playsinline preload="auto" ${subsUrl ? 'crossorigin="anonymous"' : ''}>${subsUrl ? `<track kind="subtitles" src="${esc(subsUrl)}" srclang="es" label="Español" default>` : ''}</video></div>`;
   playerRoot.innerHTML = `<div class="player${native ? ' rv' : ''}" role="dialog" aria-modal="true" aria-label="Reproductor">
     <div class="pl-top">
       <button class="pl-btn" data-pl-close aria-label="Volver">←</button>
       <div class="pl-title">${t?.logo && safeUrl(t.logo) ? `<img class="pl-logo" src="${esc(t.logo)}" alt="${esc(t.title || '')}">` : `<strong>${esc(t?.title || '')}</strong>`}${sub ? `<span>${esc(sub)}</span>` : ''}</div>
-      ${nx ? `<button class="pl-next" data-pl-next="${esc(t.id)}" data-s="${esc(nx.s.number)}" data-e="${esc(nx.e.number)}">Siguiente episodio ›</button>` : ''}
+      ${nx && !native ? `<button class="pl-next" data-pl-next="${esc(t.id)}" data-s="${esc(nx.s.number)}" data-e="${esc(nx.e.number)}">Siguiente episodio ›</button>` : ''}
       <button class="pl-btn" data-pl-full aria-label="Pantalla completa">⛶</button>
     </div>
     <div class="pl-stage">${media}</div>
@@ -3137,9 +3195,24 @@ function openPlayer({ url, tid, s: season, e: episode, x }){
     else if (emb.type === 'ts') setTsSource(v, emb.src);
     else if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = emb.src;
     else loadHls().then(Hls => { if (!v.isConnected) return; const hls = new Hls(); hls.loadSource(emb.src); hls.attachMedia(v); v._hls = hls; }).catch(() => toast('No se pudo cargar el video', true));
-    const rv = rvPlayer(v);
     // volver al minuto donde lo dejaste, y guardar el minuto mientras mirás
     const saved = tid ? getPos(tid, season, season === '' ? null : episode) : null;
+    // datos para la pantalla de carga, la pausa ("Estás viendo") y la lista de capítulos
+    const isEp = t && t.type === 'serie' && season !== '' && season != null && !x;
+    const curEp = isEp ? flatEpisodes(t).find(z => +z.s.number === +season && +z.e.number === +episode) : null;
+    const xe = x && t ? (t.seasons || []).find(z => +z.number === +xsn)?.extras?.[+xi] : null;
+    const curSeason = curEp ? curEp.s : null;
+    const rv = rvPlayer(v, {
+      tid: t?.id || '', name: t?.title || '', logo: safeUrl(t?.logo),
+      bg: safeUrl(t?.playerBg) || safeUrl(t?.backdrop) || safeUrl(t?.bannerImage) || safeUrl(t?.poster),
+      line: sub, desc: (curEp ? curEp.e.description : xe ? xe.description : t?.description) || '',
+      mid: t ? `<b>${esc(t.title || '')}</b>${isEp ? ' · T' + esc(season) + ':E' + esc(episode) : x ? ' · Extra' : ''}` : '',
+      resumeAt: posResumable(saved) ? saved.t : 0, skips,
+      next: nx ? { s: nx.s.number, e: nx.e.number } : null,
+      epsTitle: curSeason ? (curSeason.title ? curSeason.title : 'Temporada ' + curSeason.number) : '',
+      eps: curSeason ? (curSeason.episodes || []).map(e => ({ s: curSeason.number, n: e.number, title: e.title, dur: e.duration, desc: e.description, thumb: safeUrl(e.thumb),
+        cur: +e.number === +episode, soon: itemSoon(t, curSeason, e), ok: !!safeUrl(e.url) && !itemSoon(t, curSeason, e) })) : []
+    });
     let isReady = false;
     v.addEventListener('loadedmetadata', () => {
       if (posResumable(saved) && v.duration && saved.t < v.duration - 45) v.currentTime = saved.t;
