@@ -2835,6 +2835,8 @@ function embedFor(url){
   if (/\.(mp4|webm|ogv|ogg|mov|m4v|mkv)$/i.test(u.pathname)) return { type:'video', src:url, mkv:/\.mkv$/i.test(u.pathname) };
   if (/\.m3u8$/i.test(u.pathname)) return { type:'hls', src:url };
   if (/\.(ts|m2ts|mts)$/i.test(u.pathname)) return { type:'ts', src:url };
+  // archivos propios (Cloudflare R2): siempre dentro del reproductor, nunca sueltos en una pestaña
+  if (/\.r2\.dev$|\.r2\.cloudflarestorage\.com$/i.test(u.hostname)) return { type:'video', src:url };
   return { type:'iframe', src:url, generic:true };
 }
 let hlsLoading = null;
@@ -2878,6 +2880,8 @@ function nextAfter(t, season, episode){
 function rvPlayer(video, o = {}){
   const rvp = video.parentElement, root = video.closest('.player') || rvp;
   video.controls = false; video.removeAttribute('controls');
+  // el enlace del archivo no se ofrece: sin menú de clic derecho, sin descargar ni transmitir desde el navegador
+  video.setAttribute('controlsList', 'nodownload noremoteplayback'); video.disableRemotePlayback = true; video.setAttribute('draggable', 'false');
   const I = {
     play:'<svg viewBox="0 0 24 24"><path d="M7 4.8v14.4a.7.7 0 0 0 1 .6l12-7.2a.7.7 0 0 0 0-1.2L8 4.2a.7.7 0 0 0-1 .6z" fill="currentColor" stroke="none"/></svg>',
     pause:'<svg viewBox="0 0 24 24"><rect x="6" y="4.5" width="4.2" height="15" rx="1.3" fill="currentColor" stroke="none"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.3" fill="currentColor" stroke="none"/></svg>',
@@ -2941,6 +2945,7 @@ function rvPlayer(video, o = {}){
   const mCC=$('[data-menu=cc]'), mSp=$('[data-menu=speed]');
 
   const L=[]; const on=(t,e,f,o)=>{t.addEventListener(e,f,o);L.push([t,e,f,o])};
+  on(rvp,'contextmenu',e=>e.preventDefault()); on(rvp,'dragstart',e=>e.preventDefault());
   let dragging=false, dragRatio=0, raf=0, idleT=0, clickT=0, busyT=0, lastType='mouse', wasIdle=false;
   const fmt=t=>{if(!isFinite(t)||t<0)t=0;t=Math.floor(t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')};
   const dur=()=>isFinite(video.duration)?video.duration:0;
@@ -3174,7 +3179,7 @@ function openPlayer({ url, tid, s: season, e: episode, x }){
       <button class="pl-btn" data-pl-full aria-label="Pantalla completa">⛶</button>
     </div>
     <div class="pl-stage">${media}</div>
-    ${emb.generic ? `<p class="pl-note">Si el video no carga, <a href="${esc(url)}" target="_blank" rel="noopener">abrilo en otra pestaña</a>.</p>` : ''}
+    ${emb.generic && !/\.r2\.dev\//i.test(url) ? `<p class="pl-note">Si el video no carga, <a href="${esc(url)}" target="_blank" rel="noopener">abrilo en otra pestaña</a>.</p>` : ''}
   </div>`;
   document.body.style.overflow = 'hidden';
   if (!S.playerOpen){ history.pushState({ player:true }, '', location.pathname); }
@@ -3289,7 +3294,7 @@ function openTrailer(id){
   const box = document.createElement('div'); box.className = 'trailer-pop'; box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true'); box.setAttribute('aria-label','Tráiler de ' + (t.title||''));
   const media = emb.type === 'iframe'
     ? `<iframe src="${esc(emb.src)}" title="Tráiler" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
-    : `<video controls autoplay playsinline ${emb.type === 'ts' ? '' : `src="${esc(emb.src)}"`}></video>`;
+    : `<video controls controlsList="nodownload noremoteplayback" disableRemotePlayback autoplay playsinline oncontextmenu="return false" ${emb.type === 'ts' ? '' : `src="${esc(emb.src)}"`}></video>`;
   box.innerHTML = `<div class="tp-card"><div class="tp-head"><strong>Tráiler · ${esc(t.title||'')}</strong><button class="pl-btn" data-trailer-close aria-label="Cerrar">✕</button></div><div class="tp-frame">${media}</div></div>`;
   document.body.appendChild(box); document.body.style.overflow = 'hidden';
   const v = box.querySelector('video');
