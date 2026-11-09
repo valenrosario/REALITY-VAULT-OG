@@ -445,41 +445,75 @@ function logoFallbacks(root){
 function mobileChips(active){
   const items = [['home','/','Todo'],['series','/series','Series'],['peliculas','/peliculas','Películas'],['mi-lista','/mi-lista','Mi lista']];
   // categorías con óvalo deslizante ("Tabs sliding" de transitions.dev); el movimiento lo hace slideChips() después de dibujar
-  return `<nav class="m-chips" aria-label="Secciones"><div class="t-tabs"><span class="t-tabs-pill" aria-hidden="true"></span>${items.map(([k,h,l]) => `<a href="${h}" class="t-tab m-chip ${k===active?'on':''}" ${k===active?'aria-current="page"':''}>${l}</a>`).join('')}</div></nav>`;
+  return `<nav class="m-chips" aria-label="Secciones"><div class="t-tabs">${pillMarkup('t-tabs-pill')}${items.map(([k,h,l]) => `<a href="${h}" class="t-tab m-chip ${k===active?'on':''}" ${k===active?'aria-current="page"':''}>${l}</a>`).join('')}</div></nav>`;
 }
 let chipPrev = null;
 // movimiento tipo Apple: los dos bordes del óvalo son resortes separados. El borde que va adelante
 // es más firme y sale primero; el de atrás lo sigue más blando, así el óvalo se estira en el camino,
 // rebota apenas al llegar y se vuelve a cerrar (como el toggle de iOS).
+// El recorrido se calcula entero de antemano y se le pasa al navegador como animación de transform
+// (dos tapas redondas + un centro que se estira), así corre en la placa de video y no se traba
+// mientras la página nueva se arma.
 const SPRING_LEAD = { k: 520, c: 2 * .72 * Math.sqrt(520) }, SPRING_TRAIL = { k: 250, c: 2 * .82 * Math.sqrt(250) };
-let chipAnim = null;
+function pillMarkup(cls){ return `<span class="${cls} sp-pill" aria-hidden="true"><i class="sp-l"></i><i class="sp-m"></i><i class="sp-r"></i></span>`; }
+function pillDraw(pill, l, r){
+  const h = pill.offsetHeight || 38, w = Math.max(0, r - l - h);
+  return [`translateX(${l}px)`, `translateX(${l + h / 2}px) scaleX(${w / 100})`, `translateX(${Math.max(l, r - h)}px)`];
+}
+// st = { l, r, vl, vr } (lo que quedó de la vez anterior); devuelve el estado nuevo
+function pillTo(pill, st, l, r){
+  const parts = [...pill.children];
+  pill.getAnimations({ subtree: true }).forEach(x => x.cancel());
+  const set = (L, R) => pillDraw(pill, L, R).forEach((t, i) => parts[i].style.transform = t);
+  if (!st || matchMedia('(prefers-reduced-motion: reduce)').matches){ set(l, r); return { l, r, vl: 0, vr: 0 }; }
+  const right = l > st.l, dt = 1 / 120;
+  const L = { x: st.l, v: st.vl || 0, to: l, s: right ? SPRING_TRAIL : SPRING_LEAD };
+  const R = { x: st.r, v: st.vr || 0, to: r, s: right ? SPRING_LEAD : SPRING_TRAIL };
+  const frames = [[L.x, R.x]];
+  for (let n = 0; n < 240; n++){   // hasta 2 s, pero casi siempre se acomoda en ~0,5 s
+    for (const e of [L, R]){ const acc = -e.s.k * (e.x - e.to) - e.s.c * e.v; e.v += acc * dt; e.x += e.v * dt; }
+    frames.push([L.x, R.x]);
+    if (Math.abs(L.x - l) < .25 && Math.abs(R.x - r) < .25 && Math.abs(L.v) < 3 && Math.abs(R.v) < 3) break;
+  }
+  frames.push([l, r]);
+  const kf = frames.map(([a, b]) => pillDraw(pill, a, b));
+  const dur = frames.length * dt * 1000, t0 = performance.now();
+  parts.forEach((p, i) => { p.style.transform = kf[kf.length - 1][i]; p.animate(kf.map(f => ({ transform: f[i] })), { duration: dur, easing: 'linear' }); });
+  // si lo vuelven a tocar a mitad de camino, arranca desde donde iba y con la velocidad que llevaba
+  return { l, r, vl: 0, vr: 0, frames, t0, dt, get now(){
+    const i = Math.min(frames.length - 1, Math.floor((performance.now() - t0) / 1000 / dt));
+    if (i >= frames.length - 1) return { l, r, vl: 0, vr: 0 };
+    const [a, b] = frames[i], [a2, b2] = frames[Math.min(i + 1, frames.length - 1)];
+    return { l: a, r: b, vl: (a2 - a) / dt, vr: (b2 - b) / dt };
+  } };
+}
 function slideChips(){
   const bar = document.querySelector('.m-chips .t-tabs'); if (!bar) return;
   const pill = bar.querySelector('.t-tabs-pill'), tab = bar.querySelector('.t-tab.on');
-  if (!pill || !tab){ if (pill) pill.style.width = '0'; return; }
-  const draw = (l, r) => { pill.style.transform = `translateX(${l}px)`; pill.style.width = Math.max(0, r - l) + 'px'; };
-  const tl = tab.offsetLeft, tr = tl + tab.offsetWidth, from = chipPrev;
-  chipPrev = { l: tl, r: tr };
+  if (!pill || !tab){ if (pill) pill.style.visibility = 'hidden'; return; }
+  const tl = tab.offsetLeft, tr = tl + tab.offsetWidth, from = chipPrev && (chipPrev.now || chipPrev);
   const sc = bar.parentElement; if (sc) sc.scrollTo({ left: Math.max(0, tl - 56), behavior: from ? 'smooth' : 'auto' });
-  cancelAnimationFrame(chipAnim);
-  if (!from || matchMedia('(prefers-reduced-motion: reduce)').matches){ draw(tl, tr); return; }
-  const right = tl > from.l;   // hacia dónde va
-  const L = { x: from.l, v: 0, to: tl, s: right ? SPRING_TRAIL : SPRING_LEAD };
-  const R = { x: from.r, v: 0, to: tr, s: right ? SPRING_LEAD : SPRING_TRAIL };
-  draw(L.x, R.x);
-  let prev = 0;
-  const step = t => {
-    const dt = prev ? Math.min(.032, (t - prev) / 1000) : 1 / 60; prev = t;
-    let moving = false;
-    for (const e of [L, R]){
-      for (let i = 0; i < 4; i++){ const h = dt / 4; const a = -e.s.k * (e.x - e.to) - e.s.c * e.v; e.v += a * h; e.x += e.v * h; }
-      if (Math.abs(e.x - e.to) > .3 || Math.abs(e.v) > 4) moving = true; else { e.x = e.to; e.v = 0; }
-    }
-    draw(L.x, R.x);
-    if (moving) chipAnim = requestAnimationFrame(step);
-  };
-  chipAnim = requestAnimationFrame(step);
+  chipPrev = pillTo(pill, from && from.l === tl && from.r === tr ? null : from, tl, tr);
 }
+// barra de arriba en compu: el mismo óvalo amarillo detrás de la sección en la que estás
+let navPrev = null;
+function slideNav(){
+  const nav = document.querySelector('header .nav'); if (!nav) return;
+  let pill = nav.querySelector('.nav-pill');
+  if (!pill){ nav.insertAdjacentHTML('afterbegin', pillMarkup('nav-pill')); pill = nav.querySelector('.nav-pill'); }
+  const a = nav.querySelector('a[aria-current="page"]:not([hidden])');
+  if (!a || !a.offsetWidth){ pill.style.visibility = 'hidden'; navPrev = null; return; }
+  pill.style.visibility = ''; pill.style.top = a.offsetTop + 'px'; pill.style.height = a.offsetHeight + 'px';
+  const l = a.offsetLeft, r = l + a.offsetWidth, from = navPrev && (navPrev.now || navPrev);
+  if (navPrev && navPrev.l === l && navPrev.r === r) return;   // ya va (o ya está) ahí
+  navPrev = pillTo(pill, from, l, r);
+}
+// arranca apenas tocás, sin esperar a que se arme la página nueva
+document.addEventListener('click', e => {
+  const a = e.target.closest?.('header .nav a[data-r]'); if (!a || e.button || e.metaKey || e.ctrlKey || e.shiftKey) return;
+  a.parentElement.querySelectorAll('a').forEach(x => x === a ? x.setAttribute('aria-current', 'page') : x.removeAttribute('aria-current'));
+  slideNav();
+}, true);
 // reparte las colecciones entre las filas (una cada tanto), en vez de apilarlas todas juntas
 function mixColls(rows, colls){
   if (!colls.length) return rows.join('');
@@ -3693,7 +3727,7 @@ function render(){
   const landNow = isLanding();
   if (landNow && app.firstElementChild && app.firstElementChild.classList.contains('landing')){ const tpl = document.createElement('div'); tpl.innerHTML = html; try { morph(app, tpl); } catch { app.innerHTML = html; } }
   else app.innerHTML = html + (S.route==='admin' || landNow ? '' : renderFooter());
-  hydrate(app); logoFallbacks(app); applyTints(app); startHero(); startLanding(); slideChips();
+  hydrate(app); logoFallbacks(app); applyTints(app); startHero(); startLanding(); slideChips(); slideNav();
 }
 
 document.getElementById('q').addEventListener('input', e => { S.q = e.target.value; if (S.route==='admin'){ history.pushState(null,'','/'); S.route='home'; } render(); });

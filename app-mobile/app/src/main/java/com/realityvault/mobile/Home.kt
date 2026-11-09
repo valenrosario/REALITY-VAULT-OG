@@ -229,21 +229,36 @@ private fun TopIcons(nav: Nav) {
 private val springLead = androidx.compose.animation.core.spring<Float>(dampingRatio = .72f, stiffness = 520f)
 private val springTrail = androidx.compose.animation.core.spring<Float>(dampingRatio = .82f, stiffness = 250f)
 
+/* El inicio se vuelve a armar entero al cambiar de categoría (y la barra fija de arriba es otra copia),
+   así que el óvalo no puede vivir adentro de Tabs: se reiniciaba y saltaba sin animarse. Vive en el inicio
+   y todas las copias de la barra lo comparten. */
+class TabsPill {
+    val pl = androidx.compose.animation.core.Animatable(0f)
+    val pr = androidx.compose.animation.core.Animatable(0f)
+    var placed by mutableStateOf(false)
+    var at: Pair<Int, Int>? = null
+    val scroll = androidx.compose.foundation.ScrollState(0)
+}
+val LocalTabsPill = androidx.compose.runtime.staticCompositionLocalOf { TabsPill() }
+
 @Composable
 private fun Tabs(tabs: List<String>, selected: String, onSelect: (String) -> Unit) {
-    val scroll = androidx.compose.foundation.rememberScrollState()
+    val st = LocalTabsPill.current
+    val scroll = st.scroll
     val density = androidx.compose.ui.platform.LocalDensity.current
     val pos = remember { androidx.compose.runtime.mutableStateMapOf<String, Pair<Int, Int>>() }   // izquierda y ancho en px
     val sel = pos[selected]
     val ease = androidx.compose.animation.core.CubicBezierEasing(.22f, 1f, .36f, 1f)
     // movimiento tipo Apple: cada borde del óvalo es un resorte; el de adelante sale firme y el de atrás lo
     // sigue más blando, así se estira en el camino, rebota apenas y se vuelve a cerrar (como el toggle de iOS)
-    val pl = remember { androidx.compose.animation.core.Animatable(0f) }
-    val pr = remember { androidx.compose.animation.core.Animatable(0f) }
-    var placed by remember { mutableStateOf(false) }
+    val pl = st.pl
+    val pr = st.pr
+    val placed = st.placed
     LaunchedEffect(sel) {
         val (l, w) = sel ?: return@LaunchedEffect
-        if (!placed) { pl.snapTo(l.toFloat()); pr.snapTo((l + w).toFloat()); placed = true }   // primera vez: sin animación
+        if (st.at == sel) return@LaunchedEffect   // otra copia de la barra ya lo está moviendo ahí
+        st.at = sel
+        if (!st.placed) { pl.snapTo(l.toFloat()); pr.snapTo((l + w).toFloat()); st.placed = true }   // primera vez: sin animación
         else {
             val right = l > pl.value
             launch { pl.animateTo(l.toFloat(), if (right) springTrail else springLead) }
@@ -282,11 +297,13 @@ fun HomeScreen(nav: Nav) {
     val all = remember(tab, Store.titles, Store.banners) { slides(tabMatch(tab)) }
     val rows = remember(tab, Store.titles, Store.myList, Store.progress, Store.colls, Store.top10, Store.featRows) { homeRows(tab) }
     if (Store.published().isEmpty()) { Empty("Todavía no hay títulos publicados."); return }
+    val pillState = remember { TabsPill() }
     val listState = nav.memory.list("home")
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val scope = rememberCoroutineScope()
     val pick: (String) -> Unit = { tb -> if (tb != tab) { tab = tb; nav.memory.text["homeTab"] = tb; scope.launch { listState.scrollToItem(0) } } }
 
+    androidx.compose.runtime.CompositionLocalProvider(LocalTabsPill provides pillState) {
     Box(Modifier.fillMaxSize()) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottom + 96.dp)) {
             item(key = "hero-$tab") {
@@ -302,6 +319,7 @@ fun HomeScreen(nav: Nav) {
                 TopIcons(nav); Spacer(Modifier.height(4.dp)); Tabs(tabs, tab, pick)
             }
         }
+    }
     }
 }
 
