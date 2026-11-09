@@ -68,6 +68,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.focus.onFocusChanged
@@ -1073,9 +1075,8 @@ fun DetailScreen(id: String, nav: Nav) {
                 // portada a pantalla completa
                 item(key = "hero") {
                     Box(Modifier.fillMaxWidth().height(screenH - 30.dp).onFocusChanged { heroFocused = it.hasFocus }) {
-                        if (t.tvBg.isNotBlank()) Img(t.tvBg, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
-                        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .8f), .36f to Color.Black.copy(alpha = .45f), .58f to Color.Transparent)))
-                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .42f to Color.Transparent, .68f to tint.copy(alpha = .75f), .88f to tint, 1f to tint)))
+                        if (t.tvBg.isNotBlank()) AppleBlurBg(t.tvBg, tint)
+                        else Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .5f to Color.Transparent, 1f to tint)))
                         Column(Modifier.align(Alignment.BottomStart).padding(start = 48.dp, bottom = 80.dp).width(540.dp)) {
                             TitleLogo(t, 320.dp, 100.dp, 40)
                             Spacer(Modifier.height(12.dp))
@@ -1378,5 +1379,42 @@ class RowSwap(private val state: LazyListState, private val scope: kotlinx.corou
             scope.launch { fade.snapTo(1f); fade.animateTo(0f, tween(260)) }
         }
         curBg = bg
+    }
+}
+
+/**
+ * Fondo de la ficha con el desenfoque de Apple TV: en vez de pintar capas oscuras encima, la misma imagen
+ * se va desenfocando de a poco hacia abajo (nítida arriba, cada vez más suave detrás del texto), así
+ * conserva sus colores. Son varias copias de la imagen, cada una más desenfocada y visible desde más
+ * abajo, que se funden entre sí sin escalones. Encima, solo una sombra leve para que el texto se lea y,
+ * en el borde de abajo, el paso al color de la página. El desenfoque necesita Android 12+; en equipos
+ * más viejos se usa en su lugar un oscurecimiento suave del color de la serie.
+ */
+@Composable
+fun AppleBlurBg(url: String, tint: Color) {
+    val canBlur = android.os.Build.VERSION.SDK_INT >= 31
+    Box(Modifier.fillMaxSize()) {
+        Img(url, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
+        if (canBlur) {
+            // (desenfoque en dp, empieza a verse, ya se ve entera) — de arriba hacia abajo
+            listOf(Triple(3f, .40f, .60f), Triple(7f, .48f, .70f), Triple(13f, .56f, .80f), Triple(22f, .64f, .90f), Triple(34f, .72f, 1f)).forEach { (r, a, b) ->
+                Img(url, Modifier.fillMaxSize()
+                    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(Brush.verticalGradient(a to Color.Transparent, b to Color.Black), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                    }
+                    .blur(r.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Rectangle),
+                    alignment = Alignment.TopCenter)
+            }
+            // sombra leve (abajo y a la izquierda) solo para que el texto se lea
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(.40f to Color.Transparent, .62f to Color.Black.copy(alpha = .18f), 1f to Color.Black.copy(alpha = .42f))))
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .26f), .55f to Color.Transparent)))
+            // el último tramo se funde con el color de la página, para que no haya un corte con los capítulos
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(.86f to Color.Transparent, 1f to tint)))
+        } else {
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .7f), .4f to Color.Black.copy(alpha = .35f), .6f to Color.Transparent)))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .45f to Color.Transparent, .72f to tint.copy(alpha = .7f), 1f to tint)))
+        }
     }
 }
