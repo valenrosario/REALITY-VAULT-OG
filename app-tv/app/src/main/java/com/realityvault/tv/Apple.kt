@@ -1388,82 +1388,137 @@ class RowSwap(private val state: LazyListState, private val scope: kotlinx.corou
 
 /* ---------------- desenfoque tipo Apple TV ---------------- */
 
-/**
- * Desenfoque hecho UNA vez, sobre una copia chiquita de la imagen (cuadro con el desenfoque ya
- * aplicado, que después se agranda suave). Es mucho más liviano que desenfocar la pantalla entera en
- * cada cuadro, anda en cualquier versión de Android y se guarda en caché como cualquier imagen.
+/*
+ * Para que sea súper fluido, el desenfoque NO se dibuja en vivo: se arma UNA sola imagen final (la
+ * portada ya desenfocada hacia abajo, con su sombra y su borde de abajo desvanecido) en segundo plano,
+ * apenas se abre la ficha, y queda guardada en caché. En pantalla es una imagen común: cero capas,
+ * cero máscaras, cero desenfoque en cada cuadro. Lo mismo con el fondo de la página. Anda igual en
+ * cualquier versión de Android.
  */
-class SoftBlur(private val radius: Int) : coil.transform.Transformation {
-    override val cacheKey = "softblur-$radius"
-    override suspend fun transform(input: android.graphics.Bitmap, size: coil.size.Size): android.graphics.Bitmap {
-        val w = input.width; val h = input.height
-        val src = input.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
-        val px = IntArray(w * h); src.getPixels(px, 0, w, 0, 0, w, h)
+private object Blur {
+    /** Desenfoque tipo gaussiano (3 pasadas de caja) sobre los pixeles. */
+    fun gauss(px: IntArray, w: Int, h: Int, r: Int) {
         val tmp = IntArray(w * h)
-        repeat(3) { box(px, tmp, w, h, radius, true); box(tmp, px, w, h, radius, false) }   // 3 pasadas ≈ desenfoque gaussiano
-        return android.graphics.Bitmap.createBitmap(px, w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        repeat(3) { box(px, tmp, w, h, r, true); box(tmp, px, w, h, r, false) }
     }
     private fun box(inp: IntArray, out: IntArray, w: Int, h: Int, r: Int, horiz: Boolean) {
         val n = if (horiz) w else h; val lines = if (horiz) h else w; val div = 2 * r + 1
         for (l in 0 until lines) {
-            fun at(i: Int): Int { val c = i.coerceIn(0, n - 1); return if (horiz) l * w + c else c * w + l }
-            var sa = 0; var sr = 0; var sg = 0; var sb = 0
-            for (i in -r..r) { val p = inp[at(i)]; sa += p ushr 24; sr += (p shr 16) and 255; sg += (p shr 8) and 255; sb += p and 255 }
+            val base = if (horiz) l * w else l; val step = if (horiz) 1 else w
+            fun at(i: Int) = base + i.coerceIn(0, n - 1) * step
+            var sr = 0; var sg = 0; var sb = 0
+            for (i in -r..r) { val p = inp[at(i)]; sr += (p shr 16) and 255; sg += (p shr 8) and 255; sb += p and 255 }
             for (i in 0 until n) {
-                out[at(i)] = ((sa / div) shl 24) or ((sr / div) shl 16) or ((sg / div) shl 8) or (sb / div)
+                out[base + i * step] = (0xFF shl 24) or ((sr / div) shl 16) or ((sg / div) shl 8) or (sb / div)
                 val pa = inp[at(i + r + 1)]; val pr = inp[at(i - r)]
-                sa += (pa ushr 24) - (pr ushr 24); sr += ((pa shr 16) and 255) - ((pr shr 16) and 255)
+                sr += ((pa shr 16) and 255) - ((pr shr 16) and 255)
                 sg += ((pa shr 8) and 255) - ((pr shr 8) and 255); sb += (pa and 255) - (pr and 255)
             }
         }
     }
+    /** Recorta como ContentScale.Crop alineado arriba al centro, a w×h exactos. */
+    fun cover(src: android.graphics.Bitmap, w: Int, h: Int): android.graphics.Bitmap {
+        val s = maxOf(w / src.width.toFloat(), h / src.height.toFloat())
+        val sw = maxOf(w, kotlin.math.ceil(src.width * s).toInt()); val sh = maxOf(h, kotlin.math.ceil(src.height * s).toInt())
+        val sc = android.graphics.Bitmap.createScaledBitmap(src, sw, sh, true)
+        return android.graphics.Bitmap.createBitmap(sc, (sw - w) / 2, 0, w, h)
+    }
+    /** La imagen achicada a ancho sw, desenfocada y vuelta a agrandar a w×h (pixeles). */
+    fun level(img: android.graphics.Bitmap, w: Int, h: Int, sw: Int, r: Int): IntArray {
+        val shh = maxOf(2, sw * h / w)
+        val small = android.graphics.Bitmap.createScaledBitmap(img, sw, shh, true)
+        val px = IntArray(sw * shh); small.getPixels(px, 0, sw, 0, 0, sw, shh)
+        gauss(px, sw, shh, r)
+        val big = android.graphics.Bitmap.createScaledBitmap(android.graphics.Bitmap.createBitmap(px, sw, shh, android.graphics.Bitmap.Config.ARGB_8888), w, h, true)
+        val out = IntArray(w * h); big.getPixels(out, 0, w, 0, 0, w, h); return out
+    }
+    fun ramp(t: Float, a: Float, b: Float) = ((t - a) / (b - a)).coerceIn(0f, 1f).let { it * it * (3 - 2 * it) }
 }
 
-/** La imagen ya desenfocada (w = ancho de la copia chica: cuanto más chica, más desenfocada). */
+/** Portada final: nítida arriba, cada vez más desenfocada hacia abajo, sombra leve y borde de abajo desvanecido. */
+private class AppleHeroT(private val w: Int, private val h: Int) : coil.transform.Transformation {
+    override val cacheKey = "applehero-$w-$h-v1"
+    override suspend fun transform(input: android.graphics.Bitmap, size: coil.size.Size): android.graphics.Bitmap {
+        val img = Blur.cover(input.copy(android.graphics.Bitmap.Config.ARGB_8888, false), w, h)
+        val px = IntArray(w * h); img.getPixels(px, 0, w, 0, 0, w, h)
+        // (copia chica, radio, empieza, ya se ve entera): de más leve a más fuerte
+        val l1 = Blur.level(img, w, h, w / 4, 2); val l2 = Blur.level(img, w, h, w / 8, 3); val l3 = Blur.level(img, w, h, w / 13, 3)
+        // sombra de la izquierda, igual para todas las filas
+        val keepX = FloatArray(w) { x -> val tx = x / (w - 1f); if (tx < .55f) 1f - .26f * (1f - tx / .55f) else 1f }
+        for (y in 0 until h) {
+            val ty = y / (h - 1f)
+            val m1 = Blur.ramp(ty, .36f, .62f); val m2 = Blur.ramp(ty, .52f, .82f); val m3 = Blur.ramp(ty, .68f, .96f)
+            val shadeY = when { ty < .38f -> 0f; ty < .62f -> .2f * Blur.ramp(ty, .38f, .62f); else -> .2f + .22f * ((ty - .62f) / .38f) }
+            val a = ((1f - Blur.ramp(ty, .78f, 1f)) * 255).toInt() shl 24
+            val row = y * w
+            for (x in 0 until w) {
+                val i = row + x
+                var p = px[i]
+                var r = ((p shr 16) and 255).toFloat(); var g = ((p shr 8) and 255).toFloat(); var b = (p and 255).toFloat()
+                if (m1 > 0f) { p = l1[i]; r += (((p shr 16) and 255) - r) * m1; g += (((p shr 8) and 255) - g) * m1; b += ((p and 255) - b) * m1 }
+                if (m2 > 0f) { p = l2[i]; r += (((p shr 16) and 255) - r) * m2; g += (((p shr 8) and 255) - g) * m2; b += ((p and 255) - b) * m2 }
+                if (m3 > 0f) { p = l3[i]; r += (((p shr 16) and 255) - r) * m3; g += (((p shr 8) and 255) - g) * m3; b += ((p and 255) - b) * m3 }
+                val keep = (1f - shadeY) * keepX[x]
+                px[i] = a or ((r * keep).toInt().coerceIn(0, 255) shl 16) or ((g * keep).toInt().coerceIn(0, 255) shl 8) or (b * keep).toInt().coerceIn(0, 255)
+            }
+        }
+        return android.graphics.Bitmap.createBitmap(px, w, h, android.graphics.Bitmap.Config.ARGB_8888)
+    }
+}
+
+/** Fondo de toda la página: la imagen muy desenfocada, oscurecida igual que el pie de la portada. */
+private class ApplePageT : coil.transform.Transformation {
+    override val cacheKey = "applepage-v1"
+    override suspend fun transform(input: android.graphics.Bitmap, size: coil.size.Size): android.graphics.Bitmap {
+        val w = 160; val h = 90
+        val img = Blur.cover(input.copy(android.graphics.Bitmap.Config.ARGB_8888, false), w, h)
+        val px = IntArray(w * h); img.getPixels(px, 0, w, 0, 0, w, h)
+        Blur.gauss(px, w, h, 3)
+        for (y in 0 until h) for (x in 0 until w) {
+            val i = y * w + x; val tx = x / (w - 1f)
+            val keep = .58f * (if (tx < .55f) 1f - .26f * (1f - tx / .55f) else 1f)
+            val p = px[i]
+            px[i] = (0xFF shl 24) or (((p shr 16) and 255) * keep).toInt().shl(16) or ((((p shr 8) and 255) * keep).toInt() shl 8) or ((p and 255) * keep).toInt()
+        }
+        return android.graphics.Bitmap.createBitmap(px, w, h, android.graphics.Bitmap.Config.ARGB_8888)
+    }
+}
+
 @Composable
-fun BlurImg(url: String, w: Int, radius: Int, modifier: Modifier = Modifier) {
+fun BlurPageBg(url: String) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     coil.compose.AsyncImage(
-        model = remember(url, w, radius) {
-            ImageRequest.Builder(ctx).data(url).size(w, (w * 9) / 16).scale(coil.size.Scale.FILL).precision(coil.size.Precision.EXACT)
-                .transformations(SoftBlur(radius)).crossfade(220).build()
-        },
-        contentDescription = null, contentScale = ContentScale.Crop, alignment = Alignment.TopCenter,
-        filterQuality = androidx.compose.ui.graphics.FilterQuality.High, modifier = modifier
+        model = remember(url) { ImageRequest.Builder(ctx).data(url).size(480, 270).transformations(ApplePageT()).crossfade(200).build() },
+        contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()
     )
 }
 
-private fun Modifier.fadeMask(a: Float, b: Float, inverse: Boolean = false) = this
-    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
-    .drawWithContent {
-        drawContent()
-        drawRect(Brush.verticalGradient(a to (if (inverse) Color.Black else Color.Transparent), b to (if (inverse) Color.Transparent else Color.Black)), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
-    }
-
-/** Fondo fijo de toda la ficha: la imagen muy desenfocada, un poco oscurecida para que todo se lea. */
-@Composable
-fun BlurPageBg(url: String) {
-    Box(Modifier.fillMaxSize()) {
-        BlurImg(url, 64, 2, Modifier.fillMaxSize())
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .42f)))
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .26f), .55f to Color.Transparent)))
-    }
-}
-
 /**
- * Portada de la ficha con el desenfoque de Apple TV: nítida arriba y cada vez más desenfocada hacia abajo
- * (sin pintar capas oscuras encima, así conserva sus colores), y en el último tramo se desvanece sobre el
- * fondo de la página, que es la misma imagen desenfocada: no hay ningún borde donde termine la imagen.
+ * Portada de la ficha con el desenfoque de Apple TV (nítida arriba, desenfocada hacia abajo, sin capas
+ * oscuras) que se desvanece sobre el fondo de la página: nunca se ve dónde termina la imagen.
  */
 @Composable
-fun AppleBlurBg(url: String, tint: Color) {
-    Box(Modifier.fillMaxSize().fadeMask(.78f, 1f, inverse = true)) {
-        Img(url, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
-        BlurImg(url, 360, 2, Modifier.fillMaxSize().fadeMask(.36f, .62f))
-        BlurImg(url, 140, 2, Modifier.fillMaxSize().fadeMask(.52f, .82f))
-        BlurImg(url, 64, 2, Modifier.fillMaxSize().fadeMask(.68f, .96f))
-        // sombra leve (abajo y a la izquierda) solo para que el texto se lea; abajo coincide con el fondo
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(.38f to Color.Transparent, .62f to Color.Black.copy(alpha = .2f), 1f to Color.Black.copy(alpha = .42f))))
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .26f), .55f to Color.Transparent)))
+fun AppleBlurBg(url: String, @Suppress("UNUSED_PARAMETER") tint: Color) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        // a la resolución real de la pantalla (hasta 1920 de ancho), así arriba se ve tan nítida como antes
+        val w = constraints.maxWidth.coerceIn(640, 1920)
+        val h = (w.toLong() * constraints.maxHeight / constraints.maxWidth.coerceAtLeast(1)).toInt().coerceIn(360, 1920)
+        var ready by remember(url) { mutableStateOf(false) }
+        var swapped by remember(url) { mutableStateOf(false) }
+        LaunchedEffect(ready) { if (ready) { delay(260); swapped = true } }
+        // mientras se arma la versión final (una fracción de segundo, una sola vez por título) se ve la imagen común
+        // (con el borde de abajo desvanecido, para que tampoco en ese instante se vea dónde termina)
+        if (!swapped) Img(url, Modifier.fillMaxSize()
+            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+            .drawWithContent { drawContent(); drawRect(Brush.verticalGradient(.62f to Color.Black, 1f to Color.Transparent), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn) },
+            alignment = Alignment.TopCenter, crossfade = false)
+        coil.compose.AsyncImage(
+            model = remember(url, w, h) {
+                ImageRequest.Builder(ctx).data(url).size(w, h).scale(coil.size.Scale.FILL).transformations(AppleHeroT(w, h)).crossfade(180).build()
+            },
+            contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize(),
+            onSuccess = { ready = true }
+        )
     }
 }
