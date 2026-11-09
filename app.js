@@ -758,7 +758,7 @@ function renderCatalog(){
 }
 function slot(kind, path, value, cls, label){
   return `<div class="slot ${cls} ${value?'filled':''}" role="button" tabindex="0" data-slot="${kind}" data-path="${esc(path)}" ${value?`data-src="${esc(value)}"`:''} aria-label="${esc(label)}">
-    <span class="slot-empty">${esc(label)}</span><button type="button" class="slot-x" data-clear="${esc(path)}" aria-label="Quitar imagen">✕</button><button type="button" class="slot-url" data-slot-url="${esc(path)}" aria-label="Usar un enlace de imagen" title="Pegar enlace de imagen">🔗</button></div>`;
+    <span class="slot-empty">${esc(label)}</span><button type="button" class="slot-x" data-clear="${esc(path)}" aria-label="Quitar imagen">✕</button><button type="button" class="slot-url" data-slot-url="${esc(path)}" aria-label="Usar un enlace de imagen" title="Pegar enlace de imagen">🔗</button>${CROP_SPECS[kind] ? `<button type="button" class="slot-crop" data-slot-crop="${esc(path)}" data-slot-kind="${esc(kind)}" aria-label="Encuadrar la imagen" title="Mover y recortar la imagen">✂</button>` : ''}></div>`;
 }
 function chipField(key, label, list, suggest){
   const sugg = (suggest||[]).filter(x=>!list.includes(x)).slice(0,14);
@@ -1336,8 +1336,9 @@ document.addEventListener('pointercancel', sortEnd);
 function featRow(r){
   const raw = (r.items || []).map(it => ({ it, t: byId(it.titleId) })).filter(x => x.t && x.t.status !== 'borrador');
   if (!raw.length) return '';
-  const order = byTaste(raw.map(x => x.t), 'frow-' + r.id);
-  const items = raw.slice().sort((a, b) => order.indexOf(a.t) - order.indexOf(b.t));
+  // por defecto se respeta el orden que armaste en el panel; "Aleatorio" lo mezcla (según gustos) en cada visita
+  let items = raw;
+  if (r.order === 'random'){ const order = byTaste(raw.map(x => x.t), 'frow-' + r.id); items = raw.slice().sort((a, b) => order.indexOf(a.t) - order.indexOf(b.t)); }
   return `<section class="row frow"><div class="row-head"><h2>${esc(r.title || 'Destacados')}</h2></div>
     <div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button>
     <div class="rail rail-feat">${items.map(({ it, t }) => {
@@ -1365,6 +1366,7 @@ function renderFrowsAdmin(){
     ${rows.length ? rows.map((r, ri) => `<div class="fs frow-ed" data-frow="${esc(r.id)}">
       <div class="frow-head">
         <input class="input" id="fr-t-${esc(r.id)}" data-frow-title="${esc(r.id)}" value="${esc(r.title||'')}" placeholder="Nombre de la fila (ej: También te podría gustar)">
+        <select class="select frow-order" data-frow-order="${esc(r.id)}" aria-label="Orden de los títulos en la página" title="Orden de los títulos en la página"><option value="fixed" ${r.order==='random'?'':'selected'}>Respetar mi orden</option><option value="random" ${r.order==='random'?'selected':''}>Orden aleatorio</option></select>
         <button class="iconbtn" data-frow-move="${esc(r.id)}" data-d="-1" aria-label="Subir fila" ${ri===0?'disabled':''}>↑</button>
         <button class="iconbtn" data-frow-move="${esc(r.id)}" data-d="1" aria-label="Bajar fila" ${ri===rows.length-1?'disabled':''}>↓</button>
         <span data-row="frow-${esc(r.id)}"><button class="btn btn-danger btn-sm" data-frow-del="${esc(r.id)}">Eliminar fila</button></span>
@@ -1389,6 +1391,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   const el = e.target; if (!S.owner) return;
+  if (el.dataset.frowOrder){ const r = S.frows.find(x => x.id === el.dataset.frowOrder); if (r){ r.order = el.value === 'random' ? 'random' : 'fixed'; saveFrows(true); toast(r.order === 'random' ? 'La fila se muestra en orden aleatorio' : 'La fila respeta tu orden'); } return; }
   if (el.dataset.frowItem && el.dataset.f === 'titleId'){ const r = S.frows.find(x => x.id === el.dataset.frowItem); if (r){ r.items[+el.dataset.i].titleId = el.value; saveFrows(true); rerenderPanel(); } }
 });
 document.addEventListener('click', e => {
@@ -1842,6 +1845,15 @@ async function importBackup(){
 }
 
 /* --- admin interactions --- */
+// Baja una imagen (de un enlace o de Supabase) para poder recortarla. Algunos sitios no lo permiten (CORS).
+async function fetchImageBlob(url){
+  const r = await fetch(url, { mode:'cors', cache:'force-cache' });
+  if (!r.ok) throw new Error('No se pudo descargar');
+  const b = await r.blob();
+  if (!/^image\//.test(b.type)) throw new Error('No es una imagen');
+  return b;
+}
+const CORS_MSG = 'Ese sitio no deja descargar la imagen para recortarla. Bajala a tu computadora y subila desde ahí.';
 async function applyImage(path, ref){
   if (path.startsWith('colllogo:')){ const c = S.colls.find(x => x.id === path.slice(9)); if (c){ c.logo = ref; await saveColls(true); rerenderPanel(); } return; }
   if (path.startsWith('coll:')){ const c = S.colls.find(x => x.id === path.slice(5)); if (c){ c.image = ref; await saveColls(true); rerenderPanel(); } return; }
@@ -2064,7 +2076,34 @@ app.addEventListener('click', async e => {
     const url = (window.prompt('Pegá el enlace de la imagen (https://…)') || '').trim();
     if (!url) return;
     if (!/^https?:\/\//i.test(url)){ toast('El enlace tiene que empezar con https://', true); return; }
-    try { await applyImage(d.slotUrl, url); } catch(err){ toast(err.message || 'No se pudo guardar', true); }
+    const slotEl = t.closest('.slot'); const kind = slotEl?.dataset.slot; const spec = CROP_SPECS[kind];
+    try {
+      // con enlace: la bajamos un momento para que la muevas y recortes como quieras
+      if (spec){
+        let blob = null;
+        try { blob = await fetchImageBlob(url); } catch { toast(CORS_MSG + ' Por ahora se guarda el enlace tal cual.', true); }
+        if (blob && !/gif|svg/.test(blob.type)){
+          slotEl?.classList.add('busy');
+          const cropped = await cropImage(blob, spec[0], spec[1]);
+          if (!cropped){ slotEl?.classList.remove('busy'); return; }
+          const ref = await uploadImage(cropped, kind); await applyImage(d.slotUrl, ref); return;
+        }
+      }
+      await applyImage(d.slotUrl, url);
+    } catch(err){ slotEl?.classList.remove('busy'); toast(err.message || 'No se pudo guardar', true); }
+    return;
+  }
+  if (d.slotCrop){ e.stopPropagation();
+    const slotEl = t.closest('.slot'); const kind = d.slotKind; const spec = CROP_SPECS[kind]; const cur = slotEl?.dataset.srcDone;
+    if (!spec || !cur){ toast('Primero poné una imagen', true); return; }
+    slotEl.classList.add('busy');
+    try {
+      let blob; try { blob = await fetchImageBlob(cur); } catch { toast(CORS_MSG, true); slotEl.classList.remove('busy'); return; }
+      if (/gif|svg/.test(blob.type)){ toast('Esta imagen no se puede recortar', true); slotEl.classList.remove('busy'); return; }
+      const cropped = await cropImage(blob, spec[0], spec[1]);
+      if (!cropped){ slotEl.classList.remove('busy'); return; }
+      const ref = await uploadImage(cropped, kind); await applyImage(d.slotCrop, ref);
+    } catch(err){ slotEl.classList.remove('busy'); toast(err.message || 'No se pudo guardar', true); }
     return;
   }
   if (d.slot){
