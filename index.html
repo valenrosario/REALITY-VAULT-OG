@@ -431,9 +431,9 @@ a.ep-card:hover .ep-thumb{transform:scale(1.03);box-shadow:inset 0 0 0 2px var(-
 .acc-menu a,.acc-menu button{text-align:left;background:none;border:0;color:var(--fg);padding:10px 12px;border-radius:6px;text-decoration:none;font:inherit;cursor:pointer}
 .acc-menu a:hover,.acc-menu button:hover{background:var(--surface-3)}
 /* corazón de Mi lista */
-.lh{position:relative;display:grid;place-items:center;width:24px;height:24px;pointer-events:none}
-.lh svg{width:24px;height:24px;overflow:visible}
-.lh path{fill:transparent;stroke:currentColor;stroke-width:2;stroke-linejoin:round;transition:fill .18s,stroke .18s}
+.lh{position:relative;display:grid;place-items:center;width:20px;height:20px;pointer-events:none}
+.lh svg{width:20px;height:20px;overflow:visible}
+.lh path{fill:transparent;stroke:currentColor;stroke-width:2.3;stroke-linejoin:round;transition:fill .18s,stroke .18s}
 .list-btn.on .lh path,.list-wide.on .lh path{fill:var(--accent-2);stroke:var(--accent-2)}
 .list-btn.on,.list-wide.on{background:rgba(255,255,255,.12)}
 .lh i{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:var(--accent-2);opacity:0}
@@ -441,7 +441,7 @@ a.ep-card:hover .ep-thumb{transform:scale(1.03);box-shadow:inset 0 0 0 2px var(-
 .lh.pop svg{animation:lhPop .55s cubic-bezier(.2,.9,.3,1.3)}
 .lh.pop i{animation:lhBurst .6s cubic-bezier(.15,.7,.3,1) both}
 @keyframes lhPop{0%{transform:scale(1)}20%{transform:scale(.72)}55%{transform:scale(1.32)}100%{transform:scale(1)}}
-@keyframes lhBurst{0%{opacity:1;transform:rotate(var(--a)) translateY(-8px) scale(1)}100%{opacity:0;transform:rotate(var(--a)) translateY(-30px) scale(.4)}}
+@keyframes lhBurst{0%{opacity:1;transform:rotate(var(--a)) translateY(-7px) scale(1)}100%{opacity:0;transform:rotate(var(--a)) translateY(-25px) scale(.4)}}
 @media(prefers-reduced-motion:reduce){.lh.pop svg,.lh.pop i{animation:none}}
 .list-btn.on{color:var(--accent-2)}
 .hero-actions .round{width:46px;height:46px;flex:0 0 auto}
