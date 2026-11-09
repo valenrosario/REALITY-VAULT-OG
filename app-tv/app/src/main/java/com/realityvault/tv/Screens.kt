@@ -100,7 +100,8 @@ class Nav {
     val stack = mutableStateListOf<Screen>(Screen.Splash)
     val top get() = stack.last()
     val memory = Memory()
-    fun go(s: Screen) { stack.add(s) }
+    // abrir una ficha de nuevo arranca siempre desde la primera temporada
+    fun go(s: Screen) { if (s is Screen.Detail) memory.focus.remove("season-" + s.id); stack.add(s) }
     fun section(s: Screen) { stack.clear(); stack.add(s) }
     fun back(): Boolean { if (stack.size > 1) { stack.removeAt(stack.lastIndex); return true }; return false }
     fun replace(s: Screen) { stack[stack.lastIndex] = s }

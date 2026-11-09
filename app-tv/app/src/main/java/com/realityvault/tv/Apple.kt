@@ -1012,10 +1012,9 @@ fun DetailScreen(id: String, nav: Nav) {
     LaunchedEffect(id) { Store.trackView(id) }
     val target = Store.playTarget(t)
     val playReq = remember { FocusRequester() }
-    var season by remember(id) {
-        val p = Store.progress.firstOrNull { it.titleId == id }
-        mutableIntStateOf(t.seasons.indexOfFirst { it.number == p?.season }.coerceAtLeast(0))
-    }
+    // siempre arranca en la primera temporada; si elegís otra, se mantiene mientras sigas en esta ficha
+    // (también al volver del reproductor)
+    var season by remember(id) { mutableIntStateOf(nav.memory.focus["season-$id"]?.toIntOrNull()?.takeIf { it in t.seasons.indices } ?: 0) }
     AutoFocus(playReq, id)
     val prog = Store.progress.firstOrNull { it.titleId == id }
     val tint = rememberTint(t.tvBg)
@@ -1092,7 +1091,7 @@ fun DetailScreen(id: String, nav: Nav) {
                             Column {
                                 if (t.seasons.size > 1) {
                                     LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        itemsIndexed(t.seasons) { i, ss -> Chip(ss.name.ifBlank { "Temporada ${ss.number}" }, i == season) { season = i } }
+                                        itemsIndexed(t.seasons) { i, ss -> Chip(ss.name.ifBlank { "Temporada ${ss.number}" }, i == season) { season = i; nav.memory.focus["season-$id"] = i.toString() } }
                                     }
                                 } else SectionTitle(s.name.ifBlank { "Temporada ${s.number}" })
                                 LazyRow(contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 10.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(17.dp)) {
