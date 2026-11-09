@@ -1,5 +1,6 @@
 package com.realityvault.mobile
 
+import com.realityvault.tv.posResumable
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -118,6 +119,7 @@ fun DetailScreen(id: String, nav: Nav) {
                     }
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (!t.isSoon && Store.canRestart(t, target)) GlassButton(Ic.replay, "Empezar desde el principio", { nav.play(t, target!!.url, target.season, target.episode, restart = true) }, size = 46.dp)
                         ListToggle(t, nav)
                         if (mediaFor(t.trailer) != null) GlassButton(Ic.clapper, "Ver tráiler", { nav.go(Screen.Player(t.id, t.trailer, null, null, trailer = true)) }, size = 46.dp)
                     }
@@ -179,7 +181,8 @@ private fun BackFab(nav: Nav) {
 
 @Composable
 private fun EpisodeRow(t: Title, s: Season, e: Episode, prog: Progress?, onClick: () -> Unit) {
-    val seen = prog?.watched?.let { "${s.number}-${e.number}" in it || "${s.number}:${e.number}" in it } == true
+    val seen = prog?.watched?.let { "${s.number}-${e.number}" in it || "${s.number}:${e.number}" in it } == true &&
+        !posResumable(Store.getPos(t.id, s.number, e.number))
     val soonEp = e.soon || s.soon
     val hasVideo = isHttp(e.url) && !soonEp
     val pos = prog?.positions?.get(posKey(s.number, e.number))

@@ -6,6 +6,10 @@
 <title>REALITY VAULT</title>
 <meta name="description" content="REALITY VAULT: series y películas de reality en un solo lugar.">
 <meta name="theme-color" content="#000000">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap">
@@ -284,6 +288,8 @@ tbody tr:hover{background:rgba(var(--fg-rgb),.025)}
 .slot.filled{border-style:solid;border-color:var(--line)}
 .slot.filled .slot-empty{display:none}
 .slot .slot-url{position:absolute;bottom:6px;right:6px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(var(--bg-rgb),.8);color:var(--fg);cursor:pointer;font-size:13px}
+.slot .slot-crop{position:absolute;bottom:6px;left:6px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(var(--bg-rgb),.8);color:var(--fg);cursor:pointer;font-size:14px;display:none}.slot.filled .slot-crop{display:block}
+.frow-order{max-width:190px;flex:none}
 .slot .slot-x{position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;border:0;background:rgba(var(--bg-rgb),.8);color:var(--fg);cursor:pointer;display:none}
 .slot.filled .slot-x{display:block}
 .slot.contain{background-size:contain;background-repeat:no-repeat;background-color:var(--surface-3)}
@@ -404,6 +410,7 @@ a.ep-card:hover .ep-thumb{transform:scale(1.03);box-shadow:inset 0 0 0 2px var(-
   .tp-logo{max-width:64vw;max-height:96px;margin-bottom:8px}
   .tp-ep p{font-size:14.5px}
   .tp-actions .btn-play{flex:1;justify-content:center}
+  .tp-actions{flex-wrap:nowrap;gap:8px}.tp-actions .round{width:44px;height:44px;flex:none}.tp-actions .btn-play{padding:13px 10px;letter-spacing:.03em;font-size:13px;min-width:0;white-space:nowrap}
   .row-head h2{font-size:17px}
   .rail{grid-auto-columns:38vw;gap:10px}
 }
@@ -1258,6 +1265,17 @@ body.in-landing .mchips,body.in-landing .mobile-chips{display:none}
 .coll:hover .coll-btn{background:#fff}
 .coll-n{margin-top:6px;font-family:var(--mono);font-size:12px;color:var(--muted)}
 .coll-page{padding-top:18px}
+.cp2{padding-top:0}
+.cp-hero{position:relative;margin:0;border-radius:0;overflow:hidden;min-height:clamp(300px,40vw,560px);display:flex;align-items:flex-end;background:#120f12;isolation:isolate}
+.cp-bg{position:absolute;inset:0;background:center 22%/cover no-repeat;z-index:-2}
+.cp-sh{position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(0,0,0,.62) 0,rgba(0,0,0,0) 62%),linear-gradient(to top,var(--cp,var(--bg)) 0,rgba(0,0,0,.35) 38%,rgba(0,0,0,0) 70%)}
+.cp-ct{padding:clamp(18px,3vw,44px) var(--gutter);max-width:min(620px,92%);display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.cp-logo{height:clamp(52px,7vw,104px);max-width:min(420px,70vw);object-fit:contain;object-position:left bottom;filter:drop-shadow(0 4px 18px rgba(0,0,0,.55))}
+.cp-name{margin:0;font-family:var(--display);font-weight:700;font-size:clamp(30px,4.4vw,60px);line-height:1.02;letter-spacing:-.025em;text-shadow:0 4px 24px rgba(0,0,0,.5)}
+.cp-tag{margin:0;color:var(--fg-2);font-size:clamp(14px,1.3vw,17px);line-height:1.45;max-width:46ch}
+.cp-n{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.cp-row{margin-top:clamp(14px,2vw,26px)}
+@media(max-width:640px){.cp-hero{min-height:clamp(260px,92vw,420px)}}
 .coll.big{margin:0 var(--gutter);min-height:clamp(240px,26vw,380px)}
 .coll.big .coll-name{font-size:clamp(30px,3.6vw,48px)}
 .coll-prev{--surface:#0d0b0c;--surface-rgb:13,11,12;--surface-2:#1a1518;--surface-3:#272024;--fg:#fdeef4;--fg-2:#ecd3de;--muted:#c6a3b3;--faint:#8c6b7a;--accent-strong:#ffb3d0;color:var(--fg)}

@@ -487,7 +487,7 @@ object Store {
         val prev = progress.firstOrNull { it.titleId == id }
         val watched = LinkedHashSet(prev?.watched ?: emptyList())
         // misma clave que la web ("T-E"), así lo visto en la tele también figura como visto en la web
-        if (season != null && episode != null) watched += "$season-$episode"
+        // abrir un capítulo ya no lo marca como visto: se marca al terminarlo (ver savePos)
         val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date())
         val p = Progress(id, season, episode, watched.toList(), now, prev?.positions ?: emptyMap())
         progress = listOf(p) + progress.filter { it.titleId != id }
@@ -509,11 +509,15 @@ object Store {
         val row = progress.firstOrNull { it.titleId == id } ?: return
         val k = posKey(season, episode)
         val pos = HashMap(row.positions)
-        if (posDone(tSec, dSec)) pos.remove(k) else pos[k] = tSec to dSec
-        progress = progress.map { if (it.titleId == id) it.copy(positions = pos) else it }
+        val done = posDone(tSec, dSec)
+        if (done) pos.remove(k) else pos[k] = tSec to dSec
+        val watched = LinkedHashSet(row.watched)
+        if (done && season != null && episode != null) watched += "$season-$episode"
+        progress = progress.map { if (it.titleId == id) it.copy(positions = pos, watched = watched.toList()) else it }
         val jo = JSONObject(); pos.forEach { (kk, v) -> jo.put(kk, JSONObject().put("t", v.first).put("d", v.second)) }
         // upsert solo con "positions": no toca el resto de la fila (temporada, vistos, fecha)
         val body = JSONObject().put("user_id", uid).put("title_id", id).put("positions", jo)
+        if (done) body.put("watched", JSONArray(watched.toList()))
         runCatching { Api.call("POST", "/rest/v1/watch_progress", body.toString(), tk, "resolution=merge-duplicates,return=minimal") }
     }
 
@@ -555,11 +559,18 @@ object Store {
         if (p != null) {
             val j = eps.indexOfFirst { it.first.number == p.season && it.second.number == p.episode }
             // si el último capítulo quedó a medias, se sigue en ese mismo; si no, el siguiente
-            if (j >= 0) { i = if (posResumable(p.positions[posKey(p.season, p.episode)]) || j + 1 >= eps.size) j else j + 1; cont = true }
+            if (j >= 0) {
+                val wk = "${p.season}-${p.episode}"
+                // se sigue en el mismo capítulo si quedó a medias o si todavía no lo terminaste
+                i = if (posResumable(p.positions[posKey(p.season, p.episode)]) || wk !in p.watched || j + 1 >= eps.size) j else j + 1; cont = true
+            }
         }
         val (s, e) = eps[i]
         return Target(e.url, s.number, e.number, "${if (cont) "Continuar" else "Ver"} T${s.number}:E${e.number}", cont)
     }
+
+    /** ¿Se puede "empezar desde el principio"? Solo si lo que se va a reproducir está a medias. */
+    fun canRestart(t: Title, tg: Target?): Boolean = tg != null && posResumable(getPos(t.id, tg.season, tg.episode))
 
     /** Capítulos con enlace para reproducir, en orden. */
     fun flatPlayable(t: Title): List<Pair<Season, Episode>> =

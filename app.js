@@ -576,6 +576,7 @@ function showDetail(id, seasonIdx){
         <div class="meta">${metaLine(t)}</div>
         <div class="hero-actions">
           ${link ? (() => { const tg = playTarget(t); return `<a class="btn btn-primary" ${watchAttrs(t, tg?.season, tg?.episode)} href="${esc(watchHref(t, tg?.season, tg?.episode))}">▶ ${tg?.label ? esc(tg.label) : 'Ver ahora'}</a>`; })() : isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : ''}
+          ${link ? restartBtn(t) : ''}
           ${safeUrl(t.trailer) ? `<button class="btn btn-ghost" data-trailer="${esc(t.id)}">Tráiler</button>` : ''}
         </div>
       </div>
@@ -758,7 +759,7 @@ function renderCatalog(){
 }
 function slot(kind, path, value, cls, label){
   return `<div class="slot ${cls} ${value?'filled':''}" role="button" tabindex="0" data-slot="${kind}" data-path="${esc(path)}" ${value?`data-src="${esc(value)}"`:''} aria-label="${esc(label)}">
-    <span class="slot-empty">${esc(label)}</span><button type="button" class="slot-x" data-clear="${esc(path)}" aria-label="Quitar imagen">✕</button><button type="button" class="slot-url" data-slot-url="${esc(path)}" aria-label="Usar un enlace de imagen" title="Pegar enlace de imagen">🔗</button></div>`;
+    <span class="slot-empty">${esc(label)}</span><button type="button" class="slot-x" data-clear="${esc(path)}" aria-label="Quitar imagen">✕</button><button type="button" class="slot-url" data-slot-url="${esc(path)}" aria-label="Usar un enlace de imagen" title="Pegar enlace de imagen">🔗</button>${CROP_SPECS[kind] ? `<button type="button" class="slot-crop" data-slot-crop="${esc(path)}" data-slot-kind="${esc(kind)}" aria-label="Encuadrar la imagen" title="Mover y recortar la imagen">✂</button>` : ''}></div>`;
 }
 function chipField(key, label, list, suggest){
   const sugg = (suggest||[]).filter(x=>!list.includes(x)).slice(0,14);
@@ -1174,7 +1175,17 @@ function renderCollection(slug){
   const c = (S.colls || []).find(x => collSlug(x) === slug || x.id === slug);
   const items = c ? collItems(c) : [];
   if (!c || !items.length) return `<div class="lock"><h1>No encontramos esta colección</h1><p>Puede que ya no esté disponible.</p><a class="btn btn-line" href="/">Volver al inicio</a></div>`;
-  return `<main class="coll-page">${collBanner(c, true)}<div class="grid">${items.map(card).join('')}</div></main>`;
+  // portada grande (imagen de la colección + logo) y abajo una fila con los títulos, en el orden elegido
+  const art = c.image || (items.find(t => t.backdrop || t.bannerImage) || {}).backdrop || (items.find(t => t.bannerImage) || {}).bannerImage || (items.find(t => t.poster) || {}).poster || '';
+  const n = items.length;
+  return `<main class="coll-page cp2"><section class="cp-hero" style="${hexOk(c.color) ? `--cp:${esc(c.color)}` : ''}">
+      ${art ? `<span class="cp-bg" data-src="${esc(art)}"></span>` : ''}<span class="cp-sh"></span>
+      <div class="cp-ct"><span class="coll-k">Colección</span>
+        ${c.logo ? `<img class="cp-logo" alt="${esc(c.name || 'Colección')}" data-img="${esc(c.logo)}" hidden><h1 class="cp-name logo-fallback" hidden>${esc(c.name || 'Colección')}</h1>` : `<h1 class="cp-name">${esc(c.name || 'Colección')}</h1>`}
+        ${c.tagline ? `<p class="cp-tag">${esc(c.tagline)}</p>` : ''}<span class="cp-n">${n} título${n === 1 ? '' : 's'}</span></div></section>
+    <section class="row cp-row"><div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button>
+      <div class="rail">${items.map(card).join('')}</div>
+      <button class="rail-btn r" data-scroll="1" aria-label="Siguiente">›</button></div></section></main>`;
 }
 let collSaveT = null;
 function saveColls(now){
@@ -1336,8 +1347,9 @@ document.addEventListener('pointercancel', sortEnd);
 function featRow(r){
   const raw = (r.items || []).map(it => ({ it, t: byId(it.titleId) })).filter(x => x.t && x.t.status !== 'borrador');
   if (!raw.length) return '';
-  const order = byTaste(raw.map(x => x.t), 'frow-' + r.id);
-  const items = raw.slice().sort((a, b) => order.indexOf(a.t) - order.indexOf(b.t));
+  // por defecto se respeta el orden que armaste en el panel; "Aleatorio" lo mezcla (según gustos) en cada visita
+  let items = raw;
+  if (r.order === 'random'){ const order = byTaste(raw.map(x => x.t), 'frow-' + r.id); items = raw.slice().sort((a, b) => order.indexOf(a.t) - order.indexOf(b.t)); }
   return `<section class="row frow"><div class="row-head"><h2>${esc(r.title || 'Destacados')}</h2></div>
     <div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button>
     <div class="rail rail-feat">${items.map(({ it, t }) => {
@@ -1365,6 +1377,7 @@ function renderFrowsAdmin(){
     ${rows.length ? rows.map((r, ri) => `<div class="fs frow-ed" data-frow="${esc(r.id)}">
       <div class="frow-head">
         <input class="input" id="fr-t-${esc(r.id)}" data-frow-title="${esc(r.id)}" value="${esc(r.title||'')}" placeholder="Nombre de la fila (ej: También te podría gustar)">
+        <select class="select frow-order" data-frow-order="${esc(r.id)}" aria-label="Orden de los títulos en la página" title="Orden de los títulos en la página"><option value="fixed" ${r.order==='random'?'':'selected'}>Respetar mi orden</option><option value="random" ${r.order==='random'?'selected':''}>Orden aleatorio</option></select>
         <button class="iconbtn" data-frow-move="${esc(r.id)}" data-d="-1" aria-label="Subir fila" ${ri===0?'disabled':''}>↑</button>
         <button class="iconbtn" data-frow-move="${esc(r.id)}" data-d="1" aria-label="Bajar fila" ${ri===rows.length-1?'disabled':''}>↓</button>
         <span data-row="frow-${esc(r.id)}"><button class="btn btn-danger btn-sm" data-frow-del="${esc(r.id)}">Eliminar fila</button></span>
@@ -1389,6 +1402,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   const el = e.target; if (!S.owner) return;
+  if (el.dataset.frowOrder){ const r = S.frows.find(x => x.id === el.dataset.frowOrder); if (r){ r.order = el.value === 'random' ? 'random' : 'fixed'; saveFrows(true); toast(r.order === 'random' ? 'La fila se muestra en orden aleatorio' : 'La fila respeta tu orden'); } return; }
   if (el.dataset.frowItem && el.dataset.f === 'titleId'){ const r = S.frows.find(x => x.id === el.dataset.frowItem); if (r){ r.items[+el.dataset.i].titleId = el.value; saveFrows(true); rerenderPanel(); } }
 });
 document.addEventListener('click', e => {
@@ -1842,6 +1856,15 @@ async function importBackup(){
 }
 
 /* --- admin interactions --- */
+// Baja una imagen (de un enlace o de Supabase) para poder recortarla. Algunos sitios no lo permiten (CORS).
+async function fetchImageBlob(url){
+  const r = await fetch(url, { mode:'cors', cache:'force-cache' });
+  if (!r.ok) throw new Error('No se pudo descargar');
+  const b = await r.blob();
+  if (!/^image\//.test(b.type)) throw new Error('No es una imagen');
+  return b;
+}
+const CORS_MSG = 'Ese sitio no deja descargar la imagen para recortarla. Bajala a tu computadora y subila desde ahí.';
 async function applyImage(path, ref){
   if (path.startsWith('colllogo:')){ const c = S.colls.find(x => x.id === path.slice(9)); if (c){ c.logo = ref; await saveColls(true); rerenderPanel(); } return; }
   if (path.startsWith('coll:')){ const c = S.colls.find(x => x.id === path.slice(5)); if (c){ c.image = ref; await saveColls(true); rerenderPanel(); } return; }
@@ -2064,7 +2087,34 @@ app.addEventListener('click', async e => {
     const url = (window.prompt('Pegá el enlace de la imagen (https://…)') || '').trim();
     if (!url) return;
     if (!/^https?:\/\//i.test(url)){ toast('El enlace tiene que empezar con https://', true); return; }
-    try { await applyImage(d.slotUrl, url); } catch(err){ toast(err.message || 'No se pudo guardar', true); }
+    const slotEl = t.closest('.slot'); const kind = slotEl?.dataset.slot; const spec = CROP_SPECS[kind];
+    try {
+      // con enlace: la bajamos un momento para que la muevas y recortes como quieras
+      if (spec){
+        let blob = null;
+        try { blob = await fetchImageBlob(url); } catch { toast(CORS_MSG + ' Por ahora se guarda el enlace tal cual.', true); }
+        if (blob && !/gif|svg/.test(blob.type)){
+          slotEl?.classList.add('busy');
+          const cropped = await cropImage(blob, spec[0], spec[1]);
+          if (!cropped){ slotEl?.classList.remove('busy'); return; }
+          const ref = await uploadImage(cropped, kind); await applyImage(d.slotUrl, ref); return;
+        }
+      }
+      await applyImage(d.slotUrl, url);
+    } catch(err){ slotEl?.classList.remove('busy'); toast(err.message || 'No se pudo guardar', true); }
+    return;
+  }
+  if (d.slotCrop){ e.stopPropagation();
+    const slotEl = t.closest('.slot'); const kind = d.slotKind; const spec = CROP_SPECS[kind]; const cur = slotEl?.dataset.srcDone;
+    if (!spec || !cur){ toast('Primero poné una imagen', true); return; }
+    slotEl.classList.add('busy');
+    try {
+      let blob; try { blob = await fetchImageBlob(cur); } catch { toast(CORS_MSG, true); slotEl.classList.remove('busy'); return; }
+      if (/gif|svg/.test(blob.type)){ toast('Esta imagen no se puede recortar', true); slotEl.classList.remove('busy'); return; }
+      const cropped = await cropImage(blob, spec[0], spec[1]);
+      if (!cropped){ slotEl.classList.remove('busy'); return; }
+      const ref = await uploadImage(cropped, kind); await applyImage(d.slotCrop, ref);
+    } catch(err){ slotEl.classList.remove('busy'); toast(err.message || 'No se pudo guardar', true); }
     return;
   }
   if (d.slot){
@@ -2144,6 +2194,7 @@ function renderTitlePage(id){
         : `<div class="tp-ep">${t.tagline?`<strong>${esc(t.tagline)}</strong>`:''}${t.description?`<p>${esc(t.description.length>180?t.description.slice(0,177)+'…':t.description)}</p>`:''}</div>`}
       <div class="tp-actions">
         ${isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-play" ${watchAttrs(t, target?.season, target?.episode)} href="${esc(watchHref(t, target?.season, target?.episode))}">${ICONS.play} ${esc(playLabel)}</a>` : ''}
+        ${link ? restartBtn(t) : ''}
         ${listBtn(t.id,'round')}
         ${safeUrl(t.trailer) ? `<button class="round" data-trailer="${esc(t.id)}" aria-label="Ver tráiler" title="Tráiler">${ICONS.trailer}</button>` : ''}
       </div>
@@ -2175,7 +2226,7 @@ function renderEpisodesTab(t, seasons){
   return `${seasons.length>1 ? `<select class="pill-select" id="tpSeason" aria-label="Temporada">${seasons.map((x,i)=>`<option value="${i}" ${i===S.tpSeason?'selected':''}>Temporada ${esc(x.number)}${x.title?' · '+esc(x.title):''}</option>`).join('')}</select>` : `<span class="pill-select" style="background-image:none;padding-right:16px">Temporada ${esc(s.number)}</span>`}
     ${s.episodes.length ? `<div class="row-wrap ep-row"><button class="rail-btn l" data-scroll="-1" aria-label="Anteriores">‹</button><div class="rail rail-eps">${s.episodes.map(e => {
       const soon = itemSoon(t, s, e); const u = soon ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
-      const seen = (S.progress.get(t.id)?.watched || []).includes(epKey(s.number, e.number));
+      const seen = (S.progress.get(t.id)?.watched || []).includes(epKey(s.number, e.number)) && !posResumable(getPos(t.id, s.number, e.number));
       return `<${tag} class="ep-card ${seen?'seen':''} ${soon?'ep-soon':''}" ${u?`${watchAttrs(t, s.number, e.number)} href="${esc(watchHref(t, s.number, e.number))}"`:''}>
         <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number, t.logo)}${seen?'<span class="seen-tag">✓ Visto</span>':soon?'<span class="seen-tag soon-tag">Próximamente</span>':''}</div>
         <div class="ep-meta"><span class="ep-label">Episodio ${esc(e.number)}</span><strong>${esc(e.title || 'Episodio '+e.number)}</strong></div>
@@ -2331,7 +2382,10 @@ async function savePos(tid, s, e, t, d){
   const positions = { ...(row.positions || {}) };
   done ? delete positions[k] : (positions[k] = val);
   row.positions = positions;
-  const { error } = await S.sb.from('watch_progress').update({ positions }).eq('user_id', S.session.user.id).eq('title_id', tid);
+  const upd = { positions };
+  // "Visto" solo cuando terminaste el capítulo (no apenas lo empezás)
+  if (done && s != null && s !== ''){ const w = new Set(row.watched || []); w.add(epKey(s, e)); row.watched = [...w]; upd.watched = row.watched; }
+  const { error } = await S.sb.from('watch_progress').update(upd).eq('user_id', S.session.user.id).eq('title_id', tid);
   if (error){ noPos = true; console.warn('No se pudo guardar el minuto (falta correr 07-posicion-de-reproduccion.sql)', error.message); }
 }
 function flatEpisodes(t){ const out = []; sortedSeasons(t).forEach(s => s.episodes.forEach(e => out.push({ s, e }))); return out; }
@@ -2345,10 +2399,23 @@ function playTarget(t){
   let i = 0, cont = false;
   if (p){
     const j = eps.findIndex(x => +x.s.number === +p.last_season && +x.e.number === +p.last_episode);
-    if (j >= 0){ i = posResumable(getPos(t.id, p.last_season, p.last_episode)) || j + 1 >= eps.length ? j : j + 1; cont = true; }
+    if (j >= 0){ i = posResumable(getPos(t.id, p.last_season, p.last_episode)) || !(p.watched || []).includes(epKey(p.last_season, p.last_episode)) || j + 1 >= eps.length ? j : j + 1; cont = true; }
   }
   const { s, e } = eps[i];
   return { url: e.url, season: s.number, episode: e.number, ep: e, label: `${cont ? 'Continuar' : 'Ver'} T${s.number}:E${e.number}`, cont };
+}
+// "Empezar desde el principio": solo cuando ya venías mirando algo (a mitad de un capítulo/película, o en un capítulo que no es el primero)
+function restartTarget(t){
+  if (!S.session || isSoon(t)) return null;
+  const tg = playTarget(t); if (!tg) return null;
+  // solo si lo que estabas viendo quedó a mitad: vuelve al segundo 0 de ESE capítulo (o de esa película)
+  const se = t.type === 'serie' ? tg.season : null, ep = t.type === 'serie' ? tg.episode : null;
+  if (!posResumable(getPos(t.id, se, ep))) return null;
+  return { season: se, episode: ep };
+}
+function restartBtn(t, cls = ''){
+  const r = restartTarget(t); if (!r) return '';
+  return `<a class="round btn-restart ${cls}" data-restart ${watchAttrs(t, r.season, r.episode)} href="${esc(watchHref(t, r.season, r.episode))}" aria-label="Empezar desde el principio" title="Empezar desde el principio"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></a>`;
 }
 function watchAttrs(t, season, episode){
   return `data-watch data-tid="${esc(t.id)}" ${season != null ? `data-s="${esc(season)}" data-e="${esc(episode)}"` : ''}`;
@@ -2376,7 +2443,7 @@ async function recordWatch(tid, season, episode){
   if (!S.session || !S.sb || !tid) return;
   const prev = S.progress.get(tid);
   const watched = new Set(prev?.watched || []);
-  if (season != null && season !== '') watched.add(epKey(season, episode));
+  // abrir un capítulo ya no lo marca como visto: se marca al terminarlo (ver savePos)
   const row = { user_id: S.session.user.id, title_id: tid, last_season: season === '' || season == null ? null : +season, last_episode: episode === '' || episode == null ? null : +episode, watched: [...watched], updated_at: new Date().toISOString() };
   if (!noPos) row.positions = prev?.positions || {};
   S.progress.delete(tid); S.progress = new Map([[tid, { positions: {}, ...row }], ...S.progress]);
@@ -3188,7 +3255,7 @@ function endPlayerSession(){
   if (ready() && tid && v.duration) savePos(tid, s, e, v.currentTime, v.duration);
   rv?.destroy(); v._hls?.destroy();
 }
-function openPlayer({ url, tid, s: season, e: episode, x, direct }){
+function openPlayer({ url, tid, s: season, e: episode, x, direct, restart }){
   const [xt, xsn, xi] = x ? String(x).split(':') : [];
   const t = tid ? byId(tid) : xt ? byId(xt) : null;
   if (!S.session && S.sb){ openAuth({ reason:'watch', href: t ? watchHref(t, season, episode, x ? { s: xsn, i: xi } : null) : '/', tid: tid || '', s: season ?? '', e: episode ?? '', x: x || '' }); return; }
@@ -3245,7 +3312,7 @@ function openPlayer({ url, tid, s: season, e: episode, x, direct }){
     else if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = emb.src;
     else loadHls().then(Hls => { if (!v.isConnected) return; const hls = new Hls(); hls.loadSource(emb.src); hls.attachMedia(v); v._hls = hls; }).catch(() => toast('No se pudo cargar el video', true));
     // volver al minuto donde lo dejaste, y guardar el minuto mientras mirás
-    const saved = tid ? getPos(tid, season, season === '' ? null : episode) : null;
+    const saved = tid && !restart ? getPos(tid, season, season === '' ? null : episode) : null;
     // datos para la pantalla de carga, la pausa ("Estás viendo") y la lista de capítulos
     const isEp = t && t.type === 'serie' && season !== '' && season != null && !x;
     const curEp = isEp ? flatEpisodes(t).find(z => +z.s.number === +season && +z.e.number === +episode) : null;
@@ -3366,7 +3433,7 @@ document.addEventListener('click', e => {
   e.preventDefault();
   if (a.closest('.auth-card, .au-full')) closeDetail();
   const href = a.getAttribute('href') || '';
-  openPlayer({ url: href.startsWith('/ver/') ? '' : href, tid: a.dataset.tid || '', s: a.dataset.s ?? '', e: a.dataset.e ?? '', x: a.dataset.x || '' });
+  openPlayer({ url: href.startsWith('/ver/') ? '' : href, tid: a.dataset.tid || '', s: a.dataset.s ?? '', e: a.dataset.e ?? '', x: a.dataset.x || '', restart: a.hasAttribute('data-restart') });
 }, true);
 
 // gate every "watch" link behind an account (capture phase, before navigation)

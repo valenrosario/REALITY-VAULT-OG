@@ -78,7 +78,7 @@ sealed class Screen {
     data object Search : Screen()
     data object Account : Screen()
     data class Detail(val id: String) : Screen()
-    data class Player(val titleId: String, val url: String, val season: Int?, val episode: Int?, val trailer: Boolean = false, val extra: Boolean = false) : Screen()
+    data class Player(val titleId: String, val url: String, val season: Int?, val episode: Int?, val trailer: Boolean = false, val extra: Boolean = false, val restart: Boolean = false) : Screen()
     /** required = true: es la puerta de entrada obligatoria, no se puede saltear. */
     data class Login(val then: Screen? = null, val required: Boolean = false) : Screen()
     data class Person(val name: String) : Screen()
@@ -106,8 +106,8 @@ class Nav {
     fun replace(s: Screen) { stack[stack.lastIndex] = s }
 
     /** Ver algo: pide cuenta igual que el sitio. */
-    fun play(t: Title, url: String, season: Int?, episode: Int?) {
-        val p = Screen.Player(t.id, url, season, episode)
+    fun play(t: Title, url: String, season: Int?, episode: Int?, restart: Boolean = false) {
+        val p = Screen.Player(t.id, url, season, episode, restart = restart)
         if (Store.session == null) go(Screen.Login(p)) else go(p)
     }
 
@@ -204,21 +204,31 @@ fun CollectionScreen(id: String, nav: Nav) {
         }
         return
     }
-    Column(Modifier.fillMaxSize().padding(start = 48.dp, top = 56.dp)) {
-        Text("COLECCIÓN", style = ts(11, FontWeight.Bold, C.accent).copy(letterSpacing = 2.sp))
-        Text(c.name, style = ts(28, FontWeight.Bold, Color.White))
-        if (c.tagline.isNotBlank()) Text(c.tagline, style = ts(13, color = C.fg2), modifier = Modifier.padding(top = 4.dp, end = 48.dp), maxLines = 2)
-        Text("${list.size} título${if (list.size == 1) "" else "s"}", style = ts(12, color = C.muted), modifier = Modifier.padding(top = 6.dp))
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(100.dp), state = nav.memory.grid(key),
-            contentPadding = PaddingValues(top = 22.dp, end = 48.dp, bottom = 40.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(34.dp)
+    // Portada grande (imagen de la colección + logo) y abajo una fila con los títulos, en el orden elegido.
+    val art = c.image.ifBlank { list.firstNotNullOfOrNull { it.tvBg.ifBlank { null } } ?: list.first().poster }
+    val tint = c.colorArgb?.let { androidx.compose.ui.graphics.Color(it) } ?: Color(0xFF0A090B)
+    Column(Modifier.fillMaxSize().padding(top = 66.dp)) {
+        Box(Modifier.padding(horizontal = 48.dp).fillMaxWidth().height(262.dp).clip(RoundedCornerShape(18.dp)).background(C.surface)) {
+            if (art.isNotBlank()) Img(art, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .65f), .6f to Color.Transparent)))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .55f to Color.Transparent, 1f to tint.copy(alpha = .92f))))
+            Column(Modifier.align(Alignment.BottomStart).padding(start = 30.dp, bottom = 22.dp, end = 30.dp).width(520.dp)) {
+                Text("COLECCIÓN", style = ts(11, FontWeight.Bold, C.accent).copy(letterSpacing = 2.sp))
+                if (c.logo.isNotBlank()) Img(c.logo, Modifier.padding(top = 6.dp).width(260.dp).height(62.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
+                else Text(c.name, style = ts(30, FontWeight.Bold, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                if (c.tagline.isNotBlank()) Text(c.tagline, style = ts(13, color = Color.White.copy(alpha = .85f)), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                Text("${list.size} título${if (list.size == 1) "" else "s"}", style = ts(12, color = Color.White.copy(alpha = .6f)), modifier = Modifier.padding(top = 6.dp))
+            }
+        }
+        LazyRow(
+            state = nav.memory.list(key), contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 22.dp, bottom = 22.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             items(list, key = { it.id }) { t ->
                 val k = "$key/${t.id}"
                 val req = remember { FocusRequester() }
                 if (k == restore || (restore == null && t.id == list.first().id)) AutoFocus(req, k)
-                Focusable({ nav.go(Screen.Detail(t.id)) }, Modifier.aspectRatio(2f / 3f), requester = req, onFocus = { nav.memory.focus[key] = k }, pivotTop = true) {
+                Focusable({ nav.go(Screen.Detail(t.id)) }, Modifier.width(112.dp).aspectRatio(2f / 3f), requester = req, onFocus = { nav.memory.focus[key] = k }) {
                     PosterCard(t)
                 }
             }

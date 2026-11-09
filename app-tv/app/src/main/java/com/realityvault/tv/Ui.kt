@@ -104,6 +104,7 @@ object Ic {
     val home = icon("M3.5 10.5L12 4l8.5 6.5V20h-5.5v-5.5h-6V20H3.5z")
     val tv = icon("M3 8a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v8.5a2 2 0 0 1 -2 2H5a2 2 0 0 1 -2 -2z", "M8.5 2.5L12 6l3.5 -3.5")
     val film = icon("M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2H5a2 2 0 0 1 -2 -2V6a2 2 0 0 1 2 -2z", "M7.5 4v16M16.5 4v16M3 9h4.5M3 15h4.5M16.5 9H21M16.5 15H21")
+    val replay = icon("M4 12a8 8 0 1 0 2.5 -5.8", "M4 4v4.5h4.5")
     val plus = icon("M12 5v14M5 12h14", width = 2.4f)
     val check = icon("M5 12.5l4.5 4.5L19 7.5", width = 2.4f)
     val user = icon("M8 8a4 4 0 1 0 8 0a4 4 0 1 0 -8 0", "M4 20.5c1.5 -4 4.5 -6 8 -6s6.5 2 8 6")

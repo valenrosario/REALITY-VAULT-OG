@@ -1044,6 +1044,7 @@ fun DetailScreen(id: String, nav: Nav) {
                                     target != null -> PlayPill(target.label, Ic.play, playReq) { nav.play(t, target.url, target.season, target.episode) }
                                     else -> PlayPill("No disponible por el momento", null, playReq) {}
                                 }
+                                if (!t.isSoon && Store.canRestart(t, target)) GlassButton(Ic.replay) { nav.play(t, target!!.url, target.season, target.episode, restart = true) }
                                 GlassButton(if (t.id in Store.myList) Ic.check else Ic.plus) {
                                     if (Store.session == null) nav.go(Screen.Login()) else scope.launch { Store.toggleList(t.id) }
                                 }
@@ -1198,7 +1199,8 @@ fun SectionTitle(text: String) {
 
 @Composable
 fun EpisodeA(t: Title, s: Season, e: Episode, prog: Progress?, onClick: () -> Unit) {
-    val seen = prog?.watched?.let { "${s.number}-${e.number}" in it || "${s.number}:${e.number}" in it } == true
+    val seen = prog?.watched?.let { "${s.number}-${e.number}" in it || "${s.number}:${e.number}" in it } == true &&
+        !posResumable(Store.getPos(t.id, s.number, e.number))
     val current = prog?.season == s.number && prog?.episode == e.number
     val hasVideo = isHttp(e.url)
     // El anillo/sombra/agrandado de foco van SOLO sobre la miniatura, no sobre todo

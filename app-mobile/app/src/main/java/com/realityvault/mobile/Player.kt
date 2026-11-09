@@ -297,7 +297,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                     durMs = player.duration.coerceAtLeast(0)
                     if (!resumed) {
                         resumed = true
-                        val saved = if (track) Store.getPos(t!!.id, s.season, s.episode) else null
+                        val saved = if (track && !s.restart) Store.getPos(t!!.id, s.season, s.episode) else null
                         if (posResumable(saved) && saved!!.first * 1000 < player.duration - 45_000) player.seekTo(saved.first * 1000)
                     }
                 }
@@ -348,7 +348,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
             wasCasting = true
             player.pause()
             if (Cast.canCast(url!!)) {
-                val saved = if (track) Store.getPos(t!!.id, s.season, s.episode) else null
+                val saved = if (track && !s.restart) Store.getPos(t!!.id, s.season, s.episode) else null
                 val start = if (resumed) player.currentPosition else if (posResumable(saved)) saved!!.first * 1000 else 0L
                 Cast.load(url!!, m.subsUrl, t?.title ?: "", castLine, castImg, start)
             }
