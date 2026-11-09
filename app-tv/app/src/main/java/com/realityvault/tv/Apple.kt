@@ -130,7 +130,9 @@ fun App(nav: Nav, onExit: () -> Unit) {
         when (val s = nav.top) {
             Screen.Splash -> SplashScreen(nav)
             is Screen.Player -> PlayerScreen(s, nav)
-            is Screen.Detail -> DetailScreen(s.id, nav)
+            // key: al pasar de una ficha a otra se arma una nueva desde cero (arriba de todo, con el foco en "Ver"),
+            // en vez de reusar la pantalla de la anterior con su scroll y su foco
+            is Screen.Detail -> androidx.compose.runtime.key(s.id) { DetailScreen(s.id, nav) }
             is Screen.Login -> LoginScreen(s, nav)
             is Screen.Person -> PersonScreen(s.name, nav)
             is Screen.Collection -> CollectionScreen(s.id, nav)
@@ -1437,7 +1439,7 @@ private object Blur {
 
 /** Portada final: nítida arriba, cada vez más desenfocada hacia abajo, sombra leve y borde de abajo desvanecido. */
 private class AppleHeroT(private val w: Int, private val h: Int) : coil.transform.Transformation {
-    override val cacheKey = "applehero-$w-$h-v1"
+    override val cacheKey = "applehero-$w-$h-v2"
     override suspend fun transform(input: android.graphics.Bitmap, size: coil.size.Size): android.graphics.Bitmap {
         val img = Blur.cover(input.copy(android.graphics.Bitmap.Config.ARGB_8888, false), w, h)
         val px = IntArray(w * h); img.getPixels(px, 0, w, 0, 0, w, h)
@@ -1447,9 +1449,9 @@ private class AppleHeroT(private val w: Int, private val h: Int) : coil.transfor
         val keepX = FloatArray(w) { x -> val tx = x / (w - 1f); if (tx < .55f) 1f - .26f * (1f - tx / .55f) else 1f }
         for (y in 0 until h) {
             val ty = y / (h - 1f)
-            val m1 = Blur.ramp(ty, .36f, .62f); val m2 = Blur.ramp(ty, .52f, .82f); val m3 = Blur.ramp(ty, .68f, .96f)
-            val shadeY = when { ty < .38f -> 0f; ty < .62f -> .2f * Blur.ramp(ty, .38f, .62f); else -> .2f + .22f * ((ty - .62f) / .38f) }
-            val a = ((1f - Blur.ramp(ty, .78f, 1f)) * 255).toInt() shl 24
+            val m1 = Blur.ramp(ty, .46f, .72f); val m2 = Blur.ramp(ty, .62f, .90f); val m3 = Blur.ramp(ty, .78f, 1f)
+            val shadeY = when { ty < .48f -> 0f; ty < .72f -> .2f * Blur.ramp(ty, .48f, .72f); else -> .2f + .22f * ((ty - .72f) / .28f) }
+            val a = ((1f - Blur.ramp(ty, .84f, 1f)) * 255).toInt() shl 24
             val row = y * w
             for (x in 0 until w) {
                 val i = row + x
@@ -1511,7 +1513,7 @@ fun AppleBlurBg(url: String, @Suppress("UNUSED_PARAMETER") tint: Color) {
         // (con el borde de abajo desvanecido, para que tampoco en ese instante se vea dónde termina)
         if (!swapped) Img(url, Modifier.fillMaxSize()
             .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
-            .drawWithContent { drawContent(); drawRect(Brush.verticalGradient(.62f to Color.Black, 1f to Color.Transparent), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn) },
+            .drawWithContent { drawContent(); drawRect(Brush.verticalGradient(.70f to Color.Black, 1f to Color.Transparent), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn) },
             alignment = Alignment.TopCenter, crossfade = false)
         coil.compose.AsyncImage(
             model = remember(url, w, h) {
