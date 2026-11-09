@@ -2405,12 +2405,10 @@ function playTarget(t){
 function restartTarget(t){
   if (!S.session || isSoon(t)) return null;
   const tg = playTarget(t); if (!tg) return null;
-  if (t.type !== 'serie') return posResumable(getPos(t.id, null, null)) ? { season: null, episode: null } : null;
-  if (!tg.cont) return null;
-  const first = flatEpisodes(t).find(x => safeUrl(x.e.url) && !seasonSoon(x.s) && !episodeSoon(x.e)); if (!first) return null;
-  const isFirst = +first.s.number === +tg.season && +first.e.number === +tg.episode;
-  if (isFirst && !posResumable(getPos(t.id, tg.season, tg.episode))) return null;
-  return { season: first.s.number, episode: first.e.number };
+  // solo si lo que estabas viendo quedó a mitad: vuelve al segundo 0 de ESE capítulo (o de esa película)
+  const se = t.type === 'serie' ? tg.season : null, ep = t.type === 'serie' ? tg.episode : null;
+  if (!posResumable(getPos(t.id, se, ep))) return null;
+  return { season: se, episode: ep };
 }
 function restartBtn(t, cls = ''){
   const r = restartTarget(t); if (!r) return '';

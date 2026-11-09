@@ -1044,6 +1044,7 @@ fun DetailScreen(id: String, nav: Nav) {
                                     target != null -> PlayPill(target.label, Ic.play, playReq) { nav.play(t, target.url, target.season, target.episode) }
                                     else -> PlayPill("No disponible por el momento", null, playReq) {}
                                 }
+                                if (!t.isSoon && Store.canRestart(t, target)) GlassButton(Ic.replay) { nav.play(t, target!!.url, target.season, target.episode, restart = true) }
                                 GlassButton(if (t.id in Store.myList) Ic.check else Ic.plus) {
                                     if (Store.session == null) nav.go(Screen.Login()) else scope.launch { Store.toggleList(t.id) }
                                 }

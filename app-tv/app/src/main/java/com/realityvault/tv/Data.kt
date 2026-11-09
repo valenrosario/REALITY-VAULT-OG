@@ -561,6 +561,9 @@ object Store {
         return Target(e.url, s.number, e.number, "${if (cont) "Continuar" else "Ver"} T${s.number}:E${e.number}", cont)
     }
 
+    /** ¿Se puede "empezar desde el principio"? Solo si lo que se va a reproducir está a medias. */
+    fun canRestart(t: Title, tg: Target?): Boolean = tg != null && posResumable(getPos(t.id, tg.season, tg.episode))
+
     /** Capítulos con enlace para reproducir, en orden. */
     fun flatPlayable(t: Title): List<Pair<Season, Episode>> =
         t.seasons.filter { !it.soon }.sortedBy { it.number }.flatMap { s -> s.episodes.filter { it.ready }.sortedBy { it.number }.map { s to it } }

@@ -192,7 +192,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                     durMs = player.duration.coerceAtLeast(0)
                     if (!resumed) {
                         resumed = true
-                        val saved = if (track) Store.getPos(t!!.id, s.season, s.episode) else null
+                        val saved = if (track && !s.restart) Store.getPos(t!!.id, s.season, s.episode) else null
                         if (posResumable(saved) && saved!!.first * 1000 < player.duration - 45_000) player.seekTo(saved.first * 1000)
                     }
                 }

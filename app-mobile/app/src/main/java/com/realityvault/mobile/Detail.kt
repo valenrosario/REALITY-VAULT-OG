@@ -118,6 +118,7 @@ fun DetailScreen(id: String, nav: Nav) {
                     }
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (!t.isSoon && Store.canRestart(t, target)) GlassButton(Ic.replay, "Empezar desde el principio", { nav.play(t, target!!.url, target.season, target.episode, restart = true) }, size = 46.dp)
                         ListToggle(t, nav)
                         if (mediaFor(t.trailer) != null) GlassButton(Ic.clapper, "Ver tráiler", { nav.go(Screen.Player(t.id, t.trailer, null, null, trailer = true)) }, size = 46.dp)
                     }

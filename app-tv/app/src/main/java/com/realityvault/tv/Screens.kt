@@ -78,7 +78,7 @@ sealed class Screen {
     data object Search : Screen()
     data object Account : Screen()
     data class Detail(val id: String) : Screen()
-    data class Player(val titleId: String, val url: String, val season: Int?, val episode: Int?, val trailer: Boolean = false, val extra: Boolean = false) : Screen()
+    data class Player(val titleId: String, val url: String, val season: Int?, val episode: Int?, val trailer: Boolean = false, val extra: Boolean = false, val restart: Boolean = false) : Screen()
     /** required = true: es la puerta de entrada obligatoria, no se puede saltear. */
     data class Login(val then: Screen? = null, val required: Boolean = false) : Screen()
     data class Person(val name: String) : Screen()
@@ -106,8 +106,8 @@ class Nav {
     fun replace(s: Screen) { stack[stack.lastIndex] = s }
 
     /** Ver algo: pide cuenta igual que el sitio. */
-    fun play(t: Title, url: String, season: Int?, episode: Int?) {
-        val p = Screen.Player(t.id, url, season, episode)
+    fun play(t: Title, url: String, season: Int?, episode: Int?, restart: Boolean = false) {
+        val p = Screen.Player(t.id, url, season, episode, restart = restart)
         if (Store.session == null) go(Screen.Login(p)) else go(p)
     }
 
