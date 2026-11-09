@@ -430,20 +430,23 @@ a.ep-card:hover .ep-thumb{transform:scale(1.03);box-shadow:inset 0 0 0 2px var(-
 .acc-menu .acc-name{padding:10px 12px 8px;font-family:var(--display);font-weight:700;border-bottom:1px solid var(--line);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .acc-menu a,.acc-menu button{text-align:left;background:none;border:0;color:var(--fg);padding:10px 12px;border-radius:6px;text-decoration:none;font:inherit;cursor:pointer}
 .acc-menu a:hover,.acc-menu button:hover{background:var(--surface-3)}
-/* corazón de Mi lista */
+/* corazón de Mi lista — transición "Like button" de transitions.dev (tokens --like-*) */
+:root{--like-color:#f40051;--like-fill:150ms;--like-pop:350ms;--like-pop-ease:cubic-bezier(.34,1.96,.64,1);--like-particle-dur:600ms;--like-particle-dist:20px;--like-particle-size:2.5px;--like-ease:cubic-bezier(.22,1,.36,1)}
 .lh{position:relative;display:grid;place-items:center;width:20px;height:20px;pointer-events:none}
-.lh svg{width:20px;height:20px;overflow:visible}
-.lh path{fill:transparent;stroke:currentColor;stroke-width:2.3;stroke-linejoin:round;transition:fill .18s,stroke .18s}
-.list-btn.on .lh path,.list-wide.on .lh path{fill:var(--accent-2);stroke:var(--accent-2)}
-.list-btn.on,.list-wide.on{background:rgba(255,255,255,.12)}
-.lh i{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:var(--accent-2);opacity:0}
-.lh i:nth-child(even){width:4px;height:4px;margin:-2px;background:#fff}
-.lh.pop svg{animation:lhPop .55s cubic-bezier(.2,.9,.3,1.3)}
-.lh.pop i{animation:lhBurst .6s cubic-bezier(.15,.7,.3,1) both}
-@keyframes lhPop{0%{transform:scale(1)}20%{transform:scale(.72)}55%{transform:scale(1.32)}100%{transform:scale(1)}}
-@keyframes lhBurst{0%{opacity:1;transform:rotate(var(--a)) translateY(-7px) scale(1)}100%{opacity:0;transform:rotate(var(--a)) translateY(-25px) scale(.4)}}
-@media(prefers-reduced-motion:reduce){.lh.pop svg,.lh.pop i{animation:none}}
-.list-btn.on{color:var(--accent-2)}
+.t-like-icon{display:grid;place-items:center}
+.t-like-heart{width:20px;height:20px;overflow:visible;color:currentColor;transition:color var(--like-fill) var(--like-ease)}
+.t-like-heart path{fill:transparent;stroke:currentColor;stroke-width:2.3;stroke-linejoin:round;transition:fill var(--like-fill) var(--like-ease),stroke var(--like-fill) var(--like-ease)}
+.lh[data-liked="true"] .t-like-heart{color:var(--like-color)}
+.lh[data-liked="true"] .t-like-heart path{fill:currentColor}
+.lh[data-liked="true"] .t-like-icon{animation:t-like-pop var(--like-pop) var(--like-pop-ease)}
+@keyframes t-like-pop{0%{transform:scale(1)}30%{transform:scale(.82)}100%{transform:scale(1)}}
+.t-like-particles{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none;color:var(--like-color)}
+.t-like-particles i{position:absolute;left:calc(var(--like-particle-size)*var(--psize,1)/-2);top:calc(var(--like-particle-size)*var(--psize,1)/-2);width:calc(var(--like-particle-size)*var(--psize,1));height:calc(var(--like-particle-size)*var(--psize,1));border-radius:50%;background:currentColor;opacity:0}
+@keyframes t-like-burst{0%{opacity:0;transform:translate(0,0) scale(.4)}20%{opacity:1;transform:translate(calc(var(--px)*.25),calc(var(--py)*.25)) scale(1)}100%{opacity:0;transform:translate(var(--px),var(--py)) scale(var(--p-end-scale,.6))}}
+.lh.is-bursting .t-like-particles i{animation:t-like-burst var(--pdur,var(--like-particle-dur)) ease-out var(--pdelay,0ms) forwards}
+@media(prefers-reduced-motion:reduce){.t-like-icon,.t-like-particles i{animation:none!important}}
+.list-btn.on,.list-wide.on{background:rgba(255,255,255,.12);border-color:rgba(244,0,81,.55)}
+.list-btn.on{color:#fff}
 .hero-actions .round{width:46px;height:46px;flex:0 0 auto}
 .auth-card{position:relative;width:min(420px,100%);background:var(--surface);border:1px solid var(--line-2);border-radius:14px;padding:28px 24px 22px;display:flex;flex-direction:column;gap:14px;margin-top:8vh;animation:rise .25s ease}
 .auth-card h2{font-family:var(--display);font-weight:700;font-size:28px}
@@ -881,7 +884,7 @@ a.cast-card:hover strong{color:var(--accent-2)}
 .round:hover,.hero-more:hover,.list-wide:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255,.7)}
 .round{width:50px;height:50px}
 .hero-more{border-radius:99px;padding:13px 24px}
-.list-btn.on,.list-wide.on{color:var(--accent-2);border-color:rgba(245,163,196,.7)}
+.list-btn.on,.list-wide.on{color:#fff;border-color:rgba(244,0,81,.55)}
 /* ---------- phones only: Tubi-style home banner ---------- */
 .m-chips,.hero-m-info{display:none}
 @media (max-width:640px){

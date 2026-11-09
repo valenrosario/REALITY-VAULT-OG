@@ -2339,16 +2339,27 @@ S.myList = new Set();
 const ICON_HEART_FILL = '<svg class="ic-heart" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.7 3.9 4.5 7.3 4.5c2 0 3.6 1.1 4.7 2.7 1.1-1.6 2.7-2.7 4.7-2.7 3.4 0 5.7 3.2 4.5 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>';
 const ICON_HEART = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.7 3.9 4.5 7.3 4.5c2 0 3.6 1.1 4.7 2.7 1.1-1.6 2.7-2.7 4.7-2.7 3.4 0 5.7 3.2 4.5 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>';
 // Corazón de "Mi lista": se rellena con un pop y salen partículas (animación en CSS, clase .pop)
-const ICON_LIST_HEART = '<span class="lh" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.7 3.9 4.5 7.3 4.5c2 0 3.6 1.1 4.7 2.7 1.1-1.6 2.7-2.7 4.7-2.7 3.4 0 5.7 3.2 4.5 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>' + [0,1,2,3,4,5,6,7].map(i => `<i style="--a:${i*45}deg"></i>`).join('') + '</span>';
+const ICON_LIST_HEART = (on) => `<span class="lh" data-liked="${!!on}" aria-hidden="true"><span class="t-like-icon"><svg class="t-like-heart" viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.7 3.9 4.5 7.3 4.5c2 0 3.6 1.1 4.7 2.7 1.1-1.6 2.7-2.7 4.7-2.7 3.4 0 5.7 3.2 4.5 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg></span><span class="t-like-particles">${'<i></i>'.repeat(8)}</span></span>`;
+// chispas del like: cada vez salen con ángulo, distancia y tamaño un poco distintos
+function likeBurst(lh){
+  lh.querySelectorAll('.t-like-particles i').forEach((p, i) => {
+    const ang = (i / 8) * Math.PI * 2 + (Math.random() - .5) * .6, dist = 20 * (.75 + Math.random() * .6);
+    p.style.setProperty('--px', (Math.cos(ang) * dist).toFixed(1) + 'px'); p.style.setProperty('--py', (Math.sin(ang) * dist).toFixed(1) + 'px');
+    p.style.setProperty('--pdur', ((520 + Math.random() * 160) | 0) + 'ms'); p.style.setProperty('--pdelay', ((Math.random() * 60) | 0) + 'ms');
+    p.style.setProperty('--psize', (.8 + Math.random() * .9).toFixed(2)); p.style.setProperty('--p-end-scale', (.4 + Math.random() * .4).toFixed(2));
+  });
+  lh.classList.remove('is-bursting'); void lh.offsetWidth; lh.classList.add('is-bursting');
+  setTimeout(() => lh.classList.remove('is-bursting'), 900);
+}
 const ICON_PLUS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
 const ICON_CHECK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 function listWide(id){
   const on = S.myList.has(id);
-  return `<button class="btn list-wide ${on?'on':''}" data-mylist="${esc(id)}" data-wide="1" aria-pressed="${on}" aria-label="${on?'Quitar de Mi lista':'Agregar a Mi lista'}" title="${on?'Quitar de Mi lista':'Agregar a Mi lista'}">${ICON_LIST_HEART}</button>`;
+  return `<button class="btn list-wide ${on?'on':''}" data-mylist="${esc(id)}" data-wide="1" aria-pressed="${on}" aria-label="${on?'Quitar de Mi lista':'Agregar a Mi lista'}" title="${on?'Quitar de Mi lista':'Agregar a Mi lista'}">${ICON_LIST_HEART(on)}</button>`;
 }
 function listBtn(id, cls){
   const on = S.myList.has(id);
-  return `<button class="${cls||'round'} list-btn ${on?'on':''}" data-mylist="${esc(id)}" aria-pressed="${on}" aria-label="${on?'Quitar de Mi lista':'Agregar a Mi lista'}" title="${on?'Quitar de Mi lista':'Agregar a Mi lista'}">${ICON_LIST_HEART}</button>`;
+  return `<button class="${cls||'round'} list-btn ${on?'on':''}" data-mylist="${esc(id)}" aria-pressed="${on}" aria-label="${on?'Quitar de Mi lista':'Agregar a Mi lista'}" title="${on?'Quitar de Mi lista':'Agregar a Mi lista'}">${ICON_LIST_HEART(on)}</button>`;
 }
 const userName = () => (S.session?.user?.user_metadata?.name || S.session?.user?.email || '').trim();
 /* --- Seguir viendo --- */
@@ -2562,7 +2573,7 @@ function refreshListButtons(){
       const on = S.myList.has(b.dataset.mylist), was = b.classList.contains('on');
       b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
       const txt = on ? 'Quitar de Mi lista' : 'Agregar a Mi lista'; b.setAttribute('aria-label', txt); b.title = txt;
-      if (on && !was){ lh.classList.remove('pop'); void lh.offsetWidth; lh.classList.add('pop'); }
+      lh.dataset.liked = on; if (on && !was) likeBurst(lh);
       return;
     }
     const tmp = document.createElement('div'); tmp.innerHTML = b.dataset.wide ? listWide(b.dataset.mylist) : listBtn(b.dataset.mylist, 'round'); b.replaceWith(tmp.firstElementChild); });
