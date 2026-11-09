@@ -2338,15 +2338,17 @@ app.addEventListener('click', e => {
 S.myList = new Set();
 const ICON_HEART_FILL = '<svg class="ic-heart" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.7 3.9 4.5 7.3 4.5c2 0 3.6 1.1 4.7 2.7 1.1-1.6 2.7-2.7 4.7-2.7 3.4 0 5.7 3.2 4.5 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>';
 const ICON_HEART = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.7 3.9 4.5 7.3 4.5c2 0 3.6 1.1 4.7 2.7 1.1-1.6 2.7-2.7 4.7-2.7 3.4 0 5.7 3.2 4.5 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>';
+// Corazón de "Mi lista": se rellena con un pop y salen partículas (animación en CSS, clase .pop)
+const ICON_LIST_HEART = '<span class="lh" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.7 3.9 4.5 7.3 4.5c2 0 3.6 1.1 4.7 2.7 1.1-1.6 2.7-2.7 4.7-2.7 3.4 0 5.7 3.2 4.5 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>' + [0,1,2,3,4,5,6,7].map(i => `<i style="--a:${i*45}deg"></i>`).join('') + '</span>';
 const ICON_PLUS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
 const ICON_CHECK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 function listWide(id){
   const on = S.myList.has(id);
-  return `<button class="btn list-wide ${on?'on':''}" data-mylist="${esc(id)}" data-wide="1" aria-pressed="${on}" aria-label="${on?'Quitar de Mi lista':'Agregar a Mi lista'}" title="${on?'Quitar de Mi lista':'Agregar a Mi lista'}">${on?ICON_CHECK:ICON_PLUS}</button>`;
+  return `<button class="btn list-wide ${on?'on':''}" data-mylist="${esc(id)}" data-wide="1" aria-pressed="${on}" aria-label="${on?'Quitar de Mi lista':'Agregar a Mi lista'}" title="${on?'Quitar de Mi lista':'Agregar a Mi lista'}">${ICON_LIST_HEART}</button>`;
 }
 function listBtn(id, cls){
   const on = S.myList.has(id);
-  return `<button class="${cls||'round'} list-btn ${on?'on':''}" data-mylist="${esc(id)}" aria-pressed="${on}" aria-label="${on?'Quitar de Mi lista':'Agregar a Mi lista'}" title="${on?'Quitar de Mi lista':'Agregar a Mi lista'}">${on?ICON_CHECK:ICON_PLUS}</button>`;
+  return `<button class="${cls||'round'} list-btn ${on?'on':''}" data-mylist="${esc(id)}" aria-pressed="${on}" aria-label="${on?'Quitar de Mi lista':'Agregar a Mi lista'}" title="${on?'Quitar de Mi lista':'Agregar a Mi lista'}">${ICON_LIST_HEART}</button>`;
 }
 const userName = () => (S.session?.user?.user_metadata?.name || S.session?.user?.email || '').trim();
 /* --- Seguir viendo --- */
@@ -2554,7 +2556,16 @@ async function toggleList(id){
 }
 function refreshListButtons(){
   if (document.querySelector('[data-heart]')){ const y = window.scrollY; render(); window.scrollTo(0, y); return; }
-  document.querySelectorAll('[data-mylist]').forEach(b => { const tmp = document.createElement('div'); tmp.innerHTML = b.dataset.wide ? listWide(b.dataset.mylist) : listBtn(b.dataset.mylist, 'round'); b.replaceWith(tmp.firstElementChild); });
+  document.querySelectorAll('[data-mylist]').forEach(b => {
+    const lh = b.querySelector('.lh');
+    if (lh){ // se actualiza en el lugar para que la animación se vea
+      const on = S.myList.has(b.dataset.mylist), was = b.classList.contains('on');
+      b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
+      const txt = on ? 'Quitar de Mi lista' : 'Agregar a Mi lista'; b.setAttribute('aria-label', txt); b.title = txt;
+      if (on && !was){ lh.classList.remove('pop'); void lh.offsetWidth; lh.classList.add('pop'); }
+      return;
+    }
+    const tmp = document.createElement('div'); tmp.innerHTML = b.dataset.wide ? listWide(b.dataset.mylist) : listBtn(b.dataset.mylist, 'round'); b.replaceWith(tmp.firstElementChild); });
 }
 function renderMyList(){
   if (!S.session) return `<div class="lock"><h1>Mi lista</h1><p>Creá una cuenta gratis para guardar tus series y películas.</p><button class="btn btn-primary" data-auth="signup">Crear cuenta</button><button class="btn btn-line" data-auth="login">Ya tengo cuenta</button></div>`;
