@@ -105,7 +105,58 @@ fun App(nav: Nav, onExit: () -> Unit) {
 /* ---------------- barra de abajo: píldora flotante de vidrio esmerilado ---------------- */
 
 @Composable
-private fun BottomBar(nav: Nav, haze: dev.chrisbanes.haze.HazeState) = LiquidTabBar(nav)
+private fun BottomBar(nav: Nav, haze: dev.chrisbanes.haze.HazeState) {
+    val shape = RoundedCornerShape(36.dp)
+    val thumbShape = RoundedCornerShape(30.dp)
+    val items = listOf(Screen.Home to "Inicio", Screen.Search to "Buscar", Screen.Mine to "Mi Vault")
+    val itemW = 96.dp
+    val idx = items.indexOfFirst { (sc, _) -> nav.top == sc || (sc == Screen.Mine && nav.top is Screen.Account) }
+    // el "vidrio" de la pestaña activa se desliza de una a otra con un rebote suave
+    val thumbX by androidx.compose.animation.core.animateDpAsState(itemW * idx.coerceAtLeast(0), androidx.compose.animation.core.spring(dampingRatio = .74f, stiffness = 420f), label = "thumb")
+    val thumbA by androidx.compose.animation.core.animateFloatAsState(if (idx >= 0) 1f else 0f, tween(180), label = "thumbA")
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.width(itemW * items.size + 12.dp).height(68.dp)
+                .shadow(26.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+                .clip(shape)
+                .hazeChild(haze, dev.chrisbanes.haze.HazeStyle(
+                    backgroundColor = C.bg,
+                    tints = listOf(dev.chrisbanes.haze.HazeTint(Color(0xFF2A2A2E).copy(alpha = .58f))),
+                    blurRadius = 28.dp, noiseFactor = .06f
+                ))
+                .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = .30f), Color.White.copy(alpha = .06f))), shape)
+                .padding(6.dp)
+        ) {
+            Box(
+                Modifier.offset(x = thumbX).width(itemW).fillMaxHeight().alpha(thumbA).clip(thumbShape)
+                    .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = .22f), Color.White.copy(alpha = .10f))))
+                    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = .34f), Color.White.copy(alpha = .08f))), thumbShape)
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                items.forEach { (sc, label) ->
+                    val on = items.indexOf(sc to label) == idx
+                    val tint by androidx.compose.animation.animateColorAsState(if (on) Color.White else Color.White.copy(alpha = .62f), tween(200), label = "tabTint")
+                    Column(
+                        Modifier.width(itemW).fillMaxHeight().clip(thumbShape).tap({ if (!on) nav.section(sc) }, .92f),
+                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+                    ) {
+                        when (sc) {
+                            Screen.Mine -> {
+                            val ph = avatarRes(Store.session?.avatar)
+                            Box(Modifier.size(25.dp).clip(RoundedCornerShape(7.dp)).background(Brush.radialGradient(listOf(Color(0xFFFFD1E6), C.accent, Color(0xFFB04C86)))).border(if (on) 1.5.dp else 0.dp, Color.White, RoundedCornerShape(7.dp)), contentAlignment = Alignment.Center) {
+                                if (ph != null) androidx.compose.foundation.Image(painterResource(ph), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                else Text("★", style = ts(12, color = Color.White))
+                            }
+                        }
+                        else -> Icon(if (sc == Screen.Home) Ic.home else Ic.search, label, tint = tint, modifier = Modifier.size(25.dp))
+                        }
+                        Text(label, style = ts(11.5f, FontWeight.Bold, tint), modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+            }
+        }
+    }
+}
 
 /** Botón redondo con la foto de perfil (abre "Mi cuenta"). */
 @Composable
