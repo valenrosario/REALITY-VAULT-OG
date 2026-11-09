@@ -1174,7 +1174,17 @@ function renderCollection(slug){
   const c = (S.colls || []).find(x => collSlug(x) === slug || x.id === slug);
   const items = c ? collItems(c) : [];
   if (!c || !items.length) return `<div class="lock"><h1>No encontramos esta colección</h1><p>Puede que ya no esté disponible.</p><a class="btn btn-line" href="/">Volver al inicio</a></div>`;
-  return `<main class="coll-page">${collBanner(c, true)}<div class="grid">${items.map(card).join('')}</div></main>`;
+  // portada grande (imagen de la colección + logo) y abajo una fila con los títulos, en el orden elegido
+  const art = c.image || (items.find(t => t.backdrop || t.bannerImage) || {}).backdrop || (items.find(t => t.bannerImage) || {}).bannerImage || (items.find(t => t.poster) || {}).poster || '';
+  const n = items.length;
+  return `<main class="coll-page cp2"><section class="cp-hero" style="${hexOk(c.color) ? `--cp:${esc(c.color)}` : ''}">
+      ${art ? `<span class="cp-bg" data-src="${esc(art)}"></span>` : ''}<span class="cp-sh"></span>
+      <div class="cp-ct"><span class="coll-k">Colección</span>
+        ${c.logo ? `<img class="cp-logo" alt="${esc(c.name || 'Colección')}" data-img="${esc(c.logo)}" hidden><h1 class="cp-name logo-fallback" hidden>${esc(c.name || 'Colección')}</h1>` : `<h1 class="cp-name">${esc(c.name || 'Colección')}</h1>`}
+        ${c.tagline ? `<p class="cp-tag">${esc(c.tagline)}</p>` : ''}<span class="cp-n">${n} título${n === 1 ? '' : 's'}</span></div></section>
+    <section class="row cp-row"><div class="row-wrap"><button class="rail-btn l" data-scroll="-1" aria-label="Anterior">‹</button>
+      <div class="rail">${items.map(card).join('')}</div>
+      <button class="rail-btn r" data-scroll="1" aria-label="Siguiente">›</button></div></section></main>`;
 }
 let collSaveT = null;
 function saveColls(now){

@@ -135,7 +135,7 @@ fun CollectionScreen(id: String, nav: Nav) {
         return
     }
     val cfg = LocalConfiguration.current
-    val heroH = minOf(cfg.screenWidthDp * 1.15f, cfg.screenHeightDp * .62f).dp
+    val heroH = minOf(cfg.screenWidthDp * 1.15f, cfg.screenHeightDp * .6f).dp
     val auto = rememberTint(c.image.ifBlank { list.first().poster })
     val tint = c.colorArgb?.let { Color(it) } ?: auto
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -161,7 +161,13 @@ fun CollectionScreen(id: String, nav: Nav) {
                     }
                 }
             }
-            itemsIndexed(list, key = { _, t -> t.id }) { i, t -> CollItem(i + 1, t, nav) }
+            item(key = "row") {
+                androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(list, key = { it.id }) { t ->
+                        PosterCard(t, Modifier.width(122.dp).aspectRatio(2f / 3f).tap({ nav.go(Screen.Detail(t.id)) }).clip(RoundedCornerShape(8.dp)))
+                    }
+                }
+            }
         }
         Box(Modifier.statusBarsPadding().padding(start = 12.dp, top = 8.dp)) { GlassButton(Ic.back, "Volver", { nav.back() }, size = 40.dp) }
     }
