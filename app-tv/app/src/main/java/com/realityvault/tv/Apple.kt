@@ -828,9 +828,9 @@ fun ExpandPoster(t: Title, baseW: Dp, key: String, restore: String?, nav: Nav, s
     val focused by src.collectIsFocusedAsState()
     val h = baseW * 1.5f
     val openW = h * (16f / 9f)
-    // se abre y se cierra con resorte, como el toggle / el óvalo de las categorías: se pasa apenas y se acomoda
-    val w by animateDpAsState(if (focused) openW else baseW, spring(dampingRatio = .74f, stiffness = 300f), label = "pw")
-    val openRaw by animateFloatAsState(if (focused) 1f else 0f, spring(dampingRatio = .74f, stiffness = 300f), label = "po")
+    // se abre y se cierra con un resorte suave: llega con apenas un asentado, sin rebotar
+    val w by animateDpAsState(if (focused) openW else baseW, spring(dampingRatio = .92f, stiffness = 220f), label = "pw")
+    val openRaw by animateFloatAsState(if (focused) 1f else 0f, spring(dampingRatio = .92f, stiffness = 220f), label = "po")
     val open = openRaw.coerceIn(0f, 1f)
     Focusable(
         onClick, Modifier.entry(entry != null, entry ?: req).width(w).height(h), shape = RoundedCornerShape(9.dp), scale = 1f, ring = true, lift = true,
