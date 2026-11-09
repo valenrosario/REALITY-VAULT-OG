@@ -5,6 +5,7 @@ import android.view.TextureView
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Spring
@@ -172,7 +173,7 @@ fun TopNavBar(nav: Nav, modifier: Modifier = Modifier, downTarget: FocusRequeste
     val activeIdx = if (rowHasFocus && focusedIdx >= 0) focusedIdx else selectedIdx
     val target = bounds[activeIdx]
     val density = LocalDensity.current
-    val pillSpec = spring<Dp>(dampingRatio = .82f, stiffness = 420f)
+    val pillSpec = tween<Dp>(250, easing = CubicBezierEasing(.22f, 1f, .36f, 1f))
     val animX by animateDpAsState(with(density) { (target?.left ?: 0f).toDp() }, pillSpec, label = "pillX")
     val animW by animateDpAsState(with(density) { (target?.width ?: 0f).toDp() }, pillSpec, label = "pillW")
     val bright = rowHasFocus && focusedIdx >= 0
@@ -202,7 +203,7 @@ fun TopNavBar(nav: Nav, modifier: Modifier = Modifier, downTarget: FocusRequeste
                     .offset(x = animX)
                     .width(animW)
                     .height(38.dp)
-                    .background(Color.White.copy(alpha = animAlpha), RoundedCornerShape(99.dp))
+                    .background(Color(0xFFEDEE3B).copy(alpha = animAlpha), RoundedCornerShape(99.dp))
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 NavIcon(
