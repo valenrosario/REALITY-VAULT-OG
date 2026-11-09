@@ -1070,6 +1070,9 @@ fun DetailScreen(id: String, nav: Nav) {
     val bgCol = Brush.radialGradient(listOf(tint.copy(alpha = 1f).lighten(.10f), tint, tint.darken(.45f)), radius = 1600f)
 
     Box(Modifier.fillMaxSize().background(bgCol)) {
+        // fondo de toda la ficha: la misma imagen muy desenfocada y apenas oscurecida (como Apple TV), así la
+        // portada se funde con ella y nunca se ve dónde termina la imagen
+        if (t.tvBg.isNotBlank()) BlurPageBg(t.tvBg)
         CompositionLocalProvider(LocalBringIntoViewSpec provides spec) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 240.dp)) {
                 // portada a pantalla completa
@@ -1382,39 +1385,85 @@ class RowSwap(private val state: LazyListState, private val scope: kotlinx.corou
     }
 }
 
+
+/* ---------------- desenfoque tipo Apple TV ---------------- */
+
 /**
- * Fondo de la ficha con el desenfoque de Apple TV: en vez de pintar capas oscuras encima, la misma imagen
- * se va desenfocando de a poco hacia abajo (nítida arriba, cada vez más suave detrás del texto), así
- * conserva sus colores. Son varias copias de la imagen, cada una más desenfocada y visible desde más
- * abajo, que se funden entre sí sin escalones. Encima, solo una sombra leve para que el texto se lea y,
- * en el borde de abajo, el paso al color de la página. El desenfoque necesita Android 12+; en equipos
- * más viejos se usa en su lugar un oscurecimiento suave del color de la serie.
+ * Desenfoque hecho UNA vez, sobre una copia chiquita de la imagen (cuadro con el desenfoque ya
+ * aplicado, que después se agranda suave). Es mucho más liviano que desenfocar la pantalla entera en
+ * cada cuadro, anda en cualquier versión de Android y se guarda en caché como cualquier imagen.
+ */
+class SoftBlur(private val radius: Int) : coil.transform.Transformation {
+    override val cacheKey = "softblur-$radius"
+    override suspend fun transform(input: android.graphics.Bitmap, size: coil.size.Size): android.graphics.Bitmap {
+        val w = input.width; val h = input.height
+        val src = input.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+        val px = IntArray(w * h); src.getPixels(px, 0, w, 0, 0, w, h)
+        val tmp = IntArray(w * h)
+        repeat(3) { box(px, tmp, w, h, radius, true); box(tmp, px, w, h, radius, false) }   // 3 pasadas ≈ desenfoque gaussiano
+        return android.graphics.Bitmap.createBitmap(px, w, h, android.graphics.Bitmap.Config.ARGB_8888)
+    }
+    private fun box(inp: IntArray, out: IntArray, w: Int, h: Int, r: Int, horiz: Boolean) {
+        val n = if (horiz) w else h; val lines = if (horiz) h else w; val div = 2 * r + 1
+        for (l in 0 until lines) {
+            fun at(i: Int): Int { val c = i.coerceIn(0, n - 1); return if (horiz) l * w + c else c * w + l }
+            var sa = 0; var sr = 0; var sg = 0; var sb = 0
+            for (i in -r..r) { val p = inp[at(i)]; sa += p ushr 24; sr += (p shr 16) and 255; sg += (p shr 8) and 255; sb += p and 255 }
+            for (i in 0 until n) {
+                out[at(i)] = ((sa / div) shl 24) or ((sr / div) shl 16) or ((sg / div) shl 8) or (sb / div)
+                val pa = inp[at(i + r + 1)]; val pr = inp[at(i - r)]
+                sa += (pa ushr 24) - (pr ushr 24); sr += ((pa shr 16) and 255) - ((pr shr 16) and 255)
+                sg += ((pa shr 8) and 255) - ((pr shr 8) and 255); sb += (pa and 255) - (pr and 255)
+            }
+        }
+    }
+}
+
+/** La imagen ya desenfocada (w = ancho de la copia chica: cuanto más chica, más desenfocada). */
+@Composable
+fun BlurImg(url: String, w: Int, radius: Int, modifier: Modifier = Modifier) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    coil.compose.AsyncImage(
+        model = remember(url, w, radius) {
+            ImageRequest.Builder(ctx).data(url).size(w, (w * 9) / 16).scale(coil.size.Scale.FILL).precision(coil.size.Precision.EXACT)
+                .transformations(SoftBlur(radius)).crossfade(220).build()
+        },
+        contentDescription = null, contentScale = ContentScale.Crop, alignment = Alignment.TopCenter,
+        filterQuality = androidx.compose.ui.graphics.FilterQuality.High, modifier = modifier
+    )
+}
+
+private fun Modifier.fadeMask(a: Float, b: Float, inverse: Boolean = false) = this
+    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(Brush.verticalGradient(a to (if (inverse) Color.Black else Color.Transparent), b to (if (inverse) Color.Transparent else Color.Black)), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+    }
+
+/** Fondo fijo de toda la ficha: la imagen muy desenfocada, un poco oscurecida para que todo se lea. */
+@Composable
+fun BlurPageBg(url: String) {
+    Box(Modifier.fillMaxSize()) {
+        BlurImg(url, 64, 2, Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .42f)))
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .26f), .55f to Color.Transparent)))
+    }
+}
+
+/**
+ * Portada de la ficha con el desenfoque de Apple TV: nítida arriba y cada vez más desenfocada hacia abajo
+ * (sin pintar capas oscuras encima, así conserva sus colores), y en el último tramo se desvanece sobre el
+ * fondo de la página, que es la misma imagen desenfocada: no hay ningún borde donde termine la imagen.
  */
 @Composable
 fun AppleBlurBg(url: String, tint: Color) {
-    val canBlur = android.os.Build.VERSION.SDK_INT >= 31
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().fadeMask(.78f, 1f, inverse = true)) {
         Img(url, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
-        if (canBlur) {
-            // (desenfoque en dp, empieza a verse, ya se ve entera) — de arriba hacia abajo
-            listOf(Triple(3f, .40f, .60f), Triple(7f, .48f, .70f), Triple(13f, .56f, .80f), Triple(22f, .64f, .90f), Triple(34f, .72f, 1f)).forEach { (r, a, b) ->
-                Img(url, Modifier.fillMaxSize()
-                    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(Brush.verticalGradient(a to Color.Transparent, b to Color.Black), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
-                    }
-                    .blur(r.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Rectangle),
-                    alignment = Alignment.TopCenter)
-            }
-            // sombra leve (abajo y a la izquierda) solo para que el texto se lea
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(.40f to Color.Transparent, .62f to Color.Black.copy(alpha = .18f), 1f to Color.Black.copy(alpha = .42f))))
-            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .26f), .55f to Color.Transparent)))
-            // el último tramo se funde con el color de la página, para que no haya un corte con los capítulos
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(.86f to Color.Transparent, 1f to tint)))
-        } else {
-            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .7f), .4f to Color.Black.copy(alpha = .35f), .6f to Color.Transparent)))
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .45f to Color.Transparent, .72f to tint.copy(alpha = .7f), 1f to tint)))
-        }
+        BlurImg(url, 360, 2, Modifier.fillMaxSize().fadeMask(.36f, .62f))
+        BlurImg(url, 140, 2, Modifier.fillMaxSize().fadeMask(.52f, .82f))
+        BlurImg(url, 64, 2, Modifier.fillMaxSize().fadeMask(.68f, .96f))
+        // sombra leve (abajo y a la izquierda) solo para que el texto se lea; abajo coincide con el fondo
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(.38f to Color.Transparent, .62f to Color.Black.copy(alpha = .2f), 1f to Color.Black.copy(alpha = .42f))))
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = .26f), .55f to Color.Transparent)))
     }
 }
