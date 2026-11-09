@@ -160,171 +160,6 @@ function pickFile(accept){
   });
 }
 
-
-/* ══ Upload dropzone (Bencho, MIT — bencho.dev/licence) ══════════════════
-   Portado de React a JS plano y conectado a subidas REALES del panel de admin.
-   Lo que cambia respecto del original: ahí los archivos eran de mentira (una bandeja con
-   tres archivos y un arrastre dentro del bloque); acá el archivo es el de tu compu, que se
-   arrastra desde el escritorio o se elige tocando la caja. El resto es igual: la caja se agranda
-   con rebote cuando le acercás un archivo, "traga" al soltarlo, muestra nombre + porcentaje que
-   rueda + barra, tilda y se cierra.
-
-   ── LA CAJA INHALA, Y TRAGA ─────────────────────────────
-   Una caja llena, sin borde. Un archivo encima y ya responde antes de soltarlo: crece con
-   un rebote chico y la flecha se levanta hacia la mano. Al soltarlo hace un trago antes de que
-   aparezca la subida adentro.
-
-   ── UNO ES DEMASIADO GRANDE ─────────────────────────────
-   Si el archivo no es del tipo o pasa el límite, la caja tiembla, lo dice en rojo y el
-   archivo vuelve a su lugar (no se sube nada). */
-const UPL_TINT = { video: '#155EEF', image: '#079455', other: '#6941C6' };
-const uplFmt = b => b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`;
-
-/* ── el ícono del archivo ─────────────────────────────────
-   Una hoja redondeada sobre una grilla de 40 con borde gris fino y la esquina doblada, y la
-   extensión en una etiqueta de color que sobresale por la izquierda: el color dice el tipo
-   antes de leer la palabra. */
-function uplPage(ext, tint, size = 40){
-  return `<svg class="upl-page" width="${size}" height="${size}" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-    <path class="upl-page-line" d="M7.75 4A3.25 3.25 0 0 1 11 .75h16c.121 0 .238.048.323.134l10.793 10.793a.46.46 0 0 1 .134.323v24A3.25 3.25 0 0 1 35 39.25H11A3.25 3.25 0 0 1 7.75 36z"/>
-    <path class="upl-page-line" d="M27 .5V8a4 4 0 0 0 4 4h7.5"/>
-    <rect width="29" height="16" x="1" y="18" rx="8" fill="${tint}"/>
-    <text x="15.5" y="29.1" text-anchor="middle" font-size="${ext.length > 3 ? 7.5 : 9}" class="upl-page-ext">${esc(ext)}</text></svg>`;
-}
-
-/* abre la caja y devuelve { file, start, progress, finish, fail, hide, show, close } cuando eligen un archivo (null si cancelan) */
-function openDropzone({ accept = 'image/*', kind = 'image', title = 'Subir archivo', maxMB = 0, tipo = 'un archivo' } = {}){
-  return new Promise(resolve => {
-    const still = !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    const lastFocus = document.activeElement;
-    const ov = document.createElement('div');
-    ov.className = 'upl-ov'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', title);
-    const idle = `<span class="upl-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg></span>
-      <span class="upl-say"><b>Arrastrá ${esc(tipo)} acá</b><span>o tocá para elegirlo${maxMB ? ` · hasta ${maxMB} MB` : ''}</span></span>`;
-    ov.innerHTML = `<div class="upl-card"><button class="upl-x" type="button" aria-label="Cancelar">✕</button><h3 class="upl-title">${esc(title)}</h3>
-      <div class="upl"><div class="upl-zone-wrap"><div class="upl-zone" tabindex="0" role="button" aria-live="polite" aria-label="${esc(title)}: soltá el archivo o tocá para elegirlo">${idle}</div></div></div></div>`;
-    const input = document.createElement('input'); input.type = 'file'; input.accept = accept; input.hidden = true; ov.appendChild(input);
-    const wrap = ov.querySelector('.upl-zone-wrap'), zone = ov.querySelector('.upl-zone'), card = ov.querySelector('.upl-card');
-    let phase = 'idle', refuseT = 0, raf = 0, p = 0;
-    const timers = [];
-    const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
-
-    const accepts = f => kind === 'video' ? (f.type.startsWith('video/') || /\.(mp4|webm|mov|m4v)$/i.test(f.name)) : f.type.startsWith('image/');
-
-    /* ── si dice que no ──────────────────────────────────── */
-    const refuse = msg => {
-      const b = zone.querySelector('.upl-say b'); if (!b) return;
-      const old = b.dataset.t || (b.dataset.t = b.textContent);
-      b.textContent = msg; zone.dataset.refuse = '';
-      if (!still) wrap.animate({ transform: ['translateX(0)', 'translateX(-7px)', 'translateX(6px)', 'translateX(-4px)', 'translateX(2px)', 'translateX(0)'] }, { duration: 420 });
-      clearTimeout(refuseT);
-      refuseT = setTimeout(() => { delete zone.dataset.refuse; if (phase === 'idle') b.textContent = old; }, 1800);
-    };
-
-    /* ── el porcentaje que rueda ─────────────────────────────
-       Una columna por dígito con las diez cifras en tira; cada una sube o baja con translateY. */
-    let cols = [];
-    const roll = (host, value) => {
-      const s = String(Math.round(value));
-      while (cols.length < s.length){
-        const c = document.createElement('span'); c.className = 'upl-roll-col';
-        c.innerHTML = `<span class="upl-roll-strip">${'0123456789'.split('').map(n => `<span>${n}</span>`).join('')}</span>`;
-        host.insertBefore(c, host.querySelector('.upl-pct')); cols.push(c);
-      }
-      while (cols.length > s.length) cols.pop().remove();
-      s.split('').forEach((d, i) => { cols[i].firstChild.style.transform = `translateY(${-Number(d)}em)`; });
-      host.setAttribute('aria-label', s + '%');
-    };
-
-    /* ── la caja se cierra sobre la subida ───────────────────
-       Mientras hay un archivo adentro la caja se ajusta a la fila (medida, porque es tan ancha como
-       el nombre) y crece un poco cuando llega el tilde. Ancho y alto, nunca escala, así la esquina
-       sigue siendo la esquina. Vive en un hueco de tamaño fijo y nada de abajo se mueve. */
-    const fit = () => { const n = zone.querySelector('.upl-now'); if (!n) return; zone.style.width = `${n.offsetWidth + 32}px`; zone.style.height = `${n.offsetHeight + 28}px`; };
-
-    let nowEl = null, bar = null, meta = null, rollEl = null, end = null;
-    const swallow = file => {
-      phase = 'sending';
-      const ext = ((file.name.match(/\.([a-z0-9]+)$/i) || [])[1] || (kind === 'video' ? 'vid' : 'img')).toUpperCase().slice(0, 4);
-      const tint = kind === 'video' ? UPL_TINT.video : file.type.startsWith('image/') ? UPL_TINT.image : UPL_TINT.other;
-      /* el trago: un poco hacia adentro al irse el archivo, pasa de su tamaño y se acomoda */
-      zone.dataset.gulp = ''; later(() => delete zone.dataset.gulp, 460);
-      later(() => {
-        zone.dataset.busy = '';
-        zone.innerHTML = `<span class="upl-now">${uplPage(ext, tint, 36)}<span class="upl-text"><span class="upl-name">${esc(file.name)}</span>
-          <span class="upl-meta">${uplFmt(file.size)} · <span class="upl-roll"><span class="upl-pct">%</span></span></span>
-          <span class="upl-track"><span class="upl-bar"></span></span></span><span class="upl-end"></span></span>`;
-        nowEl = zone.querySelector('.upl-now'); bar = zone.querySelector('.upl-bar'); meta = zone.querySelector('.upl-meta'); rollEl = zone.querySelector('.upl-roll'); end = zone.querySelector('.upl-end');
-        zone.removeAttribute('tabindex'); zone.removeAttribute('role');
-        set(p); fit();
-      }, still ? 0 : 220);
-      resolve(ui(file));
-    };
-    const set = v => { p = v; if (bar) bar.style.transform = `scaleX(${v})`; if (rollEl) roll(rollEl, v * 100); };
-
-    const choose = file => {
-      if (!file || phase !== 'idle') return;
-      if (!accepts(file)) { refuse(`Eso no es ${tipo}`); return; }
-      if (maxMB && file.size > maxMB * 1e6) { refuse(`Muy pesado — hasta ${maxMB} MB`); return; }
-      swallow(file);
-    };
-
-    /* ── el cable de mentira, ahora el de verdad ─────────────
-       progress(p) recibe el avance real (video a R2). Las imágenes no informan avance: start(false)
-       sube desparejo hasta cerca del final; un ascenso parejo parece un timer. */
-    const ui = file => ({
-      file,
-      start(real){
-        if (real) return;
-        let prev = 0;
-        const tick = t => { const dt = prev ? Math.min(0.05, (t - prev) / 1000) : 0; prev = t; set(Math.min(0.92, p + (dt / 6) * (0.4 + Math.random() * 1.2))); raf = requestAnimationFrame(tick); };
-        raf = requestAnimationFrame(tick);
-      },
-      progress(v){ cancelAnimationFrame(raf); set(Math.max(p, Math.min(1, v))); },
-      finish(){
-        cancelAnimationFrame(raf); set(1); phase = 'done';
-        if (meta) meta.innerHTML = `${uplFmt(file.size)} · Subido`;
-        if (end) end.innerHTML = `<span class="upl-tick"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>`;
-        return new Promise(ok => later(() => { api.close(); ok(); }, 1300));
-      },
-      fail(msg){
-        cancelAnimationFrame(raf); phase = 'idle'; delete zone.dataset.busy; zone.style.width = ''; zone.style.height = ''; zone.innerHTML = idle; zone.tabIndex = 0; zone.setAttribute('role', 'button');
-        refuse(msg || 'No se pudo subir'); later(() => api.close(), 2200);
-      },
-      hide(){ ov.style.display = 'none'; }, show(){ ov.style.display = ''; },
-      close: () => api.close()
-    });
-    const api = {
-      close(){
-        cancelAnimationFrame(raf); timers.forEach(clearTimeout); clearTimeout(refuseT);
-        document.removeEventListener('keydown', onKey, true); ov.remove();
-        if (phase === 'idle') resolve(null);
-        try { lastFocus?.focus?.(); } catch {}
-      }
-    };
-    const onKey = e => { if (e.key === 'Escape' && phase === 'idle'){ e.stopPropagation(); api.close(); } };
-    document.addEventListener('keydown', onKey, true);
-
-    /* ── arrastrar y soltar (archivos de verdad) ───────────── */
-    const inCard = e => { const r = card.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
-    const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
-    const over = on => { if (on) zone.dataset.over = ''; else delete zone.dataset.over; };
-    ov.addEventListener('dragenter', e => { if (hasFiles(e)) e.preventDefault(); });
-    ov.addEventListener('dragover', e => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; over(phase === 'idle' && inCard(e)); });
-    ov.addEventListener('dragleave', e => { if (!e.relatedTarget) over(false); });
-    ov.addEventListener('drop', e => { if (!hasFiles(e)) return; e.preventDefault(); over(false); if (inCard(e)) choose(e.dataTransfer.files[0]); });
-    /* sin esto, soltar un archivo fuera de la caja abriría el archivo en la pestaña */
-    ['dragover', 'drop'].forEach(n => window.addEventListener(n, e => { if (ov.isConnected && hasFiles(e)) e.preventDefault(); }, { once: false }));
-
-    zone.addEventListener('click', () => { if (phase === 'idle'){ input.value = ''; input.click(); } });
-    zone.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && phase === 'idle'){ e.preventDefault(); zone.click(); } });
-    input.addEventListener('change', () => choose(input.files[0]));
-    ov.querySelector('.upl-x').addEventListener('click', () => { if (phase === 'idle') api.close(); });
-    ov.addEventListener('mousedown', e => { if (e.target === ov && phase === 'idle') api.close(); });
-    document.body.appendChild(ov);
-  });
-}
-
 /* ---------- derived ---------- */
 const published = () => S.titles.filter(t => t.status !== 'borrador');
 const byId = id => S.titles.find(t => t.id === id);
@@ -1176,14 +1011,13 @@ app.addEventListener('click', async e => {
   e.preventDefault();
   if (clr){ S.editing[clr.dataset.vidclear] = ''; markDirty(); rerenderPanel(); return; }
   const key = up.dataset.vidup;
-  const dz = await openDropzone({ accept: 'video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov,.m4v', kind: 'video', title: 'Subir video', tipo: 'un video' }); if (!dz) return;
-  up.disabled = true; dz.start(true);
+  const file = await pickFile('video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov,.m4v'); if (!file) return;
+  const label = up.textContent; up.disabled = true; up.textContent = 'Subiendo…';
   try {
-    const url = await uploadVideo(dz.file, p => dz.progress(p / 100));
+    const url = await uploadVideo(file, p => { up.textContent = 'Subiendo… ' + p + '%'; });
     S.editing[key] = url; markDirty(); rerenderPanel();
-    await dz.finish();
     toast('Video subido. Tocá Guardar para publicarlo.');
-  } catch(err){ dz.fail(err.message || 'No se pudo subir el video'); toast(err.message || 'No se pudo subir el video', true); up.disabled = false; }
+  } catch(err){ toast(err.message || 'No se pudo subir el video', true); up.disabled = false; up.textContent = label; }
 });
 function renderSeasonsEd(E){
   return `<div class="fs"><h3>Temporadas y capítulos <small>${E.seasons.length} temp. · ${epCount(E)} ep.</small></h3>
@@ -2298,22 +2132,19 @@ app.addEventListener('click', async e => {
     return;
   }
   if (d.slot){
-    const dz = await openDropzone({ accept: 'image/*', kind: 'image', title: 'Subir imagen', maxMB: 25, tipo: 'una imagen' }); if (!dz) return;
-    const file = dz.file;
+    const file = await pickFile(); if (!file) return;
+    if (!file.type.startsWith('image/')){ toast('Elegí un archivo de imagen', true); return; }
     let toUpload = file;
     const spec = CROP_SPECS[d.slot];
     if (spec && !/gif|svg/.test(file.type)){
-      dz.hide();   // el recorte tiene su propia ventana
       try { toUpload = await cropImage(file, spec[0], spec[1]); } catch { toUpload = file; }
-      if (!toUpload){ dz.close(); return; }
-      dz.show();
+      if (!toUpload) return;
     }
-    t.classList.add('busy'); dz.start(false);
+    t.classList.add('busy');
     try {
       const ref = await uploadImage(toUpload, d.slot);
       await applyImage(d.path, ref);
-      await dz.finish();
-    } catch(err){ dz.fail(err.message || 'No se pudo subir la imagen'); toast(err.message || 'No se pudo subir la imagen', true); t.classList.remove('busy'); }
+    } catch(err){ toast(err.message || 'No se pudo subir la imagen', true); t.classList.remove('busy'); }
     return;
   }
   if (d.bannerAdd !== undefined){
