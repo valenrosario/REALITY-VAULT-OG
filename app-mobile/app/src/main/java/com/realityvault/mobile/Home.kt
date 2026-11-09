@@ -1,5 +1,7 @@
 package com.realityvault.mobile
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -327,9 +329,13 @@ private fun Hero(all: List<Slide>, tabs: List<String>, tab: String, pick: (Strin
 @Composable
 fun ListToggle(t: Title, nav: Nav, size: androidx.compose.ui.unit.Dp = 46.dp) {
     val scope = rememberCoroutineScope()
-    GlassButton(if (t.id in Store.myList) Ic.check else Ic.plus, if (t.id in Store.myList) "Quitar de Mi lista" else "Agregar a Mi lista", {
-        if (Store.session == null) nav.go(Screen.Login()) else scope.launch { Store.toggleList(t.id) }
-    }, size = size)
+    val liked = t.id in Store.myList
+    androidx.compose.foundation.layout.Box(
+        Modifier.size(size).tap({ if (Store.session == null) nav.go(Screen.Login()) else scope.launch { Store.toggleList(t.id) } }, .9f)
+            .clip(androidx.compose.foundation.shape.CircleShape).background(Color(0x9C3C3C42))
+            .semantics { this.contentDescription = if (liked) "Quitar de Mi lista" else "Agregar a Mi lista" },
+        contentAlignment = Alignment.Center
+    ) { com.realityvault.tv.LikeHeart(liked, size * .46f) }
 }
 
 /* ---------------- filas ---------------- */
