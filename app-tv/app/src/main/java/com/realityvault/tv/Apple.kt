@@ -67,6 +67,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
@@ -405,7 +407,8 @@ fun HomeScreen(nav: Nav, heroReq: FocusRequester) {
     var heroFocused by remember { mutableStateOf(mem.focus["home"] == null) }
     val density = LocalDensity.current
     val defaultSpec = LocalBringIntoViewSpec.current
-    val spec = remember { PivotSpec(with(density) { 66.dp.toPx() }) { heroFocused } }
+    // la tarjeta enfocada queda a 100 dp del borde: así el título de su fila se ve entero debajo de la barra de arriba
+    val spec = remember { PivotSpec(with(density) { 100.dp.toPx() }) { heroFocused } }
     val screenH = LocalConfiguration.current.screenHeightDp.dp
 
     LaunchedEffect(heroIdx, heroFocused, all.size) {
@@ -614,7 +617,7 @@ fun GlassButton(icon: ImageVector, onFocus: (() -> Unit)? = null, onClick: () ->
 
 /* ---------------- filas ---------------- */
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
     val restore = nav.memory.focus[screenKey]
@@ -634,17 +637,23 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
         with(density) { OpenSpec(openPx = (128.dp * 1.5f * (16f / 9f)).toPx(), leftPx = (48 + 110).dp.toPx(), rightPx = 48.dp.toPx()) }
     }
     val pin = r.kind != "feat" && r.kind != "wide"
+    // Al bajar (o subir) a una fila, Compose elegía la tarjeta más cercana a la de arriba, que al estar
+    // abierta a lo ancho casi siempre era la segunda. Ahora se entra por la primera tarjeta que se ve entera.
+    val entry = remember { FocusRequester() }
+    val entryIdx by remember { derivedStateOf { state.layoutInfo.visibleItemsInfo.firstOrNull { it.offset >= -2 }?.index ?: 0 } }
+    val entryOk by remember { derivedStateOf { state.layoutInfo.visibleItemsInfo.any { it.index == entryIdx } } }
     Column(Modifier.padding(top = 22.dp)) {
         Text(r.title, style = ts(13, FontWeight.Bold, Color.White.copy(alpha = .92f)), modifier = Modifier.padding(start = 48.dp))
         CompositionLocalProvider(LocalBringIntoViewSpec provides (if (!pin) LocalBringIntoViewSpec.current else if (r.kind == "top") topSpec else rowSpec)) {
         LazyRow(
             state = state,
+            modifier = Modifier.focusProperties { enter = { if (entryOk) entry else FocusRequester.Default } },
             contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(if (r.kind == "top") 4.dp else 15.dp)
         ) {
             if (r.kind == "feat") {
                 itemsIndexed(r.feat, key = { i, _ -> "f$i" }) { i, (t, item) ->
-                    CardA("${r.key}/$i", restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, Modifier.width(112.dp).aspectRatio(3f / 4.45f)) { FeatCard(t, item) }
+                    CardA("${r.key}/$i", restore, nav, screenKey, { nav.go(Screen.Detail(t.id)) }, Modifier.entry(i == entryIdx, entry).width(112.dp).aspectRatio(3f / 4.45f)) { FeatCard(t, item) }
                 }
             } else itemsIndexed(r.titles, key = { _, t -> t.id }) { i, t ->
                 val k = "${r.key}/${t.id}"
@@ -654,13 +663,13 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
                         CardA(k, restore, nav, screenKey, {
                             val tg = Store.playTarget(t)
                             if (r.key == "cont" && tg != null) nav.play(t, tg.url, tg.season, tg.episode) else nav.go(Screen.Detail(t.id))
-                        }, Modifier.width(189.dp).aspectRatio(16f / 9f)) { f -> WideCard(t, if (p?.season != null) "T${p.season}:E${p.episode}" else null, f) }
+                        }, Modifier.entry(i == entryIdx, entry).width(189.dp).aspectRatio(16f / 9f)) { f -> WideCard(t, if (p?.season != null) "T${p.season}:E${p.episode}" else null, f) }
                     }
                     "top" -> Row(verticalAlignment = Alignment.Bottom) {
                         Text("${i + 1}", modifier = Modifier.offset(x = 8.dp, y = 8.dp), style = ts(86, FontWeight.Bold, C.accent).copy(drawStyle = Stroke(width = 4f)))
-                        ExpandPoster(t, 128.dp, k, restore, nav, screenKey) { nav.go(Screen.Detail(t.id)) }
+                        ExpandPoster(t, 128.dp, k, restore, nav, screenKey, if (i == entryIdx) entry else null) { nav.go(Screen.Detail(t.id)) }
                     }
-                    else -> ExpandPoster(t, 152.dp, k, restore, nav, screenKey) { nav.go(Screen.Detail(t.id)) }
+                    else -> ExpandPoster(t, 152.dp, k, restore, nav, screenKey, if (i == entryIdx) entry else null) { nav.go(Screen.Detail(t.id)) }
                 }
             }
         }
@@ -812,17 +821,19 @@ fun RestoreFocus(req: FocusRequester, key: String, nav: Nav, screenKey: String) 
  * después arranca el "Video del banner principal" (previewVideo) con un crossfade.
  */
 @Composable
-fun ExpandPoster(t: Title, baseW: Dp, key: String, restore: String?, nav: Nav, screenKey: String, onClick: () -> Unit) {
+fun ExpandPoster(t: Title, baseW: Dp, key: String, restore: String?, nav: Nav, screenKey: String, entry: FocusRequester? = null, onClick: () -> Unit) {
     val req = remember { FocusRequester() }
     if (key == restore) RestoreFocus(req, key, nav, screenKey)
     val src = remember { MutableInteractionSource() }
     val focused by src.collectIsFocusedAsState()
     val h = baseW * 1.5f
     val openW = h * (16f / 9f)
-    val w by animateDpAsState(if (focused) openW else baseW, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow), label = "pw")
-    val open by animateFloatAsState(if (focused) 1f else 0f, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow), label = "po")
+    // se abre y se cierra con resorte, como el toggle / el óvalo de las categorías: se pasa apenas y se acomoda
+    val w by animateDpAsState(if (focused) openW else baseW, spring(dampingRatio = .74f, stiffness = 300f), label = "pw")
+    val openRaw by animateFloatAsState(if (focused) 1f else 0f, spring(dampingRatio = .74f, stiffness = 300f), label = "po")
+    val open = openRaw.coerceIn(0f, 1f)
     Focusable(
-        onClick, Modifier.width(w).height(h), shape = RoundedCornerShape(9.dp), scale = 1f, ring = true, lift = true,
+        onClick, Modifier.entry(entry != null, entry ?: req).width(w).height(h), shape = RoundedCornerShape(9.dp), scale = 1f, ring = true, lift = true,
         requester = req, onFocus = { nav.memory.focus[screenKey] = key }, pivotTop = true, interactionSource = src
     ) { f ->
         Box(Modifier.fillMaxSize().background(C.surface)) {
@@ -1311,3 +1322,6 @@ fun Color.lighten(f: Float) = Color(red + (1 - red) * f, green + (1 - green) * f
 
 /** Foto de perfil elegida en la web ("a1" / "a2") → imagen incluida en la app. */
 fun avatarRes(key: String?): Int? = when (key) { "a1" -> R.drawable.avatar_a1; "a2" -> R.drawable.avatar_a2; else -> null }
+
+/** Marca la tarjeta por la que se entra a una fila (ver RowA). */
+private fun Modifier.entry(on: Boolean, req: FocusRequester): Modifier = if (on) this.focusRequester(req) else this
