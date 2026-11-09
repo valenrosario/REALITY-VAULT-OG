@@ -1,5 +1,6 @@
 package com.realityvault.mobile
 
+import com.realityvault.tv.posResumable
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -180,7 +181,8 @@ private fun BackFab(nav: Nav) {
 
 @Composable
 private fun EpisodeRow(t: Title, s: Season, e: Episode, prog: Progress?, onClick: () -> Unit) {
-    val seen = prog?.watched?.let { "${s.number}-${e.number}" in it || "${s.number}:${e.number}" in it } == true
+    val seen = prog?.watched?.let { "${s.number}-${e.number}" in it || "${s.number}:${e.number}" in it } == true &&
+        !posResumable(Store.getPos(t.id, s.number, e.number))
     val soonEp = e.soon || s.soon
     val hasVideo = isHttp(e.url) && !soonEp
     val pos = prog?.positions?.get(posKey(s.number, e.number))

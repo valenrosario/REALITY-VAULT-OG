@@ -1199,7 +1199,8 @@ fun SectionTitle(text: String) {
 
 @Composable
 fun EpisodeA(t: Title, s: Season, e: Episode, prog: Progress?, onClick: () -> Unit) {
-    val seen = prog?.watched?.let { "${s.number}-${e.number}" in it || "${s.number}:${e.number}" in it } == true
+    val seen = prog?.watched?.let { "${s.number}-${e.number}" in it || "${s.number}:${e.number}" in it } == true &&
+        !posResumable(Store.getPos(t.id, s.number, e.number))
     val current = prog?.season == s.number && prog?.episode == e.number
     val hasVideo = isHttp(e.url)
     // El anillo/sombra/agrandado de foco van SOLO sobre la miniatura, no sobre todo

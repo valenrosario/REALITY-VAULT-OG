@@ -2226,7 +2226,7 @@ function renderEpisodesTab(t, seasons){
   return `${seasons.length>1 ? `<select class="pill-select" id="tpSeason" aria-label="Temporada">${seasons.map((x,i)=>`<option value="${i}" ${i===S.tpSeason?'selected':''}>Temporada ${esc(x.number)}${x.title?' · '+esc(x.title):''}</option>`).join('')}</select>` : `<span class="pill-select" style="background-image:none;padding-right:16px">Temporada ${esc(s.number)}</span>`}
     ${s.episodes.length ? `<div class="row-wrap ep-row"><button class="rail-btn l" data-scroll="-1" aria-label="Anteriores">‹</button><div class="rail rail-eps">${s.episodes.map(e => {
       const soon = itemSoon(t, s, e); const u = soon ? '' : safeUrl(e.url); const tag = u ? 'a' : 'div';
-      const seen = (S.progress.get(t.id)?.watched || []).includes(epKey(s.number, e.number));
+      const seen = (S.progress.get(t.id)?.watched || []).includes(epKey(s.number, e.number)) && !posResumable(getPos(t.id, s.number, e.number));
       return `<${tag} class="ep-card ${seen?'seen':''} ${soon?'ep-soon':''}" ${u?`${watchAttrs(t, s.number, e.number)} href="${esc(watchHref(t, s.number, e.number))}"`:''}>
         <div class="ep-thumb" ${e.thumb?`data-src="${esc(e.thumb)}"`:''}>${genBlock({title:e.title||'Episodio '+e.number,id:t.id}, 'T'+s.number+' · E'+e.number, t.logo)}${seen?'<span class="seen-tag">✓ Visto</span>':soon?'<span class="seen-tag soon-tag">Próximamente</span>':''}</div>
         <div class="ep-meta"><span class="ep-label">Episodio ${esc(e.number)}</span><strong>${esc(e.title || 'Episodio '+e.number)}</strong></div>
@@ -2382,7 +2382,10 @@ async function savePos(tid, s, e, t, d){
   const positions = { ...(row.positions || {}) };
   done ? delete positions[k] : (positions[k] = val);
   row.positions = positions;
-  const { error } = await S.sb.from('watch_progress').update({ positions }).eq('user_id', S.session.user.id).eq('title_id', tid);
+  const upd = { positions };
+  // "Visto" solo cuando terminaste el capítulo (no apenas lo empezás)
+  if (done && s != null && s !== ''){ const w = new Set(row.watched || []); w.add(epKey(s, e)); row.watched = [...w]; upd.watched = row.watched; }
+  const { error } = await S.sb.from('watch_progress').update(upd).eq('user_id', S.session.user.id).eq('title_id', tid);
   if (error){ noPos = true; console.warn('No se pudo guardar el minuto (falta correr 07-posicion-de-reproduccion.sql)', error.message); }
 }
 function flatEpisodes(t){ const out = []; sortedSeasons(t).forEach(s => s.episodes.forEach(e => out.push({ s, e }))); return out; }
@@ -2396,7 +2399,7 @@ function playTarget(t){
   let i = 0, cont = false;
   if (p){
     const j = eps.findIndex(x => +x.s.number === +p.last_season && +x.e.number === +p.last_episode);
-    if (j >= 0){ i = posResumable(getPos(t.id, p.last_season, p.last_episode)) || j + 1 >= eps.length ? j : j + 1; cont = true; }
+    if (j >= 0){ i = posResumable(getPos(t.id, p.last_season, p.last_episode)) || !(p.watched || []).includes(epKey(p.last_season, p.last_episode)) || j + 1 >= eps.length ? j : j + 1; cont = true; }
   }
   const { s, e } = eps[i];
   return { url: e.url, season: s.number, episode: e.number, ep: e, label: `${cont ? 'Continuar' : 'Ver'} T${s.number}:E${e.number}`, cont };
@@ -2440,7 +2443,7 @@ async function recordWatch(tid, season, episode){
   if (!S.session || !S.sb || !tid) return;
   const prev = S.progress.get(tid);
   const watched = new Set(prev?.watched || []);
-  if (season != null && season !== '') watched.add(epKey(season, episode));
+  // abrir un capítulo ya no lo marca como visto: se marca al terminarlo (ver savePos)
   const row = { user_id: S.session.user.id, title_id: tid, last_season: season === '' || season == null ? null : +season, last_episode: episode === '' || episode == null ? null : +episode, watched: [...watched], updated_at: new Date().toISOString() };
   if (!noPos) row.positions = prev?.positions || {};
   S.progress.delete(tid); S.progress = new Map([[tid, { positions: {}, ...row }], ...S.progress]);
