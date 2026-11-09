@@ -514,13 +514,16 @@ document.addEventListener('click', e => {
   a.parentElement.querySelectorAll('a').forEach(x => x === a ? x.setAttribute('aria-current', 'page') : x.removeAttribute('aria-current'));
   slideNav();
 }, true);
-// reparte las colecciones entre las filas (una cada tanto), en vez de apilarlas todas juntas
-function mixColls(rows, colls){
-  if (!colls.length) return rows.join('');
-  const out = [], gap = Math.max(1, Math.floor(rows.length / (colls.length + 1)));
-  let ci = 0;
-  rows.forEach((r, i) => { out.push(r); if (ci < colls.length && (i + 1) % gap === 0) out.push(colls[ci++]); });
-  while (ci < colls.length) out.push(colls[ci++]);
+// reparte las filas destacadas y las colecciones entre las filas comunes, en lugares al azar (fijos durante
+// la visita): cada una va después de una fila común distinta, así nunca quedan dos especiales seguidas
+function mixColls(rows, specials){
+  if (!specials.length) return rows.join('');
+  const sp = shuffled(specials, 'mix-order');
+  const slots = shuffled(rows.map((_, i) => i), 'mix-slots').slice(0, sp.length).sort((x, y) => x - y);
+  const at = new Map(slots.map((s, i) => [s, sp[i]]));
+  const out = [];
+  rows.forEach((row, i) => { out.push(row); if (at.has(i)) out.push(at.get(i)); });
+  sp.slice(slots.length).forEach(x => out.push(x));   // solo si hay más especiales que filas comunes
   return out.join('');
 }
 function tvStrip(){
@@ -548,14 +551,13 @@ function renderHome(){
     ${top10Row()}
     ${recommendedRow()}
     ${listRow()}
-    ${(S.frows||[]).map(featRow).join('')}
     ${mixColls([
       row('Destacados', byTaste(feat, 'feat', prof)),
       row('Novedades', newest),
       row('Series', byTaste(series, 'series', prof), '/series'),
       row('Películas', byTaste(movies, 'movies', prof), '/peliculas'),
       ...genreRows.map(({ g, l }) => row(g, byTaste(l, 'g-' + g, prof)))
-    ].filter(Boolean), (S.colls||[]).map(c => collBanner(c)).filter(Boolean))}
+    ].filter(Boolean), [...(S.frows||[]).map(featRow), ...(S.colls||[]).map(c => collBanner(c))].filter(Boolean))}
   </main>`;
 }
 function renderBrowse(kind){

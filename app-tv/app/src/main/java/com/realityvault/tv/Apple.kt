@@ -373,10 +373,6 @@ fun homeRows(): List<RowSpec> {
     if (top.isNotEmpty()) rows += RowSpec("top", "Top 10 de la semana", "top", top)
     val list = Store.myList.mapNotNull { id -> pub.firstOrNull { it.id == id } }
     if (list.isNotEmpty()) rows += RowSpec("list", "Mi lista", "wide", list)
-    Store.featRows.forEach { r ->
-        val items = r.items.mapNotNull { i -> pub.firstOrNull { it.id == i.titleId }?.let { it to i } }
-        if (items.isNotEmpty()) rows += RowSpec("f-" + r.id, r.title, "feat", emptyList(), items)
-    }
     val rest = mutableListOf<RowSpec>()
     val feat = pub.filter { it.featured }
     if (feat.isNotEmpty()) rest += RowSpec("feat", "Destacados", "poster", feat)
@@ -387,15 +383,15 @@ fun homeRows(): List<RowSpec> {
     pub.flatMap { t -> t.genres.map { it to t } }.groupBy({ it.first }, { it.second })
         .entries.sortedByDescending { it.value.size }.take(8)
         .forEach { (g, l) -> rest += RowSpec("g-$g", g, "poster", l) }
-    // las colecciones se reparten entre las filas, igual que en la web (una cada tanto, no todas juntas)
-    val colls = Store.colls.mapNotNull { c ->
+    // las filas destacadas y las colecciones se reparten al azar entre las filas, igual que en la web
+    val specials = Store.featRows.mapNotNull { r ->
+        val items = r.items.mapNotNull { i -> pub.firstOrNull { it.id == i.titleId }?.let { it to i } }
+        if (items.isEmpty()) null else RowSpec("f-" + r.id, r.title, "feat", emptyList(), items)
+    } + Store.colls.mapNotNull { c ->
         val ts = c.items.mapNotNull { i -> pub.firstOrNull { it.id == i } }
         if (ts.isEmpty()) null else RowSpec("c-" + c.id, c.name, "coll", ts, coll = c)
     }
-    val gap = maxOf(1, rest.size / (colls.size + 1)); var ci = 0
-    rest.forEachIndexed { i, r -> rows += r; if (ci < colls.size && (i + 1) % gap == 0) rows += colls[ci++] }
-    while (ci < colls.size) rows += colls[ci++]
-    return rows
+    return rows + mixSpecials(rest, specials)
 }
 
 @OptIn(ExperimentalFoundationApi::class)

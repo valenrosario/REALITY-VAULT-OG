@@ -584,3 +584,21 @@ object Store {
         return if (i in eps.indices && i + 1 < eps.size) eps[i + 1] else null
     }
 }
+
+
+/**
+ * Reparte filas especiales (filas destacadas y colecciones) entre las filas comunes, en lugares al azar
+ * pero fijos durante la sesión (como en la web): cada especial va después de una fila común distinta,
+ * así nunca quedan dos seguidas. Si hay más especiales que filas comunes, las que sobran van al final.
+ */
+fun <T> mixSpecials(rows: List<T>, specials: List<T>): List<T> {
+    if (specials.isEmpty()) return rows
+    val r = kotlin.random.Random(Store.bannerSeed xor 0x5EEDL)
+    val sp = specials.shuffled(r)
+    val slots = rows.indices.shuffled(r).take(sp.size).sorted()
+    val at = slots.withIndex().associate { (i, s) -> s to sp[i] }
+    val out = ArrayList<T>(rows.size + sp.size)
+    rows.forEachIndexed { i, row -> out += row; at[i]?.let { out += it } }
+    out += sp.drop(slots.size)
+    return out
+}
