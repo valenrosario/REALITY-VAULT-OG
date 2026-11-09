@@ -483,7 +483,7 @@ fun HeroA(all: List<Slide>, idx: Int, height: Dp, nav: Nav, req: FocusRequester,
                     target != null -> PlayPill(if (target.cont) target.label else "Reproducir", Ic.play, req, onFocus = { edge = 0 }) { nav.play(t, target.url, target.season, target.episode) }
                     else -> PlayPill("Ver detalles", null, req, onFocus = { edge = 0 }) { nav.go(Screen.Detail(t.id)) }
                 }
-                GlassButton(if (t.id in Store.myList) Ic.check else Ic.plus, onFocus = { edge = 1 }) {
+                LikeButton(t.id in Store.myList, onFocus = { edge = 1 }) {
                     if (Store.session == null) nav.go(Screen.Login()) else scope.launch { Store.toggleList(t.id) }
                 }
                 GlassButton(Ic.info, onFocus = { edge = 2 }) { nav.go(Screen.Detail(t.id)) }
@@ -579,6 +579,16 @@ fun PlayPill(text: String, icon: ImageVector?, req: FocusRequester? = null, onFo
         Row(Modifier.background(Color.White).padding(horizontal = 28.dp).height(46.dp), verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) { Icon(icon, null, tint = Color.Black, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(8.dp)) }
             Text(text, style = ts(15, FontWeight.Bold, Color.Black), maxLines = 1)
+        }
+    }
+}
+
+/** Botón de Mi lista: corazón animado (ver LikeHeart). */
+@Composable
+fun LikeButton(liked: Boolean, onFocus: (() -> Unit)? = null, onClick: () -> Unit) {
+    Focusable(onClick, Modifier.size(42.dp), shape = CircleShape, scale = 1.1f, ring = false, lift = true, onFocus = onFocus) { f ->
+        Box(Modifier.fillMaxSize().background(if (f) Color.White else Color(0x9C3C3C42)), contentAlignment = Alignment.Center) {
+            LikeHeart(liked, 19.dp, idle = if (f) Color.Black else Color.White)
         }
     }
 }
@@ -1045,7 +1055,7 @@ fun DetailScreen(id: String, nav: Nav) {
                                     else -> PlayPill("No disponible por el momento", null, playReq) {}
                                 }
                                 if (!t.isSoon && Store.canRestart(t, target)) GlassButton(Ic.replay) { nav.play(t, target!!.url, target.season, target.episode, restart = true) }
-                                GlassButton(if (t.id in Store.myList) Ic.check else Ic.plus) {
+                                LikeButton(t.id in Store.myList) {
                                     if (Store.session == null) nav.go(Screen.Login()) else scope.launch { Store.toggleList(t.id) }
                                 }
                                 if (mediaFor(t.trailer) != null) GlassButton(Ic.clapper) { nav.go(Screen.Player(t.id, t.trailer, null, null, trailer = true)) }

@@ -19,7 +19,7 @@ val relKeystorePath = System.getenv("RV_KEYSTORE_PATH")?.takeIf { file(it).exist
 val tvSrc = rootProject.file("../app-tv/app/src/main/java/com/realityvault/tv")
 val sharedOut = layout.buildDirectory.dir("generated/shared")
 val copyShared = tasks.register<Copy>("copyShared") {
-    from(tvSrc) { include("Data.kt", "Embed.kt", "UpdateCore.kt") }
+    from(tvSrc) { include("Data.kt", "Embed.kt", "UpdateCore.kt", "LikeHeart.kt") }
     into(sharedOut.map { it.dir("com/realityvault/tv") })
 }
 
