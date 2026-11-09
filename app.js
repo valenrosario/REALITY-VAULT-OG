@@ -444,7 +444,21 @@ function logoFallbacks(root){
 
 function mobileChips(active){
   const items = [['home','/','Todo'],['series','/series','Series'],['peliculas','/peliculas','Películas'],['mi-lista','/mi-lista','Mi lista']];
-  return `<nav class="m-chips" aria-label="Secciones">${items.map(([k,h,l]) => `<a href="${h}" class="m-chip ${k===active?'on':''}" ${k===active?'aria-current="page"':''}>${l}</a>`).join('')}</nav>`;
+  // categorías con óvalo deslizante ("Tabs sliding" de transitions.dev); el movimiento lo hace slideChips() después de dibujar
+  return `<nav class="m-chips" aria-label="Secciones"><div class="t-tabs"><span class="t-tabs-pill" aria-hidden="true"></span>${items.map(([k,h,l]) => `<a href="${h}" class="t-tab m-chip ${k===active?'on':''}" ${k===active?'aria-current="page"':''}>${l}</a>`).join('')}</div></nav>`;
+}
+let chipPrev = null;
+function slideChips(){
+  const bar = document.querySelector('.m-chips .t-tabs'); if (!bar) return;
+  const pill = bar.querySelector('.t-tabs-pill'), tab = bar.querySelector('.t-tab.on');
+  if (!pill || !tab){ if (pill) pill.style.width = '0'; return; }
+  const set = (l, w) => { pill.style.transform = `translateX(${l}px)`; pill.style.width = w + 'px'; };
+  // arranca donde estaba el óvalo antes de cambiar de sección (sin animar) y después se desliza a la nueva
+  pill.style.transition = 'none'; const from = chipPrev; set(from ? from.l : tab.offsetLeft, from ? from.w : tab.offsetWidth);
+  void pill.offsetWidth; pill.style.transition = '';
+  requestAnimationFrame(() => set(tab.offsetLeft, tab.offsetWidth));
+  chipPrev = { l: tab.offsetLeft, w: tab.offsetWidth };
+  const sc = bar.parentElement; if (sc) sc.scrollTo({ left: Math.max(0, tab.offsetLeft - 56), behavior: from ? 'smooth' : 'auto' });
 }
 // reparte las colecciones entre las filas (una cada tanto), en vez de apilarlas todas juntas
 function mixColls(rows, colls){
@@ -3659,7 +3673,7 @@ function render(){
   const landNow = isLanding();
   if (landNow && app.firstElementChild && app.firstElementChild.classList.contains('landing')){ const tpl = document.createElement('div'); tpl.innerHTML = html; try { morph(app, tpl); } catch { app.innerHTML = html; } }
   else app.innerHTML = html + (S.route==='admin' || landNow ? '' : renderFooter());
-  hydrate(app); logoFallbacks(app); applyTints(app); startHero(); startLanding();
+  hydrate(app); logoFallbacks(app); applyTints(app); startHero(); startLanding(); slideChips();
 }
 
 document.getElementById('q').addEventListener('input', e => { S.q = e.target.value; if (S.route==='admin'){ history.pushState(null,'','/'); S.route='home'; } render(); });
