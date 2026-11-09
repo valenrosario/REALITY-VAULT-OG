@@ -2855,6 +2855,12 @@ function renderAuth(){
   if (c.done){
     body = `<h2>¡Listo${c.doneName ? ', ' + esc(c.doneName) : ''}!</h2><p class="au-sub">${esc(c.doneMsg)}</p>
       ${c.href ? `<a class="btn btn-primary au-btn" data-watch ${c.tid ? `data-tid="${esc(c.tid)}"` : ''} ${c.s !== '' ? `data-s="${esc(c.s)}" data-e="${esc(c.e)}"` : ''} ${c.x ? `data-x="${esc(c.x)}"` : ''} href="${esc(c.href)}">▶ Ver ahora</a>` : `<button class="btn btn-primary au-btn" data-close>Seguir</button>`}`;
+  } else if (signup && c.step === 5){
+    const ap = shuffled(published().filter(t => t.poster), 'au-app').slice(0, 3);
+    body = `<div class="au-appart" aria-hidden="true">${ap.map((t, i) => `<span class="au-ap a${i}" data-src="${esc(t.poster)}"></span>`).join('')}</div>
+      <h2>Llevate REALITY VAULT en el celular</h2><p class="au-sub">Instalá la app de Android: más cómoda, con avisos de capítulos nuevos y tu lista y tu progreso siempre al día.</p>
+      <a class="btn btn-primary au-btn" href="/app">Descargar la app</a>
+      <button type="button" class="btn au-btn au-ghost" data-au-appskip>Seguir en el navegador</button>`;
   } else if (signup && c.step === 4){
     const pool = shuffled(published().filter(t => t.poster), 'au-fav').slice(0, 12);
     body = `<div class="au-step">PASO 4 DE 4</div><div class="au-prog"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
@@ -2916,6 +2922,12 @@ function renderAuth(){
   hydrate(overlayRoot); logoFallbacks(overlayRoot);
   (overlayRoot.querySelector('#au-name') || overlayRoot.querySelector('#au-email') || overlayRoot.querySelector('.au-btn'))?.focus();
 }
+function appOfferOk(){
+  try { return /Android/i.test(navigator.userAgent) && !window.Capacitor && matchMedia('(max-width: 900px)').matches && !matchMedia('(display-mode: standalone)').matches; } catch { return false; }
+}
+async function endSignup(c){
+  if (c.href){ c.done = true; c.doneMsg = 'Tu cuenta está creada.'; renderAuth(); } else { await showWelcome(c.doneName || userName(), true); closeDetail(); }
+}
 overlayRoot.addEventListener('click', async e => {
   const c = S.authCtx; if (!c || !overlayRoot.querySelector('.au-full')) return;
   const m = e.target.closest('[data-auth-mode]'); if (m){ c.mode = m.dataset.authMode; c.step = 1; c.msg=''; renderAuth(); return; }
@@ -2935,8 +2947,10 @@ overlayRoot.addEventListener('click', async e => {
       const rows = c.favs.filter(id => !S.myList.has(id)).map(id => ({ user_id: S.session.user.id, title_id: id }));
       if (rows.length){ const { error } = await S.sb.from('user_lists').insert(rows); if (!error){ S.myList = new Set([...rows.map(r=>r.title_id), ...S.myList]); toast('Guardamos tus favoritas en Mi lista'); } }
     }
-    if (c.href){ c.done = true; c.doneMsg = 'Tu cuenta está creada.'; renderAuth(); } else { await showWelcome(c.doneName || userName(), true); closeDetail(); }
-    return; }
+    // en un celular Android (web, no la app) ofrecemos instalar la app antes de entrar
+    if (appOfferOk() && !c.appSeen){ c.appSeen = true; c.step = 5; c.msg = ''; renderAuth(); return; }
+    await endSignup(c); return; }
+  if (e.target.closest('[data-au-appskip]')){ await endSignup(c); return; }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && S.authCtx?.mode === 'signup' && S.authCtx.step === 2 && S.authCtx.avatar && overlayRoot.querySelector('[data-au-next]') && !e.target.closest('button')){ e.preventDefault(); overlayRoot.querySelector('[data-au-next]').click(); } });
 overlayRoot.addEventListener('submit', async e => {
