@@ -67,6 +67,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.focus.onFocusChanged
@@ -849,7 +850,9 @@ fun ExpandPoster(t: Title, baseW: Dp, key: String, restore: String?, nav: Nav, s
     val w = (if (instant) wT else wA.value).dp
     val open = (if (instant) oT else oA.value).coerceIn(0f, 1f)
     Focusable(
-        onClick, Modifier.entry(entry != null, entry ?: req).graphicsLayer { if (swap != null && swap.pinned && idx > swap.cur && swap.cur >= 0) translationX = swap.shift.value }
+        // el abierto siempre se dibuja ENCIMA de sus vecinos: al volver para atrás, el póster que deja de estar
+        // abierto sale deslizándose desde abajo del cuadro abierto en vez de pasarle por arriba
+        onClick, Modifier.zIndex(if (focused) 1f else 0f).entry(entry != null, entry ?: req).graphicsLayer { if (swap != null && swap.pinned && idx > swap.cur && swap.cur >= 0) translationX = swap.shift.value }
             .width(w).height(h), shape = RoundedCornerShape(9.dp), scale = 1f, ring = true, lift = true,
         requester = req, onFocus = {
             nav.memory.focus[screenKey] = key
