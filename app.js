@@ -576,6 +576,7 @@ function showDetail(id, seasonIdx){
         <div class="meta">${metaLine(t)}</div>
         <div class="hero-actions">
           ${link ? (() => { const tg = playTarget(t); return `<a class="btn btn-primary" ${watchAttrs(t, tg?.season, tg?.episode)} href="${esc(watchHref(t, tg?.season, tg?.episode))}">▶ ${tg?.label ? esc(tg.label) : 'Ver ahora'}</a>`; })() : isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : ''}
+          ${link ? restartBtn(t) : ''}
           ${safeUrl(t.trailer) ? `<button class="btn btn-ghost" data-trailer="${esc(t.id)}">Tráiler</button>` : ''}
         </div>
       </div>
@@ -2193,6 +2194,7 @@ function renderTitlePage(id){
         : `<div class="tp-ep">${t.tagline?`<strong>${esc(t.tagline)}</strong>`:''}${t.description?`<p>${esc(t.description.length>180?t.description.slice(0,177)+'…':t.description)}</p>`:''}</div>`}
       <div class="tp-actions">
         ${isSoon(t) ? `<span class="btn btn-soon">${esc(soonLabel(t))}</span>` : link ? `<a class="btn btn-play" ${watchAttrs(t, target?.season, target?.episode)} href="${esc(watchHref(t, target?.season, target?.episode))}">${ICONS.play} ${esc(playLabel)}</a>` : ''}
+        ${link ? restartBtn(t) : ''}
         ${listBtn(t.id,'round')}
         ${safeUrl(t.trailer) ? `<button class="round" data-trailer="${esc(t.id)}" aria-label="Ver tráiler" title="Tráiler">${ICONS.trailer}</button>` : ''}
       </div>
@@ -2398,6 +2400,21 @@ function playTarget(t){
   }
   const { s, e } = eps[i];
   return { url: e.url, season: s.number, episode: e.number, ep: e, label: `${cont ? 'Continuar' : 'Ver'} T${s.number}:E${e.number}`, cont };
+}
+// "Empezar desde el principio": solo cuando ya venías mirando algo (a mitad de un capítulo/película, o en un capítulo que no es el primero)
+function restartTarget(t){
+  if (!S.session || isSoon(t)) return null;
+  const tg = playTarget(t); if (!tg) return null;
+  if (t.type !== 'serie') return posResumable(getPos(t.id, null, null)) ? { season: null, episode: null } : null;
+  if (!tg.cont) return null;
+  const first = flatEpisodes(t).find(x => safeUrl(x.e.url) && !seasonSoon(x.s) && !episodeSoon(x.e)); if (!first) return null;
+  const isFirst = +first.s.number === +tg.season && +first.e.number === +tg.episode;
+  if (isFirst && !posResumable(getPos(t.id, tg.season, tg.episode))) return null;
+  return { season: first.s.number, episode: first.e.number };
+}
+function restartBtn(t, cls = ''){
+  const r = restartTarget(t); if (!r) return '';
+  return `<a class="btn btn-restart ${cls}" data-restart ${watchAttrs(t, r.season, r.episode)} href="${esc(watchHref(t, r.season, r.episode))}">↺ Empezar desde el principio</a>`;
 }
 function watchAttrs(t, season, episode){
   return `data-watch data-tid="${esc(t.id)}" ${season != null ? `data-s="${esc(season)}" data-e="${esc(episode)}"` : ''}`;
@@ -3223,7 +3240,7 @@ function endPlayerSession(){
   if (ready() && tid && v.duration) savePos(tid, s, e, v.currentTime, v.duration);
   rv?.destroy(); v._hls?.destroy();
 }
-function openPlayer({ url, tid, s: season, e: episode, x, direct }){
+function openPlayer({ url, tid, s: season, e: episode, x, direct, restart }){
   const [xt, xsn, xi] = x ? String(x).split(':') : [];
   const t = tid ? byId(tid) : xt ? byId(xt) : null;
   if (!S.session && S.sb){ openAuth({ reason:'watch', href: t ? watchHref(t, season, episode, x ? { s: xsn, i: xi } : null) : '/', tid: tid || '', s: season ?? '', e: episode ?? '', x: x || '' }); return; }
@@ -3280,7 +3297,7 @@ function openPlayer({ url, tid, s: season, e: episode, x, direct }){
     else if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = emb.src;
     else loadHls().then(Hls => { if (!v.isConnected) return; const hls = new Hls(); hls.loadSource(emb.src); hls.attachMedia(v); v._hls = hls; }).catch(() => toast('No se pudo cargar el video', true));
     // volver al minuto donde lo dejaste, y guardar el minuto mientras mirás
-    const saved = tid ? getPos(tid, season, season === '' ? null : episode) : null;
+    const saved = tid && !restart ? getPos(tid, season, season === '' ? null : episode) : null;
     // datos para la pantalla de carga, la pausa ("Estás viendo") y la lista de capítulos
     const isEp = t && t.type === 'serie' && season !== '' && season != null && !x;
     const curEp = isEp ? flatEpisodes(t).find(z => +z.s.number === +season && +z.e.number === +episode) : null;
@@ -3401,7 +3418,7 @@ document.addEventListener('click', e => {
   e.preventDefault();
   if (a.closest('.auth-card, .au-full')) closeDetail();
   const href = a.getAttribute('href') || '';
-  openPlayer({ url: href.startsWith('/ver/') ? '' : href, tid: a.dataset.tid || '', s: a.dataset.s ?? '', e: a.dataset.e ?? '', x: a.dataset.x || '' });
+  openPlayer({ url: href.startsWith('/ver/') ? '' : href, tid: a.dataset.tid || '', s: a.dataset.s ?? '', e: a.dataset.e ?? '', x: a.dataset.x || '', restart: a.hasAttribute('data-restart') });
 }, true);
 
 // gate every "watch" link behind an account (capture phase, before navigation)
