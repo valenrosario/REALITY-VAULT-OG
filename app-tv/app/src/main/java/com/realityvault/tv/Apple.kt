@@ -640,6 +640,9 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
     // Al bajar (o subir) a una fila, Compose elegía la tarjeta más cercana a la de arriba, que al estar
     // abierta a lo ancho casi siempre era la segunda. Ahora se entra por la primera tarjeta que se ve entera.
     val entry = remember { FocusRequester() }
+    // moverse de costado: el póster abierto "pasa" al siguiente sin cerrarse y abrirse (ver RowSwap)
+    val swapScope = rememberCoroutineScope()
+    val swap = remember { RowSwap(state, swapScope, pinned = pin && r.kind != "top") }
     val entryIdx by remember { derivedStateOf { state.layoutInfo.visibleItemsInfo.firstOrNull { it.offset >= -2 }?.index ?: 0 } }
     val entryOk by remember { derivedStateOf { state.layoutInfo.visibleItemsInfo.any { it.index == entryIdx } } }
     Column(Modifier.padding(top = 22.dp)) {
@@ -647,7 +650,8 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
         CompositionLocalProvider(LocalBringIntoViewSpec provides (if (!pin) LocalBringIntoViewSpec.current else if (r.kind == "top") topSpec else rowSpec)) {
         LazyRow(
             state = state,
-            modifier = Modifier.focusProperties { enter = { if (entryOk) entry else FocusRequester.Default } },
+            modifier = Modifier.focusProperties { enter = { if (entryOk) entry else FocusRequester.Default } }
+                .onFocusChanged { if (!it.hasFocus) swap.cur = -1 },
             contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(if (r.kind == "top") 4.dp else 15.dp)
         ) {
@@ -667,9 +671,9 @@ fun RowA(r: RowSpec, nav: Nav, screenKey: String, state: LazyListState) {
                     }
                     "top" -> Row(verticalAlignment = Alignment.Bottom) {
                         Text("${i + 1}", modifier = Modifier.offset(x = 8.dp, y = 8.dp), style = ts(86, FontWeight.Bold, C.accent).copy(drawStyle = Stroke(width = 4f)))
-                        ExpandPoster(t, 128.dp, k, restore, nav, screenKey, if (i == entryIdx) entry else null) { nav.go(Screen.Detail(t.id)) }
+                        ExpandPoster(t, 128.dp, k, restore, nav, screenKey, if (i == entryIdx) entry else null, swap, i) { nav.go(Screen.Detail(t.id)) }
                     }
-                    else -> ExpandPoster(t, 152.dp, k, restore, nav, screenKey, if (i == entryIdx) entry else null) { nav.go(Screen.Detail(t.id)) }
+                    else -> ExpandPoster(t, 152.dp, k, restore, nav, screenKey, if (i == entryIdx) entry else null, swap, i) { nav.go(Screen.Detail(t.id)) }
                 }
             }
         }
@@ -821,26 +825,44 @@ fun RestoreFocus(req: FocusRequester, key: String, nav: Nav, screenKey: String) 
  * después arranca el "Video del banner principal" (previewVideo) con un crossfade.
  */
 @Composable
-fun ExpandPoster(t: Title, baseW: Dp, key: String, restore: String?, nav: Nav, screenKey: String, entry: FocusRequester? = null, onClick: () -> Unit) {
+fun ExpandPoster(t: Title, baseW: Dp, key: String, restore: String?, nav: Nav, screenKey: String, entry: FocusRequester? = null, swap: RowSwap? = null, idx: Int = 0, onClick: () -> Unit) {
     val req = remember { FocusRequester() }
     if (key == restore) RestoreFocus(req, key, nav, screenKey)
     val src = remember { MutableInteractionSource() }
     val focused by src.collectIsFocusedAsState()
     val h = baseW * 1.5f
     val openW = h * (16f / 9f)
-    // se abre y se cierra con un resorte suave: llega con apenas un asentado, sin rebotar
-    val w by animateDpAsState(if (focused) openW else baseW, spring(dampingRatio = .92f, stiffness = 220f), label = "pw")
-    val openRaw by animateFloatAsState(if (focused) 1f else 0f, spring(dampingRatio = .92f, stiffness = 220f), label = "po")
-    val open = openRaw.coerceIn(0f, 1f)
+    val density = LocalDensity.current
+    // Entrar o salir de la fila: se abre / se cierra con un resorte suave. Moverse de costado dentro de
+    // la fila: el abierto pasa al siguiente SIN cerrarse y abrirse (cambia en el acto, la fila se corre
+    // un lugar y la imagen se funde con la anterior).
+    val instant = remember(focused) { swap != null && (if (focused) swap.sibling else swap.cur >= 0 && swap.cur != idx) }
+    val wA = remember { androidx.compose.animation.core.Animatable(baseW.value) }
+    val oA = remember { androidx.compose.animation.core.Animatable(0f) }
+    val wT = if (focused) openW.value else baseW.value
+    val oT = if (focused) 1f else 0f
+    LaunchedEffect(focused) {
+        val sp = spring<Float>(dampingRatio = .92f, stiffness = 220f)
+        if (instant) { wA.snapTo(wT); oA.snapTo(oT) }
+        else { launch { wA.animateTo(wT, sp) }; launch { oA.animateTo(oT, sp) } }
+    }
+    val w = (if (instant) wT else wA.value).dp
+    val open = (if (instant) oT else oA.value).coerceIn(0f, 1f)
     Focusable(
-        onClick, Modifier.entry(entry != null, entry ?: req).width(w).height(h), shape = RoundedCornerShape(9.dp), scale = 1f, ring = true, lift = true,
-        requester = req, onFocus = { nav.memory.focus[screenKey] = key }, pivotTop = true, interactionSource = src
+        onClick, Modifier.entry(entry != null, entry ?: req).graphicsLayer { if (swap != null && swap.pinned && idx > swap.cur && swap.cur >= 0) translationX = swap.shift.value }
+            .width(w).height(h), shape = RoundedCornerShape(9.dp), scale = 1f, ring = true, lift = true,
+        requester = req, onFocus = {
+            nav.memory.focus[screenKey] = key
+            swap?.moveTo(idx, t.tvBg, with(density) { (baseW + 15.dp).toPx() })
+        }, pivotTop = true, interactionSource = src
     ) { f ->
         Box(Modifier.fillMaxSize().background(C.surface)) {
             if (t.poster.isNotBlank()) Img(t.poster, Modifier.fillMaxSize().graphicsLayer { alpha = 1f - open })
             else Placeholder(t, Modifier.fillMaxSize().graphicsLayer { alpha = 1f - open })
             // imagen de FONDO del título (no la miniatura)
             if (open > 0f && t.tvBg.isNotBlank()) Img(t.tvBg, Modifier.fillMaxSize().graphicsLayer { alpha = open })
+            // la imagen del que estaba abierto se desvanece encima, así el cambio no es de golpe
+            if (f && swap != null && swap.prevBg.isNotBlank() && swap.cur == idx) Img(swap.prevBg, Modifier.fillMaxSize().graphicsLayer { alpha = swap.fade.value })
             PreviewOverlay(t, f)
             if (open > 0f) {
                 Box(Modifier.fillMaxSize().graphicsLayer { alpha = open }.background(Brush.verticalGradient(0f to Color.Transparent, .55f to Color.Transparent, 1f to Color.Black.copy(alpha = .75f))))
@@ -1325,3 +1347,33 @@ fun avatarRes(key: String?): Int? = when (key) { "a1" -> R.drawable.avatar_a1; "
 
 /** Marca la tarjeta por la que se entra a una fila (ver RowA). */
 private fun Modifier.entry(on: Boolean, req: FocusRequester): Modifier = if (on) this.focusRequester(req) else this
+
+/**
+ * Estado compartido de una fila de pósters para que, al moverte de costado, el póster abierto pase al
+ * siguiente sin cerrarse y volver a abrirse: la fila salta un lugar en el mismo cuadro (el abierto queda
+ * clavado a la izquierda, donde estaba), los pósters de la derecha se deslizan un lugar con suavidad y la
+ * imagen del anterior se desvanece sobre la nueva.
+ */
+class RowSwap(private val state: LazyListState, private val scope: kotlinx.coroutines.CoroutineScope, val pinned: Boolean) {
+    var cur = -1                       // índice enfocado en esta fila (-1 = la fila no tiene el foco)
+    var prevBg = ""
+    var sibling = false                // el último foco llegó desde otro póster de esta misma fila
+    private var curBg = ""
+    val shift = androidx.compose.animation.core.Animatable(0f)
+    val fade = androidx.compose.animation.core.Animatable(0f)
+    fun moveTo(i: Int, bg: String, slotPx: Float) {
+        val from = cur
+        cur = i
+        sibling = from >= 0 && from != i
+        if (sibling) {
+            prevBg = curBg
+            if (pinned) {
+                state.requestScrollToItem(i)
+                val dir = if (i > from) 1f else -1f
+                scope.launch { shift.snapTo(dir * slotPx); shift.animateTo(0f, spring(dampingRatio = .92f, stiffness = 260f)) }
+            }
+            scope.launch { fade.snapTo(1f); fade.animateTo(0f, tween(260)) }
+        }
+        curBg = bg
+    }
+}
