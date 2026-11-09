@@ -1,5 +1,8 @@
 package com.realityvault.mobile
 
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.core.LinearEasing
@@ -218,22 +221,47 @@ private fun TopIcons(nav: Nav) {
     }
 }
 
+/**
+ * Categorías de arriba: barra translúcida con un óvalo amarillo que se desliza hasta la activa
+ * (transición "Tabs sliding" de transitions.dev: 250 ms, cubic-bezier(.22, 1, .36, 1); el óvalo toma
+ * posición y ancho de la pestaña elegida).
+ */
 @Composable
 private fun Tabs(tabs: List<String>, selected: String, onSelect: (String) -> Unit) {
-    val state = androidx.compose.foundation.lazy.rememberLazyListState()
-    LaunchedEffect(selected) { val i = tabs.indexOf(selected); if (i > 0) state.animateScrollToItem((i - 1).coerceAtLeast(0)) }
-    LazyRow(state = state, contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-        items(tabs, key = { it }) { tab ->
-            val on = tab == selected
-            val alpha by animateFloatAsState(if (on) 1f else .68f, tween(200), label = "tabA")
-            Column(Modifier.width(IntrinsicSize.Max).tap({ onSelect(tab) }, .95f).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(tab, style = ts(17, FontWeight.Bold, Color.White.copy(alpha = alpha)), maxLines = 1)
-                Spacer(Modifier.height(7.dp))
-                // subrayado del ancho de la palabra, como en la captura
-                androidx.compose.animation.AnimatedVisibility(on, enter = fadeIn(tween(180)) + androidx.compose.animation.expandHorizontally(tween(220)), exit = fadeOut(tween(120)) + androidx.compose.animation.shrinkHorizontally(tween(160))) {
-                    Box(Modifier.fillMaxWidth().height(3.dp).background(Color.White, RoundedCornerShape(99.dp)))
+    val scroll = androidx.compose.foundation.rememberScrollState()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val pos = remember { androidx.compose.runtime.mutableStateMapOf<String, Pair<Int, Int>>() }   // izquierda y ancho en px
+    val sel = pos[selected]
+    val ease = androidx.compose.animation.core.CubicBezierEasing(.22f, 1f, .36f, 1f)
+    val px = remember { androidx.compose.animation.core.Animatable(0f) }
+    val pw = remember { androidx.compose.animation.core.Animatable(0f) }
+    var placed by remember { mutableStateOf(false) }
+    LaunchedEffect(sel) {
+        val (l, w) = sel ?: return@LaunchedEffect
+        if (!placed) { px.snapTo(l.toFloat()); pw.snapTo(w.toFloat()); placed = true }   // primera vez: sin animación
+        else {
+            launch { px.animateTo(l.toFloat(), tween(250, easing = ease)) }
+            launch { pw.animateTo(w.toFloat(), tween(250, easing = ease)) }
+        }
+        scroll.animateScrollTo((l - with(density) { 56.dp.toPx() }).toInt().coerceAtLeast(0), tween(300, easing = ease))
+    }
+    Box(Modifier.fillMaxWidth().horizontalScroll(scroll).padding(horizontal = 20.dp)) {
+        Box(Modifier.clip(RoundedCornerShape(99.dp)).background(Color.White.copy(alpha = .12f)).padding(3.dp)) {
+            // hasta que arranque la animación, el óvalo se dibuja directo sobre la pestaña activa
+            if (sel != null) Box(
+                Modifier.offset { androidx.compose.ui.unit.IntOffset((if (placed) px.value else sel.first.toFloat()).toInt(), 0) }.width(with(density) { (if (placed) pw.value else sel.second.toFloat()).toDp() }).height(36.dp)
+                    .background(Color(0xFFEDEE3B), RoundedCornerShape(99.dp))
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                tabs.forEach { tab ->
+                    val on = tab == selected
+                    val c by androidx.compose.animation.animateColorAsState(if (on) Color(0xFF0C0C0C) else Color.White.copy(alpha = .78f), tween(250, easing = ease), label = "tabC")
+                    Box(
+                        Modifier.height(36.dp).onGloballyPositioned { pos[tab] = it.positionInParent().x.toInt() to it.size.width }
+                            .clip(RoundedCornerShape(99.dp)).tap({ onSelect(tab) }, .95f).padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) { Text(tab, style = ts(15, FontWeight.Bold, c), maxLines = 1) }
                 }
-                if (!on) Spacer(Modifier.height(3.dp))
             }
         }
     }

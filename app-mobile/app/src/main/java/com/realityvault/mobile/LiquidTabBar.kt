@@ -38,6 +38,8 @@ import java.io.ByteArrayOutputStream
 @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 @Composable
 fun LiquidTabBar(nav: Nav) {
+    // en las vistas previas / capturas de diseño no hay WebView: no se dibuja la barra
+    if (androidx.compose.ui.platform.LocalInspectionMode.current) return
     val ctx = LocalContext.current
     val tab = when {
         nav.top == Screen.Home -> "home"
@@ -45,7 +47,8 @@ fun LiquidTabBar(nav: Nav) {
         nav.top == Screen.Mine || nav.top is Screen.Account -> "mine"
         else -> null
     }
-    val web = remember {
+    // si el sistema no tiene WebView (o en las capturas de diseño) simplemente no se dibuja la barra
+    val web = remember { runCatching {
         WebView(ctx).apply {
             setBackgroundColor(AColor.TRANSPARENT)
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -54,7 +57,7 @@ fun LiquidTabBar(nav: Nav) {
             settings.allowFileAccess = true
             settings.allowContentAccess = false
         }
-    }
+    }.getOrNull() } ?: return
     var ready by remember { androidx.compose.runtime.mutableStateOf(false) }
     // lo que pasa en la barra (tocar una pestaña) vuelve a la app nativa
     remember(web) {
