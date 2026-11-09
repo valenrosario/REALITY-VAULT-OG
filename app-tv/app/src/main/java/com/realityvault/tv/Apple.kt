@@ -173,9 +173,22 @@ fun TopNavBar(nav: Nav, modifier: Modifier = Modifier, downTarget: FocusRequeste
     val activeIdx = if (rowHasFocus && focusedIdx >= 0) focusedIdx else selectedIdx
     val target = bounds[activeIdx]
     val density = LocalDensity.current
-    val pillSpec = tween<Dp>(250, easing = CubicBezierEasing(.22f, 1f, .36f, 1f))
-    val animX by animateDpAsState(with(density) { (target?.left ?: 0f).toDp() }, pillSpec, label = "pillX")
-    val animW by animateDpAsState(with(density) { (target?.width ?: 0f).toDp() }, pillSpec, label = "pillW")
+    // movimiento tipo Apple: cada borde del óvalo es un resorte; el de adelante sale firme y el de atrás lo
+    // sigue más blando, así se estira en el camino, rebota apenas y se vuelve a cerrar (como el toggle de iOS)
+    val edgeL = remember { androidx.compose.animation.core.Animatable(0f) }
+    val edgeR = remember { androidx.compose.animation.core.Animatable(0f) }
+    var pillPlaced by remember { mutableStateOf(false) }
+    LaunchedEffect(target) {
+        val t = target ?: return@LaunchedEffect
+        if (!pillPlaced) { edgeL.snapTo(t.left); edgeR.snapTo(t.right); pillPlaced = true; return@LaunchedEffect }
+        val lead = spring<Float>(dampingRatio = .72f, stiffness = 520f)
+        val trail = spring<Float>(dampingRatio = .82f, stiffness = 250f)
+        val right = t.left > edgeL.value
+        launch { edgeL.animateTo(t.left, if (right) trail else lead) }
+        launch { edgeR.animateTo(t.right, if (right) lead else trail) }
+    }
+    val animX = with(density) { edgeL.value.toDp() }
+    val animW = with(density) { (edgeR.value - edgeL.value).coerceAtLeast(0f).toDp() }
     val bright = rowHasFocus && focusedIdx >= 0
     val animAlpha by animateFloatAsState(if (target == null) 0f else if (bright) .95f else .16f, tween(160), label = "pillA")
 

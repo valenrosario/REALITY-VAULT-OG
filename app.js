@@ -448,17 +448,37 @@ function mobileChips(active){
   return `<nav class="m-chips" aria-label="Secciones"><div class="t-tabs"><span class="t-tabs-pill" aria-hidden="true"></span>${items.map(([k,h,l]) => `<a href="${h}" class="t-tab m-chip ${k===active?'on':''}" ${k===active?'aria-current="page"':''}>${l}</a>`).join('')}</div></nav>`;
 }
 let chipPrev = null;
+// movimiento tipo Apple: los dos bordes del óvalo son resortes separados. El borde que va adelante
+// es más firme y sale primero; el de atrás lo sigue más blando, así el óvalo se estira en el camino,
+// rebota apenas al llegar y se vuelve a cerrar (como el toggle de iOS).
+const SPRING_LEAD = { k: 520, c: 2 * .72 * Math.sqrt(520) }, SPRING_TRAIL = { k: 250, c: 2 * .82 * Math.sqrt(250) };
+let chipAnim = null;
 function slideChips(){
   const bar = document.querySelector('.m-chips .t-tabs'); if (!bar) return;
   const pill = bar.querySelector('.t-tabs-pill'), tab = bar.querySelector('.t-tab.on');
   if (!pill || !tab){ if (pill) pill.style.width = '0'; return; }
-  const set = (l, w) => { pill.style.transform = `translateX(${l}px)`; pill.style.width = w + 'px'; };
-  // arranca donde estaba el óvalo antes de cambiar de sección (sin animar) y después se desliza a la nueva
-  pill.style.transition = 'none'; const from = chipPrev; set(from ? from.l : tab.offsetLeft, from ? from.w : tab.offsetWidth);
-  void pill.offsetWidth; pill.style.transition = '';
-  requestAnimationFrame(() => set(tab.offsetLeft, tab.offsetWidth));
-  chipPrev = { l: tab.offsetLeft, w: tab.offsetWidth };
-  const sc = bar.parentElement; if (sc) sc.scrollTo({ left: Math.max(0, tab.offsetLeft - 56), behavior: from ? 'smooth' : 'auto' });
+  const draw = (l, r) => { pill.style.transform = `translateX(${l}px)`; pill.style.width = Math.max(0, r - l) + 'px'; };
+  const tl = tab.offsetLeft, tr = tl + tab.offsetWidth, from = chipPrev;
+  chipPrev = { l: tl, r: tr };
+  const sc = bar.parentElement; if (sc) sc.scrollTo({ left: Math.max(0, tl - 56), behavior: from ? 'smooth' : 'auto' });
+  cancelAnimationFrame(chipAnim);
+  if (!from || matchMedia('(prefers-reduced-motion: reduce)').matches){ draw(tl, tr); return; }
+  const right = tl > from.l;   // hacia dónde va
+  const L = { x: from.l, v: 0, to: tl, s: right ? SPRING_TRAIL : SPRING_LEAD };
+  const R = { x: from.r, v: 0, to: tr, s: right ? SPRING_LEAD : SPRING_TRAIL };
+  draw(L.x, R.x);
+  let prev = 0;
+  const step = t => {
+    const dt = prev ? Math.min(.032, (t - prev) / 1000) : 1 / 60; prev = t;
+    let moving = false;
+    for (const e of [L, R]){
+      for (let i = 0; i < 4; i++){ const h = dt / 4; const a = -e.s.k * (e.x - e.to) - e.s.c * e.v; e.v += a * h; e.x += e.v * h; }
+      if (Math.abs(e.x - e.to) > .3 || Math.abs(e.v) > 4) moving = true; else { e.x = e.to; e.v = 0; }
+    }
+    draw(L.x, R.x);
+    if (moving) chipAnim = requestAnimationFrame(step);
+  };
+  chipAnim = requestAnimationFrame(step);
 }
 // reparte las colecciones entre las filas (una cada tanto), en vez de apilarlas todas juntas
 function mixColls(rows, colls){

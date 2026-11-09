@@ -226,6 +226,9 @@ private fun TopIcons(nav: Nav) {
  * (transición "Tabs sliding" de transitions.dev: 250 ms, cubic-bezier(.22, 1, .36, 1); el óvalo toma
  * posición y ancho de la pestaña elegida).
  */
+private val springLead = androidx.compose.animation.core.spring<Float>(dampingRatio = .72f, stiffness = 520f)
+private val springTrail = androidx.compose.animation.core.spring<Float>(dampingRatio = .82f, stiffness = 250f)
+
 @Composable
 private fun Tabs(tabs: List<String>, selected: String, onSelect: (String) -> Unit) {
     val scroll = androidx.compose.foundation.rememberScrollState()
@@ -233,15 +236,18 @@ private fun Tabs(tabs: List<String>, selected: String, onSelect: (String) -> Uni
     val pos = remember { androidx.compose.runtime.mutableStateMapOf<String, Pair<Int, Int>>() }   // izquierda y ancho en px
     val sel = pos[selected]
     val ease = androidx.compose.animation.core.CubicBezierEasing(.22f, 1f, .36f, 1f)
-    val px = remember { androidx.compose.animation.core.Animatable(0f) }
-    val pw = remember { androidx.compose.animation.core.Animatable(0f) }
+    // movimiento tipo Apple: cada borde del óvalo es un resorte; el de adelante sale firme y el de atrás lo
+    // sigue más blando, así se estira en el camino, rebota apenas y se vuelve a cerrar (como el toggle de iOS)
+    val pl = remember { androidx.compose.animation.core.Animatable(0f) }
+    val pr = remember { androidx.compose.animation.core.Animatable(0f) }
     var placed by remember { mutableStateOf(false) }
     LaunchedEffect(sel) {
         val (l, w) = sel ?: return@LaunchedEffect
-        if (!placed) { px.snapTo(l.toFloat()); pw.snapTo(w.toFloat()); placed = true }   // primera vez: sin animación
+        if (!placed) { pl.snapTo(l.toFloat()); pr.snapTo((l + w).toFloat()); placed = true }   // primera vez: sin animación
         else {
-            launch { px.animateTo(l.toFloat(), tween(250, easing = ease)) }
-            launch { pw.animateTo(w.toFloat(), tween(250, easing = ease)) }
+            val right = l > pl.value
+            launch { pl.animateTo(l.toFloat(), if (right) springTrail else springLead) }
+            launch { pr.animateTo((l + w).toFloat(), if (right) springLead else springTrail) }
         }
         scroll.animateScrollTo((l - with(density) { 56.dp.toPx() }).toInt().coerceAtLeast(0), tween(300, easing = ease))
     }
@@ -249,7 +255,7 @@ private fun Tabs(tabs: List<String>, selected: String, onSelect: (String) -> Uni
         Box(Modifier.clip(RoundedCornerShape(99.dp)).background(Color.White.copy(alpha = .12f)).padding(3.dp)) {
             // hasta que arranque la animación, el óvalo se dibuja directo sobre la pestaña activa
             if (sel != null) Box(
-                Modifier.offset { androidx.compose.ui.unit.IntOffset((if (placed) px.value else sel.first.toFloat()).toInt(), 0) }.width(with(density) { (if (placed) pw.value else sel.second.toFloat()).toDp() }).height(36.dp)
+                Modifier.offset { androidx.compose.ui.unit.IntOffset((if (placed) pl.value else sel.first.toFloat()).toInt(), 0) }.width(with(density) { (if (placed) (pr.value - pl.value).coerceAtLeast(0f) else sel.second.toFloat()).toDp() }).height(36.dp)
                     .background(Color(0xFFEDEE3B), RoundedCornerShape(99.dp))
             )
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
