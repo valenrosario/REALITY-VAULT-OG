@@ -1185,59 +1185,57 @@ fun DetailScreen(id: String, nav: Nav) {
 @Composable
 private fun ExtrasShowcase(t: Title, s: Season, nav: Nav) {
     val xs = s.extras
-    val f = xs.first()
-    val tint = rememberTint(f.thumb)
-    val bg = Color(0xFF140A10)
+    // el extra en el que estás parado: la vista grande de la izquierda lo va mostrando
+    var sel by remember(t.id, s.number) { mutableIntStateOf(0) }
+    val cur = xs.getOrElse(sel) { xs.first() }
     val mins = xs.sumOf { it.duration.filter { c -> c.isDigit() }.take(3).toIntOrNull() ?: 0 }
-    val shape = RoundedCornerShape(20.dp)
-    Box(
-        Modifier.padding(start = 48.dp, end = 48.dp, top = 30.dp).fillMaxWidth().clip(shape)
-            .background(Color(0xF20E080B))
-            .border(1.dp, Color.White.copy(alpha = .10f), shape)
-    ) {
-        Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(tint.copy(alpha = .38f), Color.Transparent), center = androidx.compose.ui.geometry.Offset(1500f, 0f), radius = 1300f)))
-        Row(Modifier.padding(start = 26.dp, end = 26.dp, top = 22.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            Column(Modifier.weight(1.35f)) {
-                Text("★  CONTENIDO EXTRA", style = ts(10, FontWeight.Bold, C.accent).copy(letterSpacing = 2.sp))
-                Text("Más de la temporada ${s.number}", style = ts(24, FontWeight.Bold, Color.White), modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
-                Focusable({ nav.playExtra(t, f.url) }, Modifier.fillMaxWidth().aspectRatio(16f / 9f), shape = RoundedCornerShape(14.dp), scale = 1.03f, ring = true, lift = true) {
-                    Box(Modifier.fillMaxSize().background(C.surface)) {
-                        if (f.thumb.isNotBlank()) Img(f.thumb, Modifier.fillMaxSize())
-                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .4f to Color.Black.copy(alpha = .2f), 1f to Color.Black.copy(alpha = .9f))))
-                        Column(Modifier.align(Alignment.BottomStart).padding(start = 18.dp, end = 18.dp, bottom = 16.dp)) {
-                            XPill()
-                            Text(f.title.ifBlank { "Extra" }, style = ts(20, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-                            if (f.description.isNotBlank()) Text(f.description, style = ts(11, color = Color.White.copy(alpha = .82f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp, end = 60.dp))
-                            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Row(Modifier.background(Color.White, RoundedCornerShape(99.dp)).padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Ic.play, null, tint = Color.Black, modifier = Modifier.size(11.dp)); Spacer(Modifier.width(6.dp))
-                                    Text("Ver extra", style = ts(12, FontWeight.Bold, Color.Black))
-                                }
-                                if (f.duration.isNotBlank()) Text(f.duration, style = ts(11, color = Color.White.copy(alpha = .75f)), modifier = Modifier.padding(start = 10.dp))
-                            }
+    Column(Modifier.padding(start = 48.dp, end = 48.dp, top = 34.dp).fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            XPill()
+            Text("Extras de la temporada ${s.number}", style = ts(19, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 12.dp).weight(1f))
+            Text("${xs.size} video${if (xs.size == 1) "" else "s"}" + (if (mins > 0) "  ·  $mins min" else ""), style = ts(11, color = Color.White.copy(alpha = .6f)))
+        }
+        Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+            // vista previa: no se enfoca; cambia (fundiéndose) con el extra elegido en la lista
+            Box(Modifier.weight(1.42f).aspectRatio(16f / 9f).clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+                androidx.compose.animation.Crossfade(cur, animationSpec = tween(280), label = "extra") { x ->
+                    if (x.thumb.isNotBlank()) Img(x.thumb, Modifier.fillMaxSize(), crossfade = false)
+                }
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .38f to Color.Black.copy(alpha = .12f), 1f to Color.Black.copy(alpha = .88f))))
+                Column(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 20.dp)) {
+                    // sobre fondo propio, para que se lea aunque la imagen sea clara
+                    Text("EXTRA ${sel + 1} DE ${xs.size}", style = ts(9, FontWeight.Bold, Color(0xFF3B0E22)).copy(letterSpacing = 1.6.sp),
+                        modifier = Modifier.background(C.accent, RoundedCornerShape(99.dp)).padding(horizontal = 9.dp, vertical = 4.dp))
+                    Text(cur.title.ifBlank { "Extra" }, style = ts(24, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
+                    if (cur.description.isNotBlank()) Text(cur.description, style = ts(12, color = Color.White.copy(alpha = .84f)).copy(lineHeight = 17.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp, end = 40.dp))
+                    Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.background(Color.White, RoundedCornerShape(99.dp)).padding(horizontal = 13.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Ic.play, null, tint = Color.Black, modifier = Modifier.size(10.dp)); Spacer(Modifier.width(6.dp))
+                            Text("OK para ver", style = ts(11.5f, FontWeight.Bold, Color.Black))
                         }
+                        if (cur.duration.isNotBlank()) Text(cur.duration, style = ts(11.5f, color = Color.White.copy(alpha = .8f)), modifier = Modifier.padding(start = 11.dp))
                     }
                 }
             }
-            if (xs.size > 1) Column(Modifier.weight(1f).padding(top = 2.dp)) {
-                Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.Bottom) {
-                    Text("Todos los extras", style = ts(14, FontWeight.Bold, Color.White), modifier = Modifier.weight(1f))
-                    Text("${xs.size} videos" + (if (mins > 0) " · $mins min" else ""), style = ts(10, color = Color.White.copy(alpha = .55f)))
-                }
-                Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .1f)))
-                Spacer(Modifier.height(6.dp))
-                xs.forEach { x ->
-                    Focusable({ nav.playExtra(t, x.url) }, Modifier.fillMaxWidth().padding(vertical = 2.dp), shape = RoundedCornerShape(12.dp), scale = 1.02f, ring = false) { fx ->
-                        Row(Modifier.fillMaxWidth().background(if (fx) Color.White else Color.Transparent).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.width(88.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(7.dp)).background(C.surface)) {
+            // la lista: acá te movés; OK reproduce
+            Column(Modifier.weight(1f)) {
+                xs.forEachIndexed { i, x ->
+                    Focusable({ nav.playExtra(t, x.url) }, Modifier.fillMaxWidth().padding(vertical = 3.dp), shape = RoundedCornerShape(12.dp), scale = 1.03f, ring = true, onFocus = { sel = i }) { fx ->
+                        Row(
+                            Modifier.fillMaxWidth().background(if (fx) Color.White.copy(alpha = .22f) else if (i == sel) Color.White.copy(alpha = .09f) else Color.Transparent).padding(start = 4.dp, top = 7.dp, bottom = 7.dp, end = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("${i + 1}", style = ts(13, FontWeight.Bold, if (i == sel) C.accent else Color.White.copy(alpha = .45f)).copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center), modifier = Modifier.width(26.dp))
+                            Box(Modifier.width(92.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(C.surface)) {
                                 if (x.thumb.isNotBlank()) Img(x.thumb, Modifier.fillMaxSize())
                                 if (x.duration.isNotBlank()) Text(x.duration, style = ts(8.5f, FontWeight.Bold, Color.White),
                                     modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp).background(Color.Black.copy(alpha = .78f), RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 1.dp))
                             }
                             Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                                Text(x.title.ifBlank { "Extra" }, style = ts(12.5f, FontWeight.Bold, if (fx) Color.Black else Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                if (x.description.isNotBlank()) Text(x.description, style = ts(10, color = if (fx) Color.Black.copy(alpha = .6f) else Color.White.copy(alpha = .55f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                                Text(x.title.ifBlank { "Extra" }, style = ts(12.5f, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (x.description.isNotBlank()) Text(x.description, style = ts(10, color = Color.White.copy(alpha = if (fx) .8f else .55f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                             }
+                            if (fx) Icon(Ic.play, null, tint = Color.White, modifier = Modifier.padding(start = 8.dp).size(13.dp))
                         }
                     }
                 }
