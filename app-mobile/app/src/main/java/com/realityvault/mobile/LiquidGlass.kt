@@ -61,6 +61,8 @@ uniform float radius;
 uniform float4 thumb;     // la lente de la pestaña elegida
 uniform float thumbRad;
 uniform float thumbA;
+uniform float4 thumbTint; // color de la lente elegida (rgb) y cuánto tiñe (a): 0 = vidrio claro
+uniform float sc;         // escala del efecto: 1 para una barra alta, menos para una fina
 uniform float dp;
 
 float sdRR(float2 p, float4 r, float rad) {
@@ -80,32 +82,35 @@ half4 main(float2 xy) {
     float d = sdRR(xy, bar, radius);
     float aa = clamp(0.5 - d, 0.0, 1.0);
     // sombra suave que el vidrio proyecta hacia abajo (afuera del vidrio)
-    float ds = sdRR(xy - float2(0.0, 7.0 * dp), bar, radius);
-    float sh = 0.34 * exp(-max(ds, 0.0) / (9.0 * dp)) * (1.0 - aa);
+    float ds = sdRR(xy - float2(0.0, 7.0 * dp * sc), bar, radius);
+    float sh = 0.34 * sc * exp(-max(ds, 0.0) / (9.0 * dp * sc)) * (1.0 - aa);
     if (aa <= 0.0) { return half4(0.0, 0.0, 0.0, half(sh)); }
 
     float2 n = nrm(xy, bar, radius);
     float depth = max(-d, 0.0);
-    float k = lens(depth, 22.0 * dp);
+    float k = lens(depth, 22.0 * dp * sc);
     float2 bc = (bar.xy + bar.zw) * 0.5;
     // el canto curva lo de atrás hacia adentro; el centro agranda apenas, como una lente gruesa
-    float2 off = -n * k * 34.0 * dp + (bc - xy) * 0.035;
+    float2 off = -n * k * 34.0 * dp * sc + (bc - xy) * 0.035 * sc;
 
     float dT = sdRR(xy, thumb, thumbRad);
     float inT = clamp(0.5 - dT, 0.0, 1.0) * thumbA;
     float2 nT = nrm(xy, thumb, thumbRad);
     float depthT = max(-dT, 0.0);
-    float kT = lens(depthT, 13.0 * dp);
+    float kT = lens(depthT, 13.0 * dp * sc);
     float2 tc = (thumb.xy + thumb.zw) * 0.5;
-    off += inT * (-nT * kT * 16.0 * dp + (tc - xy) * 0.09);
+    off += inT * (-nT * kT * 16.0 * dp * sc + (tc - xy) * 0.09);
 
     float3 col = float3(content.eval(xy + off * 1.14).r, content.eval(xy + off).g, content.eval(xy + off * 0.86).b);
     float l = dot(col, float3(0.299, 0.587, 0.114));
     col = mix(float3(l), col, 1.22);                         // un poco más de color, como el vidrio de Apple
     // tinte oscuro para que los íconos blancos se lean: leve sobre fondos oscuros, más fuerte sobre fondos claros
     col = mix(col, float3(0.06, 0.06, 0.075), 0.24 + 0.34 * smoothstep(0.25, 0.85, l));
+    col += 0.035 * (1.0 - l);                                // sobre fondos muy oscuros el vidrio igual se distingue
     // la lente elegida: más clara, con una sombrita alrededor que la despega del vidrio
-    col += inT * (0.10 + 0.05 * (1.0 - l));
+    col += inT * (0.10 + 0.05 * (1.0 - l)) * (1.0 - thumbTint.a);
+    // ...o de color (vidrio teñido): deja pasar un poco de lo de atrás, así se nota que es vidrio y no una mancha plana
+    col = mix(col, thumbTint.rgb * (0.97 + 0.10 * l), thumbTint.a * inT);
     float ring = (1.0 - clamp(0.5 - dT, 0.0, 1.0)) * exp(-max(dT, 0.0) / (5.0 * dp)) * thumbA;
     col *= 1.0 - 0.22 * ring;
 
@@ -133,7 +138,11 @@ half4 main(float2 xy) {
  */
 @RequiresApi(33)
 @Composable
-fun LiquidGlass(backdrop: GlassBackdrop, modifier: Modifier, margin: Dp, radius: Dp, thumb: () -> Rect, thumbRadius: Dp, thumbAlpha: () -> Float) {
+fun LiquidGlass(
+    backdrop: GlassBackdrop, modifier: Modifier, margin: Dp, radius: Dp, thumb: () -> Rect, thumbRadius: Dp, thumbAlpha: () -> Float,
+    // rectángulo del vidrio en dp dentro de este Box (si no se pasa: todo el Box menos el margen). En ese caso [thumb] también va en dp del Box.
+    bar: (() -> Rect)? = null, scale: Float = 1f, thumbTint: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Transparent, blur: Dp = 4.dp
+) {
     val shader = remember { RuntimeShader(GLASS_SRC) }
     var pos by remember { mutableStateOf(Offset.Zero) }
     Box(
@@ -141,16 +150,24 @@ fun LiquidGlass(backdrop: GlassBackdrop, modifier: Modifier, margin: Dp, radius:
             .onGloballyPositioned { pos = it.positionInRoot() }
             .graphicsLayer {
                 val m = margin.toPx(); val t = thumb(); val d = density
-                shader.setFloatUniform("bar", m, m, size.width - m, size.height - m)
+                val b = bar?.invoke()
+                if (b == null) {
+                    shader.setFloatUniform("bar", m, m, size.width - m, size.height - m)
+                    shader.setFloatUniform("thumb", m + t.left * d, m + t.top * d, m + t.right * d, m + t.bottom * d)
+                } else {
+                    shader.setFloatUniform("bar", b.left * d, b.top * d, b.right * d, b.bottom * d)
+                    shader.setFloatUniform("thumb", t.left * d, t.top * d, t.right * d, t.bottom * d)
+                }
                 shader.setFloatUniform("radius", radius.toPx())
-                shader.setFloatUniform("thumb", m + t.left * d, m + t.top * d, m + t.right * d, m + t.bottom * d)
+                shader.setFloatUniform("thumbTint", thumbTint.red, thumbTint.green, thumbTint.blue, thumbTint.alpha)
+                shader.setFloatUniform("sc", scale)
                 shader.setFloatUniform("thumbRad", thumbRadius.toPx())
                 shader.setFloatUniform("thumbA", thumbAlpha())
                 shader.setFloatUniform("dp", d)
-                val blur = 4.dp.toPx()
+                val blurPx = blur.toPx()
                 renderEffect = RenderEffect.createChainEffect(
                     RenderEffect.createRuntimeShaderEffect(shader, "content"),
-                    RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP)
+                    RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP)
                 ).asComposeRenderEffect()
             }
             .drawBehind { translate(backdrop.origin.x - pos.x, backdrop.origin.y - pos.y) { drawLayer(backdrop.layer) } }

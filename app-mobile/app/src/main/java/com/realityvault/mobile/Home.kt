@@ -1,5 +1,7 @@
 package com.realityvault.mobile
 
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.horizontalScroll
@@ -242,6 +244,9 @@ class TabsPill {
 }
 val LocalTabsPill = androidx.compose.runtime.staticCompositionLocalOf { TabsPill() }
 
+/** El inicio grabado en vivo (lo que se ve a través del vidrio de las categorías). */
+val LocalHomeGlass = androidx.compose.runtime.staticCompositionLocalOf<GlassBackdrop?> { null }
+
 @Composable
 private fun Tabs(tabs: List<String>, selected: String, onSelect: (String) -> Unit) {
     val st = LocalTabsPill.current
@@ -267,17 +272,36 @@ private fun Tabs(tabs: List<String>, selected: String, onSelect: (String) -> Uni
         }
         scroll.animateScrollTo((l - with(density) { 56.dp.toPx() }).toInt().coerceAtLeast(0), tween(300, easing = ease))
     }
+    val glass = LocalHomeGlass.current
+    val liquid = GLASS_OK && glass != null
+    var contentW by remember { mutableStateOf(0) }   // ancho de la barra entera (px), aunque se salga de la pantalla
+    Box(Modifier.fillMaxWidth().height(42.dp), contentAlignment = Alignment.Center) {
+    if (liquid) {
+        // vidrio líquido: la barra es una lente sobre la portada y la categoría elegida, una gota de vidrio amarillo
+        val m = 18f
+        LiquidGlass(
+            glass!!, Modifier.fillMaxWidth().requiredHeight((42 + m * 2).dp), margin = m.dp, radius = 21.dp,
+            thumb = {
+                val d = density.density; val x0 = 20f - scroll.value / d + 3f
+                val l = if (placed) pl.value else (sel?.first ?: 0).toFloat(); val r = if (placed) pr.value else ((sel?.first ?: 0) + (sel?.second ?: 0)).toFloat()
+                androidx.compose.ui.geometry.Rect(x0 + l / d, m + 3f, x0 + r / d, m + 39f)
+            },
+            thumbRadius = 18.dp, thumbAlpha = { if (sel != null) 1f else 0f },
+            bar = { val d = density.density; val x0 = 20f - scroll.value / d; androidx.compose.ui.geometry.Rect(x0, m, x0 + contentW / d, m + 42f) },
+            scale = .62f, thumbTint = Color(0xFFEDEE3B).copy(alpha = .93f), blur = 5.dp
+        )
+    }
     Box(Modifier.fillMaxWidth().horizontalScroll(scroll).padding(horizontal = 20.dp)) {
-        Box(Modifier.clip(RoundedCornerShape(99.dp)).background(Color.White.copy(alpha = .12f)).padding(3.dp)) {
+        Box(Modifier.onGloballyPositioned { contentW = it.size.width }.clip(RoundedCornerShape(99.dp)).then(if (liquid) Modifier else Modifier.background(Color.White.copy(alpha = .12f))).padding(3.dp)) {
             // hasta que arranque la animación, el óvalo se dibuja directo sobre la pestaña activa
-            if (sel != null) Box(
+            if (sel != null && !liquid) Box(
                 Modifier.offset { androidx.compose.ui.unit.IntOffset((if (placed) pl.value else sel.first.toFloat()).toInt(), 0) }.width(with(density) { (if (placed) (pr.value - pl.value).coerceAtLeast(0f) else sel.second.toFloat()).toDp() }).height(36.dp)
                     .background(Color(0xFFEDEE3B), RoundedCornerShape(99.dp))
             )
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 tabs.forEach { tab ->
                     val on = tab == selected
-                    val c by androidx.compose.animation.animateColorAsState(if (on) Color(0xFF0C0C0C) else Color.White.copy(alpha = .78f), tween(250, easing = ease), label = "tabC")
+                    val c by androidx.compose.animation.animateColorAsState(if (on) Color(0xFF0C0C0C) else Color.White.copy(alpha = if (liquid) .9f else .78f), tween(250, easing = ease), label = "tabC")
                     Box(
                         Modifier.height(36.dp).onGloballyPositioned { pos[tab] = it.positionInParent().x.toInt() to it.size.width }
                             .clip(RoundedCornerShape(99.dp)).tap({ onSelect(tab) }, .95f).padding(horizontal = 16.dp),
@@ -286,6 +310,7 @@ private fun Tabs(tabs: List<String>, selected: String, onSelect: (String) -> Uni
                 }
             }
         }
+    }
     }
 }
 
@@ -304,21 +329,28 @@ fun HomeScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     val pick: (String) -> Unit = { tb -> if (tb != tab) { tab = tb; nav.memory.text["homeTab"] = tb; scope.launch { listState.scrollToItem(0) } } }
 
-    androidx.compose.runtime.CompositionLocalProvider(LocalTabsPill provides pillState) {
+    val homeGlass = rememberGlassBackdrop()
+    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    androidx.compose.runtime.CompositionLocalProvider(LocalTabsPill provides pillState, LocalHomeGlass provides homeGlass) {
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottom + 96.dp)) {
+        // la lista se "graba" para que el vidrio de las categorías la muestre por detrás
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize().then(if (GLASS_OK) Modifier.glassSource(homeGlass) else Modifier), contentPadding = PaddingValues(bottom = bottom + 96.dp)) {
             item(key = "hero-$tab") {
-                if (all.isNotEmpty()) Hero(all, tabs, tab, pick, nav)
-                else Column(Modifier.statusBarsPadding().padding(top = 10.dp)) { TopIcons(nav); Spacer(Modifier.height(10.dp)); Tabs(tabs, tab, pick) }
+                if (all.isNotEmpty()) Hero(all, nav)
+                else Spacer(Modifier.height(topInset + 112.dp))
             }
             items(rows, key = { "$tab-" + it.key }) { r -> RowSection(r, nav, tab) }
         }
-        // al bajar, la barra de arriba queda fija con fondo
-        val pinned by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 420 } }
-        AnimatedVisibility(pinned, enter = fadeIn(tween(180)), exit = fadeOut(tween(140))) {
-            Column(Modifier.fillMaxWidth().background(C.bg.copy(alpha = .96f)).statusBarsPadding().padding(top = 8.dp, bottom = 6.dp)) {
-                TopIcons(nav); Spacer(Modifier.height(4.dp)); Tabs(tabs, tab, pick)
-            }
+        // al bajar, un velo oscuro arriba para que el logo, los íconos y las categorías se sigan leyendo
+        val pinned by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 120 } }
+        AnimatedVisibility(pinned, enter = fadeIn(tween(220)), exit = fadeOut(tween(180))) {
+            Box(Modifier.fillMaxWidth().height(topInset + 150.dp).background(Brush.verticalGradient(
+                0f to C.bg.copy(alpha = .96f), .55f to C.bg.copy(alpha = if (GLASS_OK) .78f else .94f), .82f to C.bg.copy(alpha = if (GLASS_OK) .3f else .6f), 1f to Color.Transparent
+            )))
+        }
+        // logo, íconos y categorías: siempre arriba, fijos (las categorías son de vidrio y dejan ver lo que pasa por detrás)
+        Column(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 10.dp)) {
+            TopIcons(nav); Spacer(Modifier.height(10.dp)); Tabs(tabs, tab, pick)
         }
     }
     }
@@ -326,7 +358,7 @@ fun HomeScreen(nav: Nav) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Hero(all: List<Slide>, tabs: List<String>, tab: String, pick: (String) -> Unit, nav: Nav) {
+private fun Hero(all: List<Slide>, nav: Nav) {
     val cfg = LocalConfiguration.current
     val h = minOf(cfg.screenWidthDp * 1.72f, cfg.screenHeightDp * 0.82f).dp
     val pager = rememberPagerState { all.size }
@@ -362,10 +394,6 @@ private fun Hero(all: List<Slide>, tabs: List<String>, tab: String, pick: (Strin
         Box(Modifier.fillMaxWidth().height(230.dp).background(Brush.verticalGradient(
             0f to Color.Black.copy(alpha = .82f), .45f to Color.Black.copy(alpha = .5f), .75f to Color.Black.copy(alpha = .18f), 1f to Color.Transparent
         )))
-        // arriba, sobre la portada: logo, íconos y pestañas
-        Column(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 10.dp)) {
-            TopIcons(nav); Spacer(Modifier.height(10.dp)); Tabs(tabs, tab, pick)
-        }
         if (all.size > 1) Row(
             Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(13.dp), verticalAlignment = Alignment.CenterVertically
