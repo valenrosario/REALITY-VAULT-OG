@@ -8,6 +8,8 @@ on:
       - 'app-tv/app/src/main/java/com/realityvault/tv/Data.kt'
       - 'app-tv/app/src/main/java/com/realityvault/tv/Embed.kt'
       - 'app-tv/app/src/main/java/com/realityvault/tv/UpdateCore.kt'
+      - 'app-tv/app/src/main/java/com/realityvault/tv/LikeHeart.kt'
+      - 'app-tv/app/src/main/java/com/realityvault/tv/FichaBlur.kt'
       - 'config.js'
       - '.github/workflows/android-mobile.yml'
   workflow_dispatch:

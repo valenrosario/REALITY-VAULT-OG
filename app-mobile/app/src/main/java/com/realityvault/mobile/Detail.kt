@@ -90,17 +90,29 @@ fun DetailScreen(id: String, nav: Nav) {
     val heroH = minOf(cfg.screenWidthDp * 1.12f, cfg.screenHeightDp * .66f).dp
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
+    // imagen final de la portada (ancho de la pantalla, hasta 1080 px) y fondo de la página (chico: es puro desenfoque)
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    val bakeW = (cfg.screenWidthDp * density).toInt().coerceIn(480, 1080)
+    val bakeH = (bakeW * heroH.value / cfg.screenWidthDp.coerceAtLeast(1)).toInt().coerceIn(360, 1600)
+    val pageH = (270L * cfg.screenHeightDp / cfg.screenWidthDp.coerceAtLeast(1)).toInt().coerceIn(270, 720)
+
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to tint, .45f to tint, 1f to tint.darken(.6f)))) {
+        // fondo de toda la ficha: la misma imagen muy desenfocada (como en la tele y en Apple TV); la portada se funde con ella
+        if (heroImg.isNotBlank()) com.realityvault.tv.BlurPage(heroImg, 270, pageH, left = false, dark = 138)
         LazyColumn(state = nav.memory.list("detail-$id"), modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottom + 40.dp)) {
             // portada + título: la imagen se funde con el color de fondo justo detrás del logo
             item(key = "info") {
                 Box(Modifier.fillMaxWidth()) {
                     Box(Modifier.fillMaxWidth().height(heroH)) {
-                        if (heroImg.isNotBlank()) Img(heroImg, Modifier.fillMaxSize(), alignment = Alignment.TopCenter) else Placeholder(t, Modifier.fillMaxSize(), big = true)
-                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-                            0f to Color.Black.copy(alpha = .38f), .22f to Color.Transparent, .5f to Color.Transparent,
-                            .66f to tint.copy(alpha = .35f), .8f to tint.copy(alpha = .78f), .92f to tint.copy(alpha = .97f), 1f to tint
-                        )))
+                        // nítida arriba y desenfocada de a poco hacia abajo, detrás del logo (difuminado tipo Apple TV)
+                        if (heroImg.isNotBlank()) com.realityvault.tv.BlurHero(heroImg, bakeW, bakeH, from = .40f, left = false, top = true, dark = 138)
+                        else {
+                            Placeholder(t, Modifier.fillMaxSize(), big = true)
+                            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+                                0f to Color.Black.copy(alpha = .38f), .22f to Color.Transparent, .5f to Color.Transparent,
+                                .66f to tint.copy(alpha = .35f), .8f to tint.copy(alpha = .78f), .92f to tint.copy(alpha = .97f), 1f to tint
+                            )))
+                        }
                     }
                 Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = heroH * .7f), horizontalAlignment = Alignment.CenterHorizontally) {
                     TitleLogo(t, 270.dp, 96.dp, 32)
