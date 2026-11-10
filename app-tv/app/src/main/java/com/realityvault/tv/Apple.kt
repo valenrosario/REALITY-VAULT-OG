@@ -68,6 +68,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.focus.focusRequester
@@ -1080,7 +1082,8 @@ fun DetailScreen(id: String, nav: Nav) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 240.dp)) {
                 // portada a pantalla completa
                 item(key = "hero") {
-                    Box(Modifier.fillMaxWidth().height(screenH - 30.dp).onFocusChanged { heroFocused = it.hasFocus }) {
+                    // portada a pantalla COMPLETA: antes dejaba 30 dp libres abajo y asomaba, cortado, el logo de la sección siguiente
+                    Box(Modifier.fillMaxWidth().height(screenH).onFocusChanged { heroFocused = it.hasFocus }) {
                         if (t.tvBg.isNotBlank()) AppleBlurBg(t.tvBg, tint)
                         else Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .5f to Color.Transparent, 1f to tint)))
                         Column(Modifier.align(Alignment.BottomStart).padding(start = 48.dp, bottom = 80.dp).width(540.dp)) {
@@ -1182,6 +1185,7 @@ fun DetailScreen(id: String, nav: Nav) {
 
 /* ---------------- extras de la temporada: vitrina (igual que en la web) ---------------- */
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ExtrasShowcase(t: Title, s: Season, nav: Nav) {
     val xs = s.extras
@@ -1189,15 +1193,31 @@ private fun ExtrasShowcase(t: Title, s: Season, nav: Nav) {
     var sel by remember(t.id, s.number) { mutableIntStateOf(0) }
     val cur = xs.getOrElse(sel) { xs.first() }
     val mins = xs.sumOf { it.duration.filter { c -> c.isDigit() }.take(3).toIntOrNull() ?: 0 }
-    Column(Modifier.padding(start = 48.dp, end = 48.dp, top = 34.dp).fillMaxWidth()) {
+    val density = LocalDensity.current
+    // Al moverte por la lista, la página traía a la vista SOLO el renglón enfocado, y con cada extra la vista
+    // grande se iba cortando por arriba. Ahora cualquier renglón pide que se vea la sección ENTERA.
+    var secSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    val whole = remember {
+        object : androidx.compose.foundation.relocation.BringIntoViewResponder {
+            override fun calculateRectForParent(localRect: Rect) = Rect(0f, 0f, secSize.width.toFloat(), secSize.height.toFloat())
+            override suspend fun bringChildIntoView(localRect: () -> Rect?) {}
+        }
+    }
+    Column(Modifier.padding(start = 48.dp, end = 48.dp, top = 34.dp).fillMaxWidth().onSizeChanged { secSize = it }.bringIntoViewResponder(whole)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             XPill()
             Text("Extras de la temporada ${s.number}", style = ts(19, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 12.dp).weight(1f))
             Text("${xs.size} video${if (xs.size == 1) "" else "s"}" + (if (mins > 0) "  ·  $mins min" else ""), style = ts(11, color = Color.White.copy(alpha = .6f)))
         }
-        Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.padding(top = 14.dp).fillMaxWidth()) {
+        // la lista tiene la misma altura que la vista grande y se desplaza por dentro: la sección nunca crece,
+        // por más extras que haya, y siempre entra entera en pantalla
+        val prevW = (maxWidth - 22.dp) * (1.42f / 2.42f)
+        val secH = prevW * (9f / 16f)
+        val exList = rememberLazyListState()
+        Row(Modifier.height(secH), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
             // vista previa: no se enfoca; cambia (fundiéndose) con el extra elegido en la lista
-            Box(Modifier.weight(1.42f).aspectRatio(16f / 9f).clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+            Box(Modifier.width(prevW).fillMaxHeight().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
                 androidx.compose.animation.Crossfade(cur, animationSpec = tween(280), label = "extra") { x ->
                     if (x.thumb.isNotBlank()) Img(x.thumb, Modifier.fillMaxSize(), crossfade = false)
                 }
@@ -1218,9 +1238,23 @@ private fun ExtrasShowcase(t: Title, s: Season, nav: Nav) {
                 }
             }
             // la lista: acá te movés; OK reproduce
-            Column(Modifier.weight(1f)) {
-                xs.forEachIndexed { i, x ->
-                    Focusable({ nav.playExtra(t, x.url) }, Modifier.fillMaxWidth().padding(vertical = 3.dp), shape = RoundedCornerShape(12.dp), scale = 1.03f, ring = true, onFocus = { sel = i }) { fx ->
+            val edgeSpec = remember(density) { ListEdgeSpec(with(density) { 40.dp.toPx() }) }
+            // si hay más extras para abajo o para arriba, la lista se desvanece en ese borde para avisar
+            // (se desvanece la lista misma: no se pinta nada encima, así queda bien sobre cualquier fondo)
+            Box(Modifier.weight(1f).fillMaxHeight()
+                .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    val f = 30.dp.toPx() / size.height
+                    drawRect(Brush.verticalGradient(
+                        0f to (if (exList.canScrollBackward) Color.Transparent else Color.Black), f to Color.Black,
+                        1f - f to Color.Black, 1f to (if (exList.canScrollForward) Color.Transparent else Color.Black)
+                    ), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                }) {
+            CompositionLocalProvider(LocalBringIntoViewSpec provides edgeSpec) {
+            LazyColumn(state = exList, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp)) {
+                itemsIndexed(xs, key = { i, _ -> i }) { i, x ->
+                    Focusable({ nav.playExtra(t, x.url) }, Modifier.fillMaxWidth().padding(vertical = 3.dp), shape = RoundedCornerShape(12.dp), scale = 1.02f, ring = true, onFocus = { sel = i }) { fx ->
                         Row(
                             Modifier.fillMaxWidth().background(if (fx) Color.White.copy(alpha = .22f) else if (i == sel) Color.White.copy(alpha = .09f) else Color.Transparent).padding(start = 4.dp, top = 7.dp, bottom = 7.dp, end = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -1240,7 +1274,20 @@ private fun ExtrasShowcase(t: Title, s: Season, nav: Nav) {
                     }
                 }
             }
+            }
+            }
         }
+        }
+    }
+}
+
+/** Dentro de una lista corta: trae el renglón enfocado a la vista con aire arriba y abajo, sin clavarlo en el borde. */
+@OptIn(ExperimentalFoundationApi::class)
+private class ListEdgeSpec(private val pad: Float) : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = when {
+        offset < pad -> offset - pad
+        offset + size > containerSize - pad -> offset + size - (containerSize - pad)
+        else -> 0f
     }
 }
 
@@ -1396,7 +1443,7 @@ private const val TV_BLUR_FROM = .47f
 private fun heroBakeSize(): Pair<Int, Int> {
     val conf = LocalConfiguration.current; val d = LocalDensity.current.density
     val w = (conf.screenWidthDp * d).toInt().coerceIn(640, 1600)
-    val h = (w.toLong() * (conf.screenHeightDp - 30) / conf.screenWidthDp.coerceAtLeast(1)).toInt().coerceIn(360, 1600)
+    val h = (w.toLong() * conf.screenHeightDp / conf.screenWidthDp.coerceAtLeast(1)).toInt().coerceIn(360, 1600)
     return w to h
 }
 
