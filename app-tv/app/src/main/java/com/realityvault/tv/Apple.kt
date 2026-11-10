@@ -68,6 +68,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.ui.draw.drawWithContent
@@ -1238,7 +1239,13 @@ private fun ExtrasShowcase(t: Title, s: Season, nav: Nav) {
                 }
             }
             // la lista: acá te movés; OK reproduce
-            val edgeSpec = remember(density) { ListEdgeSpec(with(density) { 40.dp.toPx() }) }
+            val edgeSpec = remember(density, exList) { ListEdgeSpec(with(density) { 40.dp.toPx() }, exList) }
+            val stopScroll = remember {
+                object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                    override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource) = available
+                    override suspend fun onPostFling(consumed: androidx.compose.ui.unit.Velocity, available: androidx.compose.ui.unit.Velocity) = available
+                }
+            }
             // si hay más extras para abajo o para arriba, la lista se desvanece en ese borde para avisar
             // (se desvanece la lista misma: no se pinta nada encima, así queda bien sobre cualquier fondo)
             Box(Modifier.weight(1f).fillMaxHeight()
@@ -1252,7 +1259,10 @@ private fun ExtrasShowcase(t: Title, s: Season, nav: Nav) {
                     ), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
                 }) {
             CompositionLocalProvider(LocalBringIntoViewSpec provides edgeSpec) {
-            LazyColumn(state = exList, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp)) {
+            // - el aire alrededor es para que el borde blanco del extra enfocado entre entero (antes se cortaba);
+            // - stopScroll: cuando la lista llega al final, el desplazamiento que sobra NO se le pasa a la página
+            //   (antes, al llegar al último extra, la página entera se iba para abajo)
+            LazyColumn(state = exList, modifier = Modifier.fillMaxSize().nestedScroll(stopScroll), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 9.dp)) {
                 itemsIndexed(xs, key = { i, _ -> i }) { i, x ->
                     Focusable({ nav.playExtra(t, x.url) }, Modifier.fillMaxWidth().padding(vertical = 3.dp), shape = RoundedCornerShape(12.dp), scale = 1.02f, ring = true, onFocus = { sel = i }) { fx ->
                         Row(
@@ -1281,13 +1291,20 @@ private fun ExtrasShowcase(t: Title, s: Season, nav: Nav) {
     }
 }
 
-/** Dentro de una lista corta: trae el renglón enfocado a la vista con aire arriba y abajo, sin clavarlo en el borde. */
+/**
+ * Dentro de una lista corta: trae el renglón enfocado a la vista con aire arriba y abajo, sin clavarlo en el
+ * borde. Si la lista ya está en su tope no pide nada: pedir un desplazamiento imposible dejaba la animación
+ * empujando sin fin, y ese empuje se lo llevaba la página.
+ */
 @OptIn(ExperimentalFoundationApi::class)
-private class ListEdgeSpec(private val pad: Float) : BringIntoViewSpec {
-    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = when {
-        offset < pad -> offset - pad
-        offset + size > containerSize - pad -> offset + size - (containerSize - pad)
-        else -> 0f
+private class ListEdgeSpec(private val pad: Float, private val list: LazyListState) : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val d = when {
+            offset < pad -> offset - pad
+            offset + size > containerSize - pad -> offset + size - (containerSize - pad)
+            else -> 0f
+        }
+        return if ((d > 0f && !list.canScrollForward) || (d < 0f && !list.canScrollBackward)) 0f else d
     }
 }
 
