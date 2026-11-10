@@ -9,6 +9,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.shadow
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.requiredSize
+import kotlinx.coroutines.launch
 import dev.chrisbanes.haze.haze
 import dev.chrisbanes.haze.hazeChild
 import androidx.activity.compose.BackHandler
@@ -57,9 +59,10 @@ fun App(nav: Nav, onExit: () -> Unit) {
         else if (!nav.back()) { if (nav.top != Screen.Home) nav.section(Screen.Home) else onExit() }
     }
     val haze = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
+    val glass = rememberGlassBackdrop()
     Box(Modifier.fillMaxSize().background(C.bg)) {
         AnimatedContent(
-            modifier = Modifier.fillMaxSize().haze(haze),
+            modifier = Modifier.fillMaxSize().then(if (GLASS_OK) Modifier.glassSource(glass) else Modifier.haze(haze)),
             targetState = nav.top,
             transitionSpec = {
                 when (nav.dir) {
@@ -90,7 +93,7 @@ fun App(nav: Nav, onExit: () -> Unit) {
             }
         }
         // la barra de abajo queda fija mientras se cambia de sección (no parpadea con la transición)
-        AnimatedVisibility(nav.top.isTab, Modifier.align(Alignment.BottomCenter), enter = fadeIn(tween(200)), exit = fadeOut(tween(120))) { BottomBar(nav, haze) }
+        AnimatedVisibility(nav.top.isTab, Modifier.align(Alignment.BottomCenter), enter = fadeIn(tween(200)), exit = fadeOut(tween(120))) { BottomBar(nav, haze, glass) }
         UpdateDialog(nav)
         // al agregar/sacar series de Mi lista, la campanita toma nota de sus capítulos actuales
         androidx.compose.runtime.LaunchedEffect(Store.myList, Store.titles) { Notifs.scan() }
@@ -102,40 +105,60 @@ fun App(nav: Nav, onExit: () -> Unit) {
     }
 }
 
-/* ---------------- barra de abajo: píldora flotante de vidrio esmerilado ---------------- */
+/* ---------------- barra de abajo: píldora flotante de vidrio líquido ---------------- */
 
 @Composable
-private fun BottomBar(nav: Nav, haze: dev.chrisbanes.haze.HazeState) {
+internal fun BottomBar(nav: Nav, haze: dev.chrisbanes.haze.HazeState, glass: GlassBackdrop) {
     val shape = RoundedCornerShape(36.dp)
     val thumbShape = RoundedCornerShape(30.dp)
     val items = listOf(Screen.Home to "Inicio", Screen.Search to "Buscar", Screen.Mine to "Mi Vault")
     val itemW = 96.dp
+    val barW = itemW * items.size + 12.dp; val barH = 68.dp
     val idx = items.indexOfFirst { (sc, _) -> nav.top == sc || (sc == Screen.Mine && nav.top is Screen.Account) }
-    // el "vidrio" de la pestaña activa se desliza de una a otra con un rebote suave
-    val thumbX by androidx.compose.animation.core.animateDpAsState(itemW * idx.coerceAtLeast(0), androidx.compose.animation.core.spring(dampingRatio = .74f, stiffness = 420f), label = "thumb")
+    // la lente de la pestaña activa: cada borde es un resorte (el de adelante sale primero), así se estira al
+    // deslizarse y se vuelve a cerrar, como una gota
+    val tl = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(itemW.value * idx.coerceAtLeast(0)) }
+    val tr = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(itemW.value * (idx.coerceAtLeast(0) + 1)) }
+    androidx.compose.runtime.LaunchedEffect(idx) {
+        if (idx < 0) return@LaunchedEffect
+        val l = itemW.value * idx; val right = l > tl.value
+        val lead = androidx.compose.animation.core.spring<Float>(dampingRatio = .78f, stiffness = 480f)
+        val trail = androidx.compose.animation.core.spring<Float>(dampingRatio = .86f, stiffness = 240f)
+        launch { tl.animateTo(l, if (right) trail else lead) }
+        launch { tr.animateTo(l + itemW.value, if (right) lead else trail) }
+    }
     val thumbA by androidx.compose.animation.core.animateFloatAsState(if (idx >= 0) 1f else 0f, tween(180), label = "thumbA")
+    val margin = 26.dp
     Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp), contentAlignment = Alignment.Center) {
+        if (GLASS_OK) {
+            LiquidGlass(
+                glass, Modifier.requiredSize(barW + margin * 2, barH + margin * 2), margin, 36.dp,
+                thumb = { androidx.compose.ui.geometry.Rect(6f + tl.value, 6f, 6f + tr.value, barH.value - 6f) },
+                thumbRadius = 30.dp, thumbAlpha = { thumbA }
+            )
+        }
         Box(
-            Modifier.width(itemW * items.size + 12.dp).height(68.dp)
-                .shadow(26.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
-                .clip(shape)
-                .hazeChild(haze, dev.chrisbanes.haze.HazeStyle(
-                    backgroundColor = C.bg,
-                    tints = listOf(dev.chrisbanes.haze.HazeTint(Color(0xFF2A2A2E).copy(alpha = .58f))),
-                    blurRadius = 28.dp, noiseFactor = .06f
-                ))
-                .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = .30f), Color.White.copy(alpha = .06f))), shape)
+            Modifier.width(barW).height(barH)
+                .then(if (GLASS_OK) Modifier else Modifier
+                    .shadow(26.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+                    .clip(shape)
+                    .hazeChild(haze, dev.chrisbanes.haze.HazeStyle(
+                        backgroundColor = C.bg,
+                        tints = listOf(dev.chrisbanes.haze.HazeTint(Color(0xFF2A2A2E).copy(alpha = .58f))),
+                        blurRadius = 28.dp, noiseFactor = .06f
+                    ))
+                    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = .30f), Color.White.copy(alpha = .06f))), shape))
                 .padding(6.dp)
         ) {
-            Box(
-                Modifier.offset(x = thumbX).width(itemW).fillMaxHeight().alpha(thumbA).clip(thumbShape)
+            if (!GLASS_OK) Box(
+                Modifier.offset(x = tl.value.dp).width((tr.value - tl.value).coerceAtLeast(0f).dp).fillMaxHeight().alpha(thumbA).clip(thumbShape)
                     .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = .22f), Color.White.copy(alpha = .10f))))
                     .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = .34f), Color.White.copy(alpha = .08f))), thumbShape)
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 items.forEach { (sc, label) ->
                     val on = items.indexOf(sc to label) == idx
-                    val tint by androidx.compose.animation.animateColorAsState(if (on) Color.White else Color.White.copy(alpha = .62f), tween(200), label = "tabTint")
+                    val tint by androidx.compose.animation.animateColorAsState(if (on) Color.White else Color.White.copy(alpha = .72f), tween(200), label = "tabTint")
                     Column(
                         Modifier.width(itemW).fillMaxHeight().clip(thumbShape).tap({ if (!on) nav.section(sc) }, .92f),
                         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
