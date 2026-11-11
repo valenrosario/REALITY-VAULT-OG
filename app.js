@@ -1075,8 +1075,82 @@ app.addEventListener('click', async e => {
     toast('Video subido. Tocá Guardar para publicarlo.');
   } catch(err){ toast(err.message || 'No se pudo subir el video', true); up.disabled = false; up.textContent = label; }
 });
+/* --- Miniaturas desde Apple TV --- */
+document.addEventListener('input', e => { if (e.target.id === 'atv-url' && S.atv) S.atv.url = e.target.value; });
+document.addEventListener('change', e => {
+  const c = e.target.closest && e.target.closest('[data-atv-pick]'); if (!c || !S.atv) return;
+  const n = +c.dataset.atvPick, sel = new Set(S.atv.sel || []); c.checked ? sel.add(n) : sel.delete(n); S.atv.sel = [...sel];
+  const go = document.querySelector('[data-atv-go]'); if (go) go.disabled = !sel.size;
+});
+// Pegás el enlace de la serie en tv.apple.com, elegís las temporadas y trae la miniatura de cada capítulo.
+function renderAtvBox(E){
+  const A = S.atv || {}, d = A.data;
+  return `<div class="fs tmdb"><h3>Miniaturas de Apple TV <small>pegá el enlace de la serie y elegí la temporada</small></h3>
+    <form class="toolbar" id="atvForm"><input class="input" id="atv-url" style="max-width:560px" placeholder="https://tv.apple.com/…/show/…" value="${esc(A.url||'')}" autocomplete="off" ${A.busy?'disabled':''}>
+      <button class="btn btn-primary" type="submit" ${A.busy?'disabled':''}>${d ? 'Buscar otra vez' : 'Buscar'}</button></form>
+    ${A.status ? `<p class="hint" style="margin:0">${esc(A.status)}</p>` : ''}
+    ${d ? `<div><strong>${esc(d.title || 'Serie encontrada')}</strong></div>
+      <div class="toolbar" style="flex-wrap:wrap">${d.seasons.map(s => {
+        const mine = (E.seasons||[]).find(x => +x.number === s.number);
+        return `<label class="check" style="border:1px solid var(--line-2);border-radius:8px;padding:8px 12px"><input type="checkbox" data-atv-pick="${s.number}" ${A.sel?.includes(s.number)?'checked':''} ${A.busy?'disabled':''}> Temporada ${s.number} <small style="color:var(--muted)">${s.episodes.length} ep.${mine ? '' : ' · se crea'}</small></label>`; }).join('')}</div>
+      <div class="toolbar"><button class="btn btn-primary" data-atv-go ${A.busy || !(A.sel||[]).length ? 'disabled' : ''}>${A.busy ? 'Importando…' : 'Importar miniaturas'}</button><button class="btn btn-line" data-atv-close ${A.busy?'disabled':''}>Cerrar</button></div>
+      <span class="hint">Se guardan en tu Storage (1280 × 720). Los capítulos que ya tenés solo cambian de miniatura; si falta un capítulo o una temporada, se crea con su título, sinopsis y duración. Después tocá Guardar.</span>` : ''}
+  </div>`;
+}
+async function atvSearch(){
+  const A = S.atv; const url = (document.getElementById('atv-url')?.value || A.url || '').trim(); A.url = url;
+  if (!url){ A.status = 'Pegá el enlace de la serie.'; rerenderPanel(); return; }
+  A.busy = true; A.status = 'Leyendo Apple TV…'; A.data = null; rerenderPanel();
+  try {
+    const r = await fetch('/api/appletv?url=' + encodeURIComponent(url));
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'No se pudo leer Apple TV.');
+    A.data = j; A.status = '';
+    const have = (S.editing.seasons||[]).map(x => +x.number);
+    A.sel = [ (j.seasons.find(s => have.includes(s.number)) || j.seasons[0]).number ];
+  } catch(err){ A.status = err.message || 'No se pudo leer Apple TV.'; }
+  A.busy = false; rerenderPanel();
+}
+async function atvImport(){
+  const A = S.atv, E = S.editing; if (!A?.data || !(A.sel||[]).length) return;
+  A.busy = true; rerenderPanel();
+  try {
+    let done = 0, total = 0, failed = 0, created = 0;
+    const jobs = [];
+    for (const n of [...A.sel].sort((a,b) => a-b)){
+      const as = A.data.seasons.find(x => x.number === n); if (!as) continue;
+      let season = (E.seasons ||= []).find(x => +x.number === n);
+      if (!season){ season = { id: uid('s'), number: n, title: '', extras: [], episodes: [] }; E.seasons.push(season); E.seasons.sort((a,b) => a.number - b.number); }
+      for (const ae of as.episodes){
+        let ep = (season.episodes ||= []).find(x => +x.number === ae.number);
+        if (!ep){ ep = { id: uid('e'), number: ae.number, title: ae.title, description: ae.description, duration: ae.duration, thumb: '', url: '' }; season.episodes.push(ep); created++; }
+        if (ae.thumb){ jobs.push({ ep, src: ae.thumb }); total++; }
+      }
+      season.episodes.sort((a,b) => a.number - b.number);
+    }
+    const run = async () => {
+      while (jobs.length){
+        const j = jobs.shift();
+        try {
+          const r = await fetch(j.src, { mode:'cors' }); if (!r.ok) throw 0;
+          const b = await r.blob(); if (!/^image\//.test(b.type)) throw 0;
+          j.ep.thumb = await uploadImage(new File([b], 'thumb', { type: b.type }), 'thumb');
+        } catch(_){ j.ep.thumb = j.src; failed++; }   // si no se puede copiar, queda el enlace de Apple
+        A.status = `Importando miniaturas… ${++done} de ${total}`;
+        const el = document.querySelector('#atvForm + .hint'); if (el) el.textContent = A.status;
+      }
+    };
+    await Promise.all([run(), run(), run()]);
+    markDirty();
+    A.status = `Listo: ${total} miniaturas importadas${created ? ` (${created} capítulos nuevos)` : ''}${failed ? `. ${failed} ${failed===1?"quedó":"quedaron"} con el enlace de Apple` : ''}. Revisá y tocá Guardar.`;
+    toast('Miniaturas importadas. Tocá Guardar para publicarlas.');
+  } catch(err){ A.status = err.message || 'No se pudo importar.'; }
+  A.busy = false; rerenderPanel();
+}
 function renderSeasonsEd(E){
   return `<div class="fs"><h3>Temporadas y capítulos <small>${E.seasons.length} temp. · ${epCount(E)} ep.</small></h3>
+    <div class="toolbar"><button class="btn btn-line btn-sm" data-atv-open>${S.atv?.open ? 'Cerrar Apple TV' : 'Importar miniaturas de Apple TV'}</button></div>
+    ${S.atv?.open ? renderAtvBox(E) : ''}
     ${E.seasons.map((s,si)=>{ const open = S.openSeasons.has(si); const soon = seasonSoon(s);
       return `<div class="season ${open?'open':''}">
       <div class="season-h">
@@ -2112,12 +2186,15 @@ app.addEventListener('click', async e => {
   if (d.qtSeasnone !== undefined){ S.qt.sel = []; rerenderPanel(); return; }
   if (d.qtPick !== undefined){ tmdbQuickPick(d.qtPick); return; }
   if (d.qtConfirm !== undefined){ const id = d.qtConfirm; const sel = S.qt.sel.slice(); S.qt = null; S.quick = false; S.catalogPicker = false; S.tmdb = { open:true, specials:false, sel }; S.editorTab = 'info'; S.openSeasons = new Set(); rerenderPanel(true); tmdbImport(+id); return; }
-  if (d.new){ S.tmdb = { open:false }; S.catalogPicker = false; S.editing = blankTitle(d.new); S.quick = true; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(); rerenderPanel(); setTimeout(()=>document.getElementById('f-title')?.focus(), 120); return; }
-  if (d.edit){ S.tmdb = { open:false }; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.editing.formats ||= {}; S.editing.formatsWeb ||= {}; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(S.editing.seasons.length===1 ? [0] : []); rerenderPanel(true); window.scrollTo(0,0); return; }
+  if (d.new){ S.tmdb = { open:false }; S.atv = null; S.catalogPicker = false; S.editing = blankTitle(d.new); S.quick = true; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(); rerenderPanel(); setTimeout(()=>document.getElementById('f-title')?.focus(), 120); return; }
+  if (d.edit){ S.tmdb = { open:false }; S.atv = null; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.editing.formats ||= {}; S.editing.formatsWeb ||= {}; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(S.editing.seasons.length===1 ? [0] : []); rerenderPanel(true); window.scrollTo(0,0); return; }
   if (d.del !== undefined && d.del){ inlineConfirm(t.closest('[data-row]'), '¿Eliminar?', () => deleteTitle(d.del)); return; }
   if (d.back !== undefined){ S.editing=null; S.dirty=false; rerenderPanel(true); return; }
   if (d.save !== undefined){ saveTitle(); return; }
   const E = S.editing;
+  if (d.atvOpen !== undefined){ S.atv = S.atv?.open ? { ...S.atv, open:false } : { ...(S.atv||{}), open:true, status:S.atv?.status||'' }; rerenderPanel(); if (S.atv.open) document.getElementById('atv-url')?.focus(); return; }
+  if (d.atvClose !== undefined){ S.atv = { ...S.atv, open:false }; rerenderPanel(); return; }
+  if (d.atvGo !== undefined){ atvImport(); return; }
   if (d.tmdbOpen !== undefined){ S.tmdb = { ...(S.tmdb||{}), open:true, editKey:false }; rerenderPanel(); document.getElementById(tmdbKey()?'tmdb-q':'tmdb-key')?.focus(); return; }
   if (d.tmdbClose !== undefined){ S.tmdb = { open:false }; rerenderPanel(); return; }
   if (d.tmdbEditkey !== undefined){ S.tmdb.editKey = true; rerenderPanel(); return; }
@@ -2385,6 +2462,7 @@ function renderFooter(){
 app.addEventListener('submit', async e => {
   if (e.target.matches('[data-qt-form]')){ e.preventDefault(); const q = document.getElementById('qt-q').value.trim(); if (q) tmdbQuickSearch(q); return; }
   if (e.target.matches('[data-quick-form]')){ e.preventDefault(); if (!S.editing || !S.editing.title.trim()){ toast('Poné un título para crearlo.', true); document.getElementById('f-title')?.focus(); return; } S.quick = false; S.catalogPicker = false; S.editorTab = 'info'; await saveTitle(); animatePanel(); return; }
+  if (e.target.id === 'atvForm'){ e.preventDefault(); atvSearch(); return; }
   if (e.target.id === 'tmdbForm'){ e.preventDefault(); S.tmdb.specials = !!document.getElementById('tmdb-specials')?.checked; const q = document.getElementById('tmdb-q').value.trim(); if (q) tmdbSearch(q); return; }
   if (e.target.id !== 'loginForm') return;
   e.preventDefault();
