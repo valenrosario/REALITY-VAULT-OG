@@ -3832,7 +3832,7 @@ function renderClosed(){
   const msg = String(S.site.closedMsg || '').trim() || 'Estamos haciendo cambios. Volvé a intentar más tarde.';
   return `<div class="lock closed-screen">${S.site.logo && safeUrl(S.site.logo) ? `<img src="${esc(S.site.logo)}" alt="REALITY VAULT" style="max-width:240px;max-height:90px">` : ''}
     <h1>No disponible por ahora</h1><p>${esc(msg)}</p>
-    ${S.session ? `<button class="btn btn-line btn-sm" data-closed-out>Cerrar sesión</button>` : `<a class="closed-admin" href="/admin">Soy el administrador</a>`}</div>`;
+    ${S.session ? `<button class="btn btn-line btn-sm" data-closed-out>Cerrar sesión</button>` : ''}</div>`;
 }
 function render(){
   queueMicrotask(deepLinks);

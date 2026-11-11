@@ -340,6 +340,8 @@ object Store {
     }
 
     suspend fun refreshCatalog() {
+        // antes de enterarse de un cierre, confirma si esta cuenta es la del admin: así al admin nunca le aparece el cartel
+        if (session != null && !isOwner) checkOwner()
         try {
             val t = Api.call("GET", "/rest/v1/titles?select=id,data")
             val b = Api.call("GET", "/rest/v1/banners?select=id,data")

@@ -497,7 +497,6 @@ fun ClosedScreen(nav: Nav, onExit: () -> Unit) {
             Spacer(Modifier.height(36.dp))
             Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp)) {
                 TextButtonTv("Reintentar", { scope.launch { Store.refreshClosed() } }, requester = req)
-                if (Store.session == null) TextButtonTv("Soy el administrador", { nav.go(Screen.Login()) })
                 TextButtonTv("Salir", onExit)
             }
         }

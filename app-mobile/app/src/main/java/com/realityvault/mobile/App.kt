@@ -227,10 +227,6 @@ fun ClosedScreen(nav: Nav, onExit: () -> Unit) {
             Text(Store.closedMsg.ifBlank { "Estamos haciendo cambios. Volvé a intentar más tarde." }, style = ts(15, color = Color(0xFFC6A3B3)).copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center))
             androidx.compose.foundation.layout.Spacer(Modifier.height(30.dp))
             PillButton("Reintentar", { scope.launch { Store.refreshClosed() } }, icon = null)
-            if (Store.session == null) {
-                androidx.compose.foundation.layout.Spacer(Modifier.height(22.dp))
-                Text("Soy el administrador", style = ts(13, color = Color(0xFF8C6B7A)), modifier = Modifier.clickable { nav.go(Screen.Login()) }.padding(10.dp))
-            }
         }
     }
 }
