@@ -3460,6 +3460,15 @@ function openPlayer({ url, tid, s: season, e: episode, x, direct, restart }){
   const media = emb.type === 'iframe'
     ? `<iframe src="${esc(emb.src)}" title="${esc(t?.title || 'Video')}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
     : `<div class="rvp"><video id="plVideo" autoplay playsinline preload="auto" ${subsUrl ? 'crossorigin="anonymous"' : ''}>${subsUrl ? `<track kind="subtitles" src="${esc(subsUrl)}" srclang="es" label="Español" default>` : ''}</video></div>`;
+  // Subtítulos que no son .vtt (un .srt, o un .txt con formato SRT): se pasan a WebVTT, que es lo único que lee el navegador.
+  if (subsUrl && !/\.vtt([?#]|$)/i.test(subsUrl)) setTimeout(async () => {
+    try {
+      const tr = playerRoot.querySelector('#plVideo track'); if (!tr) return;
+      let txt = (await (await fetch(subsUrl)).text()).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+      if (!/^\s*WEBVTT/.test(txt)){ if (!txt.includes('-->')) return; txt = 'WEBVTT\n\n' + txt.replace(/(\d{1,2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2'); }
+      tr.src = URL.createObjectURL(new Blob([txt], { type:'text/vtt' }));
+    } catch(_){}
+  }, 0);
   playerRoot.innerHTML = `<div class="player${native ? ' rv' : ''}" role="dialog" aria-modal="true" aria-label="Reproductor">
     <div class="pl-top">
       <button class="pl-btn" data-pl-close aria-label="Volver">←</button>

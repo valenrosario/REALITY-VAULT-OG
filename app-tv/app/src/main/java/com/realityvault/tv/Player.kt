@@ -97,12 +97,16 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             else -> ""
         }
     }
-    val media = remember(s.url, subsUrl) { mediaFor(s.url, subsUrl) }
+    // El subtítulo se baja antes y se pasa siempre a WebVTT (hay .srt y .txt cargados): si viene mal, el video se ve igual.
+    val subsVtt by androidx.compose.runtime.produceState<String?>(if (subsUrl.isBlank()) "" else null, subsUrl) {
+        if (subsUrl.isNotBlank()) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { subsAsVtt(subsUrl) }
+    }
+    val media = remember(s.url, subsVtt) { mediaFor(s.url, subsVtt ?: "") }
     val next = remember(s, t) { if (t != null && !s.extra) Store.nextAfter(t, s.season, s.episode) else null }
     LaunchedEffect(s) { if (!s.trailer && !s.extra) Store.recordWatch(s.titleId, s.season, s.episode) }
 
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-        when (media) {
+        if (subsVtt != null) when (media) {
             is Media.Native -> NativePlayer(media, t, episode, s, next, nav)
             is Media.Embed -> EmbedPlayerScreen(media.url, t, episode, nav)
             null -> Unavailable(nav)
@@ -145,7 +149,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     var lastTouch by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     val player = remember(m.url, m.subsUrl) {
-        ExoPlayer.Builder(ctx).setSeekBackIncrementMs(10_000).setSeekForwardIncrementMs(10_000).build().apply {
+        ExoPlayer.Builder(ctx).setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(ctx, rvExtractors())).setSeekBackIncrementMs(10_000).setSeekForwardIncrementMs(10_000).build().apply {
             val subs = if (m.subsUrl.isNotBlank()) listOf(
                 MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(m.subsUrl))
                     .setId("rv-es").setMimeType(MimeTypes.TEXT_VTT).setLanguage("es")

@@ -95,6 +95,8 @@ import com.realityvault.tv.Store
 import com.realityvault.tv.Title
 import com.realityvault.tv.isHttp
 import com.realityvault.tv.mediaFor
+import com.realityvault.tv.rvExtractors
+import com.realityvault.tv.subsAsVtt
 import com.realityvault.tv.posResumable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -160,12 +162,16 @@ fun PlayerScreen(s: Screen.Player, nav: Nav) {
             else -> ""
         }
     }
-    val media = remember(s.url, subsUrl) { mediaFor(s.url, subsUrl) }
+    // El subtítulo se baja antes y se pasa siempre a WebVTT (hay .srt y .txt cargados): si viene mal, el video se ve igual.
+    val subsVtt by androidx.compose.runtime.produceState<String?>(if (subsUrl.isBlank()) "" else null, subsUrl) {
+        if (subsUrl.isNotBlank()) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { subsAsVtt(subsUrl) }
+    }
+    val media = remember(s.url, subsVtt) { mediaFor(s.url, subsVtt ?: "") }
     val next = remember(s, t) { if (t != null && !s.extra) Store.nextAfter(t, s.season, s.episode) else null }
     LaunchedEffect(s) { if (!s.trailer && !s.extra) Store.recordWatch(s.titleId, s.season, s.episode) }
 
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-        when (media) {
+        if (subsVtt != null) when (media) {
             is Media.Native -> androidx.compose.runtime.key(s) { NativePlayer(media, t, episode, s, next, nav) }
             // YouTube, Vimeo y demás: sin WebView, se abren en la app o el navegador del celular.
             is Media.Embed -> {
@@ -249,7 +255,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     val player = remember(url, m.subsUrl, attempt) {
         val http = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(15_000).setReadTimeoutMs(20_000)
         ExoPlayer.Builder(ctx)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(ctx).setDataSourceFactory(http))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(androidx.media3.datasource.DefaultDataSource.Factory(ctx, http), rvExtractors()))
             .setSeekBackIncrementMs(10_000).setSeekForwardIncrementMs(10_000)
             .setHandleAudioBecomingNoisy(true)
             .setAudioAttributes(AudioAttributes.Builder().setUsage(M3C.USAGE_MEDIA).setContentType(M3C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)

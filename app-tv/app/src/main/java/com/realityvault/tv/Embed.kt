@@ -44,3 +44,27 @@ fun mediaFor(raw: String, subsUrl: String = ""): Media? {
     if (Regex("\\.m3u8$", RegexOption.IGNORE_CASE).containsMatchIn(path)) return Media.Native(url, true, subsUrl)
     return Media.Embed(url)
 }
+
+/**
+ * Baja el subtítulo y lo deja siempre como WebVTT: acepta .vtt, .srt o un .txt con formato SRT
+ * (y textos guardados en Windows-1252). Devuelve un "data:" listo para el reproductor, o "" si no se pudo
+ * (el video se ve igual, sin subtítulos). Llamar fuera del hilo principal.
+ */
+fun subsAsVtt(url: String): String = runCatching {
+    val c = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply { connectTimeout = 8000; readTimeout = 12000 }
+    val bytes = c.inputStream.use { it.readBytes() }
+    if (bytes.size > 3_000_000) return ""
+    var txt = String(bytes, Charsets.UTF_8)
+    if (txt.contains('\uFFFD')) txt = String(bytes, charset("windows-1252"))
+    txt = txt.removePrefix("\uFEFF").replace("\r\n", "\n").replace('\r', '\n')
+    if (!txt.trimStart().startsWith("WEBVTT")) {
+        if (!txt.contains("-->")) return ""
+        txt = "WEBVTT\n\n" + txt.replace(Regex("(\\d{1,2}:\\d{2}:\\d{2}),(\\d{3})"), "$1.$2")
+    }
+    "data:text/vtt;base64," + android.util.Base64.encodeToString(txt.toByteArray(), android.util.Base64.NO_WRAP)
+}.getOrDefault("")
+
+/** Lee también los .ts de TV grabada que casi no traen cuadros IDR: sin esto, adelantar o saltear los deja trabados. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+fun rvExtractors() = androidx.media3.extractor.DefaultExtractorsFactory()
+    .setTsExtractorFlags(androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES)
