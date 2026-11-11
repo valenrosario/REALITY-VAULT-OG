@@ -235,6 +235,31 @@ object Store {
     var loaded by mutableStateOf(false)
     var offline by mutableStateOf(false)
 
+    /* ---------- interruptor "cerrado" del panel: solo entra la cuenta admin ---------- */
+    var closed by mutableStateOf(false)
+    var closedMsg by mutableStateOf("")
+    var isOwner by mutableStateOf(false)
+    val locked get() = closed && !isOwner
+
+    private fun applyClosed(d: JSONObject) { closed = d.optBoolean("closed"); closedMsg = d.s("closedMsg") }
+
+    /** Consulta liviana (solo la configuración del sitio) para enterarse rápido si se cerró o se abrió. */
+    suspend fun refreshClosed() {
+        runCatching {
+            val a = JSONArray(Api.call("GET", "/rest/v1/site?select=data&id=eq.config"))
+            a.optJSONObject(0)?.optJSONObject("data")?.let { applyClosed(it) }
+        }
+        if (closed && !isOwner) checkOwner()
+    }
+
+    /** ¿La cuenta iniciada es la del admin? Si no hay internet se conserva lo último que se supo. */
+    suspend fun checkOwner() {
+        val tk = token()
+        if (tk == null) { putOwner(false); return }
+        runCatching { Api.call("POST", "/rest/v1/rpc/is_admin", "{}", tk).trim() == "true" }.onSuccess { putOwner(it) }
+    }
+    private fun putOwner(v: Boolean) { if (isOwner != v) { isOwner = v; prefs.edit().putBoolean("owner", v).apply() } }
+
     // Orden de los banners del hero: se decide UNA sola vez por apertura de la app (como en el
     // sitio, que también sortea un orden nuevo en cada visita) y se mantiene fijo mientras la
     // app sigue abierta, para que no salte de golpe mientras estás navegando.
@@ -253,6 +278,7 @@ object Store {
 
     fun init(ctx: Context) {
         app = ctx.applicationContext
+        isOwner = prefs.getBoolean("owner", false)
         prefs.getString("session", null)?.let { s ->
             runCatching {
                 val j = JSONObject(s)
@@ -287,7 +313,7 @@ object Store {
             val r = site.optJSONObject(k) ?: continue
             val d = r.optJSONObject("data") ?: continue
             when (r.s("id")) {
-                "config" -> siteLogo = d.s("logo")
+                "config" -> { siteLogo = d.s("logo"); applyClosed(d) }
                 "collections" -> {
                     val la = d.optJSONArray("list") ?: JSONArray()
                     cl = (0 until la.length()).mapNotNull { x ->
@@ -412,8 +438,8 @@ object Store {
     }
 
     fun logout() {
-        session = null; myList = emptyList(); progress = emptyList()
-        prefs.edit().remove("session").apply()
+        session = null; myList = emptyList(); progress = emptyList(); isOwner = false
+        prefs.edit().remove("session").remove("owner").apply()
     }
 
     /** Token válido (lo renueva si está por vencer). */
@@ -441,6 +467,7 @@ object Store {
     }
 
     suspend fun refreshUser() {
+        checkOwner()
         val tk = token() ?: return
         // sesiones ya iniciadas antes de esta versión: trae la foto de perfil elegida en la web
         runCatching {

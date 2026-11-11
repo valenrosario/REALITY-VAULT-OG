@@ -1572,7 +1572,13 @@ document.addEventListener('click', e => {
 });
 
 function renderSite(){
+  const shut = !!S.site.closed;
   return `<div class="panel-head"><h1>Sitio</h1></div>
+    <div class="fs" style="border-color:${shut ? '#e5484d' : 'var(--line-2)'}"><h3>Acceso <small>${shut ? 'CERRADO · solo entra tu cuenta admin' : 'ABIERTO · lo puede usar cualquiera'}</small></h3>
+      <div class="toolbar"><button class="btn ${shut ? 'btn-primary' : 'btn-danger'}" data-site-closed="${shut ? '0' : '1'}">${shut ? 'Abrir la página y las apps' : 'Cerrar la página y las apps'}</button></div>
+      <label class="field"><span>Mensaje que ven los demás mientras está cerrado (opcional)</span><input class="input" id="s-closedmsg" data-site="closedMsg" value="${esc(S.site.closedMsg || '')}" placeholder="Estamos haciendo cambios. Volvé a intentar más tarde."></label>
+      <span class="hint">Cerrado: la web, la app del celular y la de la tele muestran "No disponible por ahora" a todos menos a vos (con tu sesión de admin iniciada). En la web el cambio es inmediato; en las apps, en menos de un minuto.</span>
+    </div>
     <div class="fs"><h3>Logo del sitio <small>aparece arriba a la izquierda · PNG transparente de 600 × 160 px aprox.</small></h3>
       <div style="max-width:420px" class="field">${slot('sitelogo','site:logo',S.site.logo,'r31 contain','Subir logo (PNG transparente)')}
       <span class="hint">${S.site.logo ? 'Tocá la imagen para reemplazarla.' : 'Mientras no haya logo se muestra el nombre escrito.'}</span></div>
@@ -2202,6 +2208,11 @@ app.addEventListener('click', async e => {
   if (d.back !== undefined){ S.editing=null; S.dirty=false; rerenderPanel(true); return; }
   if (d.save !== undefined){ saveTitle(); return; }
   const E = S.editing;
+  if (d.siteClosed !== undefined){
+    const v = d.siteClosed === '1';
+    const go = async () => { try { await S.db.doc('site/config').set({ ...S.site, closed: v, updatedAt: Date.now() }); S.site = { ...S.site, closed: v }; toast(v ? 'Cerrado: solo entrás vos' : 'Abierto para todos'); rerenderPanel(); } catch(err){ toast('No se pudo guardar', true); } };
+    go(); return;
+  }
   if (d.atvOpen !== undefined){ S.atv = S.atv?.open ? { ...S.atv, open:false } : { ...(S.atv||{}), open:true, status:S.atv?.status||'' }; rerenderPanel(); if (S.atv.open) document.getElementById('atv-url')?.focus(); return; }
   if (d.atvClose !== undefined){ S.atv = { ...S.atv, open:false }; rerenderPanel(); return; }
   if (d.atvGo !== undefined){ atvImport(); return; }
@@ -3799,6 +3810,7 @@ function renderBrand(){
 S.shareCheck = true;
 function deepLinks(){
   if (!S.authReady || !S.loaded.t || !S.sb) return;
+  if (S.site.closed && !S.owner) return;
   if (S.watchReq){
     const w = S.watchReq; S.watchReq = null;
     const t = findBySlug(S.titleKind, S.titleSlug); if (!t) return;
@@ -3815,6 +3827,13 @@ function deepLinks(){
     else if (S.route === 'coleccion'){ const c = (S.colls || []).find(x => collSlug(x) === S.collSlug || x.id === S.collSlug); openAuth({ reason: 'share', gate: true, shareName: c?.name || '' }); }
   }
 }
+document.addEventListener('click', async e => { if (e.target.closest && e.target.closest('[data-closed-out]')){ try { await S.sb.auth.signOut(); } catch(_){} location.reload(); } });
+function renderClosed(){
+  const msg = String(S.site.closedMsg || '').trim() || 'Estamos haciendo cambios. Volvé a intentar más tarde.';
+  return `<div class="lock closed-screen">${S.site.logo && safeUrl(S.site.logo) ? `<img src="${esc(S.site.logo)}" alt="REALITY VAULT" style="max-width:240px;max-height:90px">` : ''}
+    <h1>No disponible por ahora</h1><p>${esc(msg)}</p>
+    ${S.session ? `<button class="btn btn-line btn-sm" data-closed-out>Cerrar sesión</button>` : `<a class="closed-admin" href="/admin">Soy el administrador</a>`}</div>`;
+}
 function render(){
   queueMicrotask(deepLinks);
   clearInterval(S.heroTimer); renderBrand();
@@ -3824,9 +3843,15 @@ function render(){
   renderAccount();
   if (S.route==='admin' && S.loaded.t && !S._descRun){ S._descRun = true; setTimeout(()=>{ fillMissingDescriptions(false); fillMissingEpisodes(); }, 800); }
   document.querySelectorAll('.nav a').forEach(a => { if (a.dataset.r===S.route && !S.q) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current'); });
+  // Interruptor "sitio cerrado" (Admin → Sitio): solo entra la cuenta admin.
+  const shutPending = !!S.site.closed && S.sb && !S.authReady && S.route !== 'admin';
+  const shut = !!S.site.closed && !S.owner && S.route !== 'admin' && !shutPending;
+  document.body.classList.toggle('site-closed', shut || shutPending);
+  if (shut && playerRoot && playerRoot.firstChild) try { closePlayer(); } catch(_){}
   let html;
+  if (shut){ app.innerHTML = renderClosed(); return; }
   if (S.noDb) html = `<div class="lock"><div class="dial" style="width:64px;height:64px" aria-hidden="true"></div><h1>Falta conectar la base de datos</h1><p>Completá <code>config.js</code> con los datos de tu proyecto de Supabase. Los pasos están en el archivo README.</p></div>`;
-  else if ((!S.loaded.t || (S.sb && !S.authReady && S.route==='home')) && S.route!=='admin') html = `<div class="skel" aria-hidden="true"><div class="skel-hero"></div><div class="skel-row"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>`;
+  else if ((shutPending || !S.loaded.t || (S.sb && !S.authReady && S.route==='home')) && S.route!=='admin') html = `<div class="skel" aria-hidden="true"><div class="skel-hero"></div><div class="skel-row"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>`;
   else if (S.route==='admin') html = renderAdmin();
   else if (isLanding()) html = renderLanding();
   else if (S.q.trim()) html = renderSearch();
@@ -3976,8 +4001,10 @@ async function checkOwner(){
     else if ((S.route === 'home' || S.route === 'coleccion') && S.loaded.t){ const y = window.scrollY; render(); window.scrollTo(0, y); }
   }, () => {});
   db.doc('site/config').onSnapshot(snap => {
+    const wasShut = !!S.site.closed;
     S.site = snap.exists ? { ...snap.data() } : {}; S.siteLoaded = true;
     saveCache(); renderBrand();
+    if (wasShut !== !!S.site.closed && S.route !== 'admin'){ render(); return; }
     const f = app.querySelector('footer'); if (f){ f.outerHTML = renderFooter(); const nf = app.querySelector('footer'); if (nf) hydrate(nf); }
     if (S.route==='admin' && S.owner && S.adminTab==='sitio') rerenderPanel();
   }, () => {});

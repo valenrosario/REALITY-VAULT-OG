@@ -1222,6 +1222,15 @@ private fun AdminSite(nav: Nav) {
         LazyColumn(contentPadding = PaddingValues(bottom = bottomPad + 110.dp)) {
             item { AdminTop("Sitio", "Logo, pie de página y redes", nav) }
             item {
+                ACard("Acceso", if (doc.bool("closed")) "CERRADO: solo entra tu cuenta admin (web, celular y tele)." else "ABIERTO: lo puede usar cualquiera.") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Chip("Abierto", !doc.bool("closed")) { doc.set("closed", false) }
+                        Chip("Cerrado", doc.bool("closed")) { doc.set("closed", true) }
+                    }
+                    AField("Mensaje mientras está cerrado (opcional)", doc.str("closedMsg"), { doc.set("closedMsg", it) }, "Estamos haciendo cambios. Volvé a intentar más tarde.")
+                }
+            }
+            item {
                 ACard("Logo", "Aparece arriba en la web y en la app. PNG transparente.") {
                     AImage("Logo principal", "sitelogo", doc.str("logo"), "600 × 160 px aprox.", ratio = 3f, contain = true) { doc.set("logo", it) }
                     AImage("Logo del pie (opcional)", "sitelogo", doc.str("footerLogo"), "300 × 100 px aprox.", ratio = 3f, contain = true) { doc.set("footerLogo", it) }

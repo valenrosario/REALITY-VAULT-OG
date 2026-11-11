@@ -477,3 +477,29 @@ fun Empty(msg: String) {
 fun LocalLogo(modifier: Modifier) {
     Image(painterResource(R.drawable.site_logo), null, modifier, contentScale = ContentScale.Fit)
 }
+
+/** Pantalla que ven todos menos el admin cuando el panel tiene el sitio "cerrado". */
+@Composable
+fun ClosedScreen(nav: Nav, onExit: () -> Unit) {
+    BackHandler { onExit() }
+    val req = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+    AutoFocus(req)
+    Box(Modifier.fillMaxSize().background(C.bg), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (Store.siteLogo.isNotBlank()) {
+                coil.compose.AsyncImage(Store.siteLogo, null, Modifier.height(70.dp).width(300.dp), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
+                Spacer(Modifier.height(34.dp))
+            }
+            Text("No disponible por ahora", style = ts(40, FontWeight.Bold, Color.White))
+            Spacer(Modifier.height(12.dp))
+            Text(Store.closedMsg.ifBlank { "Estamos haciendo cambios. Volvé a intentar más tarde." }, style = ts(18, color = C.muted))
+            Spacer(Modifier.height(36.dp))
+            Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp)) {
+                TextButtonTv("Reintentar", { scope.launch { Store.refreshClosed() } }, requester = req)
+                if (Store.session == null) TextButtonTv("Soy el administrador", { nav.go(Screen.Login()) })
+                TextButtonTv("Salir", onExit)
+            }
+        }
+    }
+}

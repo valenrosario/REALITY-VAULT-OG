@@ -129,6 +129,7 @@ fun App(nav: Nav, onExit: () -> Unit) {
             if (nav.top != Screen.Home) nav.section(Screen.Home) else onExit()
         }
     }
+    if (Store.locked && nav.top !is Screen.Login && nav.top != Screen.Splash) { ClosedScreen(nav, onExit); return }
     Box(Modifier.fillMaxSize().background(C.bg)) {
         when (val s = nav.top) {
             Screen.Splash -> SplashScreen(nav)

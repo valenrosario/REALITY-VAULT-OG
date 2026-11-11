@@ -24,6 +24,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +59,7 @@ fun App(nav: Nav, onExit: () -> Unit) {
         if (top is Screen.Login && top.required) onExit()
         else if (!nav.back()) { if (nav.top != Screen.Home) nav.section(Screen.Home) else onExit() }
     }
+    if (Store.locked && nav.top !is Screen.Login && nav.top != Screen.Splash) { ClosedScreen(nav, onExit); return }
     val haze = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
     val glass = rememberGlassBackdrop()
     Box(Modifier.fillMaxSize().background(C.bg)) {
@@ -206,5 +208,29 @@ fun ScreenHeader(title: String, nav: Nav, subtitle: String? = null, back: Boolea
             if (subtitle != null) Text(subtitle, style = ts(12, color = C.muted))
         }
         AvatarButton(nav)
+    }
+}
+
+/** Pantalla que ven todos menos el admin cuando el panel tiene el sitio "cerrado". */
+@Composable
+fun ClosedScreen(nav: Nav, onExit: () -> Unit) {
+    BackHandler { onExit() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    Box(Modifier.fillMaxSize().background(Color.Black).padding(horizontal = 32.dp), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (Store.siteLogo.isNotBlank()) {
+                coil.compose.AsyncImage(Store.siteLogo, null, Modifier.height(54.dp).width(220.dp), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
+                androidx.compose.foundation.layout.Spacer(Modifier.height(30.dp))
+            }
+            Text("No disponible por ahora", style = ts(24, FontWeight.Bold, Color.White).copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center))
+            androidx.compose.foundation.layout.Spacer(Modifier.height(10.dp))
+            Text(Store.closedMsg.ifBlank { "Estamos haciendo cambios. Volvé a intentar más tarde." }, style = ts(15, color = Color(0xFFC6A3B3)).copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center))
+            androidx.compose.foundation.layout.Spacer(Modifier.height(30.dp))
+            PillButton("Reintentar", { scope.launch { Store.refreshClosed() } }, icon = null)
+            if (Store.session == null) {
+                androidx.compose.foundation.layout.Spacer(Modifier.height(22.dp))
+                Text("Soy el administrador", style = ts(13, color = Color(0xFF8C6B7A)), modifier = Modifier.clickable { nav.go(Screen.Login()) }.padding(10.dp))
+            }
+        }
     }
 }

@@ -337,6 +337,10 @@ tbody tr:hover{background:rgba(var(--fg-rgb),.025)}
 @media (max-width:760px){.bcard{grid-template-columns:1fr}}
 .bcard .order{display:flex;gap:6px;align-items:center}
 .lock{max-width:460px;margin:12vh auto;text-align:center;padding:0 16px;display:flex;flex-direction:column;gap:14px;align-items:center}
+body.site-closed .top,body.site-closed footer{display:none}
+.closed-screen{margin-top:26vh;max-width:640px}
+.closed-admin{color:var(--muted);font-size:12px;opacity:.55;margin-top:22px;text-decoration:none}
+.closed-admin:hover{opacity:1;text-decoration:underline}
 .lock h1{font-family:var(--display);font-weight:700;font-size:38px;line-height:1}
 .lock p{color:var(--muted);margin:0}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:90;background:var(--fg);color:var(--bg);font-family:var(--display);font-weight:700;padding:10px 18px;border-radius:99px;box-shadow:0 10px 30px rgba(var(--shadow-rgb),.22);font-size:14px}

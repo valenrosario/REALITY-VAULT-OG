@@ -45,6 +45,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        // "cerrado" desde el panel: se consulta seguido (pesa muy poco) para que el corte llegue en menos de un minuto
+        lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED) { while (true) { delay(45_000); Store.refreshClosed() } } }
         setContent {
             val nav = remember { Nav() }
             MaterialTheme(colorScheme = darkColorScheme()) {
