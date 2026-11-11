@@ -1078,6 +1078,8 @@ app.addEventListener('click', async e => {
 /* --- Miniaturas desde Apple TV --- */
 document.addEventListener('input', e => { if (e.target.id === 'atv-url' && S.atv) S.atv.url = e.target.value; });
 document.addEventListener('change', e => {
+  const w = e.target.closest && e.target.closest('[data-atv-what]');
+  if (w && S.atv){ S.atv.what = { thumb:1, title:1, desc:1, dur:1, ...(S.atv.what||{}), [w.dataset.atvWhat]: w.checked ? 1 : 0 }; return; }
   const c = e.target.closest && e.target.closest('[data-atv-pick]'); if (!c || !S.atv) return;
   const n = +c.dataset.atvPick, sel = new Set(S.atv.sel || []); c.checked ? sel.add(n) : sel.delete(n); S.atv.sel = [...sel];
   const go = document.querySelector('[data-atv-go]'); if (go) go.disabled = !sel.size;
@@ -1085,7 +1087,7 @@ document.addEventListener('change', e => {
 // Pegás el enlace de la serie en tv.apple.com, elegís las temporadas y trae la miniatura de cada capítulo.
 function renderAtvBox(E){
   const A = S.atv || {}, d = A.data;
-  return `<div class="fs tmdb"><h3>Miniaturas de Apple TV <small>pegá el enlace de la serie y elegí la temporada</small></h3>
+  return `<div class="fs tmdb"><h3>Importar de Apple TV <small>pegá el enlace de la serie y elegí qué traer</small></h3>
     <form class="toolbar" id="atvForm"><input class="input" id="atv-url" style="max-width:560px" placeholder="https://tv.apple.com/…/show/…" value="${esc(A.url||'')}" autocomplete="off" ${A.busy?'disabled':''}>
       <button class="btn btn-primary" type="submit" ${A.busy?'disabled':''}>${d ? 'Buscar otra vez' : 'Buscar'}</button></form>
     ${A.status ? `<p class="hint" style="margin:0">${esc(A.status)}</p>` : ''}
@@ -1093,8 +1095,9 @@ function renderAtvBox(E){
       <div class="toolbar" style="flex-wrap:wrap">${d.seasons.map(s => {
         const mine = (E.seasons||[]).find(x => +x.number === s.number);
         return `<label class="check" style="border:1px solid var(--line-2);border-radius:8px;padding:8px 12px"><input type="checkbox" data-atv-pick="${s.number}" ${A.sel?.includes(s.number)?'checked':''} ${A.busy?'disabled':''}> Temporada ${s.number} <small style="color:var(--muted)">${s.episodes.length} ep.${mine ? '' : ' · se crea'}</small></label>`; }).join('')}</div>
-      <div class="toolbar"><button class="btn btn-primary" data-atv-go ${A.busy || !(A.sel||[]).length ? 'disabled' : ''}>${A.busy ? 'Importando…' : 'Importar miniaturas'}</button><button class="btn btn-line" data-atv-close ${A.busy?'disabled':''}>Cerrar</button></div>
-      <span class="hint">Se guardan en tu Storage (1280 × 720). Los capítulos que ya tenés solo cambian de miniatura; si falta un capítulo o una temporada, se crea con su título, sinopsis y duración. Después tocá Guardar.</span>` : ''}
+      <div class="toolbar" style="flex-wrap:wrap">${[['thumb','Miniaturas'],['title','Nombres'],['desc','Descripciones'],['dur','Duración']].map(([k,l]) => `<label class="check"><input type="checkbox" data-atv-what="${k}" ${(A.what||{thumb:1,title:1,desc:1,dur:1})[k]?'checked':''} ${A.busy?'disabled':''}> ${l}</label>`).join('')}</div>
+      <div class="toolbar"><button class="btn btn-primary" data-atv-go ${A.busy || !(A.sel||[]).length ? 'disabled' : ''}>${A.busy ? 'Importando…' : 'Importar'}</button><button class="btn btn-line" data-atv-close ${A.busy?'disabled':''}>Cerrar</button></div>
+      <span class="hint">Solo se cambia lo que marques en los capítulos que ya tenés; si falta un capítulo o una temporada, se crea completo. Las miniaturas se copian a tu Storage (1280 × 720). Los textos vienen en el idioma del país del enlace (con /ar/ salen en español). Después tocá Guardar.</span>` : ''}
   </div>`;
 }
 async function atvSearch(){
@@ -1116,6 +1119,8 @@ async function atvImport(){
   A.busy = true; rerenderPanel();
   try {
     let done = 0, total = 0, failed = 0, created = 0;
+    const W = { thumb:1, title:1, desc:1, dur:1, ...(A.what||{}) };
+    if (!W.thumb && !W.title && !W.desc && !W.dur){ A.status = 'Marcá al menos una cosa para importar.'; A.busy = false; rerenderPanel(); return; }
     const jobs = [];
     for (const n of [...A.sel].sort((a,b) => a-b)){
       const as = A.data.seasons.find(x => x.number === n); if (!as) continue;
@@ -1124,7 +1129,12 @@ async function atvImport(){
       for (const ae of as.episodes){
         let ep = (season.episodes ||= []).find(x => +x.number === ae.number);
         if (!ep){ ep = { id: uid('e'), number: ae.number, title: ae.title, description: ae.description, duration: ae.duration, thumb: '', url: '' }; season.episodes.push(ep); created++; }
-        if (ae.thumb){ jobs.push({ ep, src: ae.thumb }); total++; }
+        else {
+          if (W.title && ae.title) ep.title = ae.title;
+          if (W.desc && ae.description) ep.description = ae.description;
+          if (W.dur && ae.duration) ep.duration = ae.duration;
+        }
+        if (ae.thumb && (W.thumb || ep.thumb === '')){ jobs.push({ ep, src: ae.thumb }); total++; }
       }
       season.episodes.sort((a,b) => a.number - b.number);
     }
@@ -1142,14 +1152,14 @@ async function atvImport(){
     };
     await Promise.all([run(), run(), run()]);
     markDirty();
-    A.status = `Listo: ${total} miniaturas importadas${created ? ` (${created} capítulos nuevos)` : ''}${failed ? `. ${failed} ${failed===1?"quedó":"quedaron"} con el enlace de Apple` : ''}. Revisá y tocá Guardar.`;
-    toast('Miniaturas importadas. Tocá Guardar para publicarlas.');
+    A.status = `Listo: importado de Apple TV (${total} miniaturas${created ? `, ${created} capítulos nuevos` : ''})${failed ? `. ${failed} ${failed===1?"quedó":"quedaron"} con el enlace de Apple` : ''}. Revisá y tocá Guardar.`;
+    toast('Importado de Apple TV. Tocá Guardar para publicarlo.');
   } catch(err){ A.status = err.message || 'No se pudo importar.'; }
   A.busy = false; rerenderPanel();
 }
 function renderSeasonsEd(E){
   return `<div class="fs"><h3>Temporadas y capítulos <small>${E.seasons.length} temp. · ${epCount(E)} ep.</small></h3>
-    <div class="toolbar"><button class="btn btn-line btn-sm" data-atv-open>${S.atv?.open ? 'Cerrar Apple TV' : 'Importar miniaturas de Apple TV'}</button></div>
+    <div class="toolbar"><button class="btn btn-line btn-sm" data-atv-open>${S.atv?.open ? 'Cerrar Apple TV' : 'Importar de Apple TV'}</button></div>
     ${S.atv?.open ? renderAtvBox(E) : ''}
     ${E.seasons.map((s,si)=>{ const open = S.openSeasons.has(si); const soon = seasonSoon(s);
       return `<div class="season ${open?'open':''}">
