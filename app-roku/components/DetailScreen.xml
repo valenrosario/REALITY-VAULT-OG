@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="DetailScreen" extends="Group">
+  <interface>
+    <field id="args" type="assocarray" onChange="build" />
+    <field id="nav" type="assocarray" alwaysNotify="true" />
+    <function name="takeFocus" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/DetailScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Util.brs" />
+  <children>
+    <Rectangle color="0x120E11FF" width="1920" height="1080" />
+    <Poster id="bg" width="1920" height="1080" />
+    <Poster uri="pkg:/images/grad_left.png" width="1920" height="1080" />
+    <Poster uri="pkg:/images/grad_bottom.png" width="1920" height="1080" />
+    <Rectangle id="dim" color="0x000000FF" width="1920" height="1080" opacity="0" />
+    <Group id="hero">
+      <Poster id="logo" translation="[96,330]" width="640" height="200" loadDisplayMode="scaleToFit" horizAlign="left" />
+      <Label id="ttl" translation="[96,380]" width="1100" maxLines="2" color="0xFFFFFFFF" />
+      <Label id="kind" translation="[96,572]" width="1300" color="0xFFFFFFFF" />
+      <Label id="desc" translation="[96,624]" width="1080" height="116" wrap="true" maxLines="3" color="0xFFFFFFDD" />
+      <Label id="facts" translation="[96,752]" width="1000" color="0xFFFFFFDD" />
+      <RvButton id="b0" translation="[96,820]" look="primary" />
+      <RvButton id="b1" translation="[96,820]" look="round" icon="replay" h="72" visible="false" />
+      <RvButton id="b2" translation="[96,820]" look="round" icon="heart" h="72" />
+      <RvButton id="b3" translation="[96,820]" look="round" icon="play" h="72" visible="false" />
+      <Label id="cast" translation="[1480,830]" width="344" height="100" wrap="true" maxLines="3" color="0xFFFFFFCC" />
+    </Group>
+    <Group id="body" translation="[0,1080]">
+      <Poster id="logoTop" translation="[700,0]" width="520" height="64" loadDisplayMode="scaleToFit" />
+      <Group id="chips" translation="[0,96]" />
+      <RowList id="rows" itemComponentName="RowItem" translation="[0,190]" itemSize="[1920,330]" numRows="2" itemSpacing="[0,76]" rowFocusAnimationStyle="floatingFocus" vertFocusAnimationStyle="fixedFocus" focusBitmapUri="pkg:/images/ring.9.png" focusFootprintBitmapUri="pkg:/images/blank.png" showRowLabel="[true]" />
+    </Group>
+    <Animation id="aMode" duration="0.3" easeFunction="outQuad">
+      <Vector2DFieldInterpolator id="iBody" fieldToInterp="body.translation" key="[0,1]" keyValue="[[0,1080],[0,56]]" />
+      <FloatFieldInterpolator id="iHero" fieldToInterp="hero.opacity" key="[0,1]" keyValue="[1,0]" />
+      <FloatFieldInterpolator id="iDim" fieldToInterp="dim.opacity" key="[0,1]" keyValue="[0,0.72]" />
+    </Animation>
+  </children>
+</component>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="GridScreen" extends="Group">
+  <interface>
+    <field id="args" type="assocarray" onChange="build" />
+    <field id="nav" type="assocarray" alwaysNotify="true" />
+    <function name="takeFocus" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/GridScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Util.brs" />
+  <children>
+    <Label id="heading" translation="[96,132]" width="1500" color="0xFFFFFFFF" />
+    <MarkupGrid id="grid" translation="[96,214]" itemComponentName="RowItem" itemSize="[264,396]" itemSpacing="[28,40]" numColumns="6" numRows="2" vertFocusAnimationStyle="floatingFocus" focusBitmapUri="pkg:/images/ring.9.png" focusFootprintBitmapUri="pkg:/images/blank.png" />
+    <Label id="empty" translation="[0,480]" width="1920" horizAlign="center" wrap="true" color="0xC6A3B3FF" visible="false" />
+  </children>
+</component>

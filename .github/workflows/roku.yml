@@ -1,0 +1,60 @@
+name: App para Roku
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app-roku/**'
+      - 'config.js'
+      - '.github/workflows/roku.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  roku:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app-roku
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generar configuración e imágenes
+        run: |
+          pip install pillow
+          python3 tools/gen_config.py
+          python3 tools/make_assets.py
+      - name: Validar el código (BrighterScript)
+        run: npx --yes brighterscript@0.73.8 --project bsconfig.json
+      - name: Armar el paquete
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          mkdir -p ../out/pkg
+          cp -r manifest source components images fonts ../out/pkg/
+          sed -i "s/^build_version=.*/build_version=${RUN_NUMBER}/" ../out/pkg/manifest
+          (cd ../out/pkg && zip -qr ../reality-vault-roku.zip .)
+      - name: Publicar para descargar
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          cd ../out
+          export NOTES=$(git log -1 --format=%s)
+          python3 -c "
+          import json, os
+          json.dump({'build': int(os.environ['RUN_NUMBER']), 'notes': os.environ['NOTES'],
+                     'zipUrl': 'https://github.com/valenrosario/REALITY-VAULT-OG/releases/download/roku/reality-vault-roku.zip'},
+                    open('update.json','w'), indent=2)
+          "
+          gh release delete roku --yes --cleanup-tag || true
+          sleep 3
+          gh release create roku reality-vault-roku.zip update.json --title "REALITY VAULT · Roku" --notes "Paquete para Roku. Subilo al canal privado o instalalo en modo desarrollador." --target "$GITHUB_SHA"
+          gh release edit roku --draft=false || true

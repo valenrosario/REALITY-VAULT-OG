@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="PlayerScreen" extends="Group">
+  <interface>
+    <field id="args" type="assocarray" />
+    <field id="nav" type="assocarray" alwaysNotify="true" />
+    <function name="takeFocus" />
+    <function name="onClose" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/PlayerScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Util.brs" />
+  <children>
+    <Rectangle color="0x000000FF" width="1920" height="1080" />
+    <Video id="video" width="1920" height="1080" translation="[0,0]" enableUI="true" />
+    <Group id="skipG" visible="false">
+      <RvButton id="skipBtn" translation="[1380,860]" look="primary" icon="skip" text="Saltear intro" focused="true" />
+      <Label id="skipHint" text="Apretá OK" translation="[1380,950]" width="440" horizAlign="center" color="0xFFFFFFCC" />
+    </Group>
+    <Label id="toast" translation="[0,150]" width="1920" horizAlign="center" color="0xFFFFFFFF" visible="false" />
+    <Label id="err" translation="[360,480]" width="1200" horizAlign="center" wrap="true" color="0xFFFFFFFF" visible="false" />
+    <Timer id="saveT" duration="20" repeat="true" />
+  </children>
+</component>

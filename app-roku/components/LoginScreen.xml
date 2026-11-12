@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="LoginScreen" extends="Group">
+  <interface>
+    <field id="args" type="assocarray" />
+    <field id="nav" type="assocarray" alwaysNotify="true" />
+    <function name="takeFocus" />
+    <function name="onClose" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/LoginScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Util.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Config.brs" />
+  <children>
+    <Rectangle color="0x000000FF" width="1920" height="1080" />
+    <Poster uri="pkg:/images/blob1.png" translation="[-300,-300]" width="1000" height="1000" />
+    <Poster uri="pkg:/images/blob2.png" translation="[1200,500]" width="1000" height="1000" />
+    <Poster uri="pkg:/images/logo.png" translation="[128,90]" width="340" height="52" loadDisplayMode="scaleToFit" />
+    <Label id="h1" text="Activá tu Roku" translation="[128,190]" width="1000" color="0xFFFFFFFF" />
+    <Label id="sub" text="Escaneá el código, creá tu cuenta gratis en segundos y quedás conectado. Sin escribir nada con el control." translation="[128,270]" width="1000" wrap="true" maxLines="3" color="0xECD3DEFF" />
+    <Label id="s1" translation="[128,410]" width="1000" wrap="true" color="0xFDEEF4FF" />
+    <Label id="s2" text="2   Creá tu cuenta o iniciá sesión." translation="[128,525]" width="1000" color="0xC6A3B3FF" />
+    <Label id="s3" text="3   Confirmá este código:" translation="[128,585]" width="1000" color="0xC6A3B3FF" />
+    <Group id="boxes" translation="[170,645]" />
+    <Label id="exp" translation="[170,735]" width="600" color="0x8C6B7AFF" />
+    <RvButton id="b0" text="Entrar con email y contraseña" look="primary" translation="[128,805]" />
+    <RvButton id="b1" text="Ahora no" look="glass" translation="[800,805]" />
+    <Label id="err" translation="[128,915]" width="1100" wrap="true" color="0xF5A3C4FF" />
+    <Rectangle color="0xFFFFFFFF" translation="[1280,250]" width="440" height="440" />
+    <Poster id="qr" translation="[1296,266]" width="408" height="408" />
+    <Label id="qrTxt" text="Escaneá con la cámara para registrarte" translation="[1200,720]" width="600" horizAlign="center" color="0xECD3DEFF" />
+    <Label id="status" translation="[1200,770]" width="600" horizAlign="center" color="0x8C6B7AFF" />
+  </children>
+</component>

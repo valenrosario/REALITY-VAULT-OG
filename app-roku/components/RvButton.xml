@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="RvButton" extends="Group">
+  <interface>
+    <field id="text" type="string" onChange="layout" />
+    <field id="icon" type="string" onChange="layout" />
+    <field id="look" type="string" value="primary" onChange="layout" />
+    <field id="focused" type="boolean" value="false" onChange="paint" />
+    <field id="on" type="boolean" value="false" onChange="layout" />
+    <field id="minW" type="integer" value="0" onChange="layout" />
+    <field id="w" type="integer" value="0" alwaysNotify="true" />
+    <field id="h" type="integer" value="76" onChange="layout" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/RvButton.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Util.brs" />
+  <children>
+    <Poster id="bg" uri="pkg:/images/pill.9.png" />
+    <Poster id="ring" uri="pkg:/images/ring.9.png" blendColor="0xFFFFFFFF" visible="false" />
+    <Poster id="ico" width="40" height="40" />
+    <Label id="lbl" vertAlign="center" />
+  </children>
+</component>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="NavBar" extends="Group">
+  <interface>
+    <field id="selected" type="string" value="home" onChange="paint" />
+    <field id="choose" type="string" alwaysNotify="true" />
+    <field id="exitDown" type="boolean" alwaysNotify="true" />
+    <field id="avatar" type="string" value="" onChange="onAvatar" />
+    <field id="logo" type="string" value="" onChange="onLogo" />
+    <function name="takeFocus" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/NavBar.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Util.brs" />
+  <children>
+    <Poster id="shade" uri="pkg:/images/grad_top.png" width="1920" height="190" />
+    <Poster id="logoImg" uri="pkg:/images/logo.png" translation="[96,46]" width="270" height="41" loadDisplayMode="scaleToFit" />
+    <Group id="items" translation="[480,34]" />
+    <Poster id="avatarImg" width="64" height="64" translation="[1760,34]" />
+    <Poster id="avRing" uri="pkg:/images/ring.9.png" width="80" height="80" translation="[1752,26]" visible="false" />
+  </children>
+</component>

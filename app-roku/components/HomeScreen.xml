@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="HomeScreen" extends="Group">
+  <interface>
+    <field id="args" type="assocarray" />
+    <field id="nav" type="assocarray" alwaysNotify="true" />
+    <function name="takeFocus" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/HomeScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Util.brs" />
+  <children>
+    <Group id="hero">
+      <Poster id="heroImg" translation="[0,0]" width="1920" height="1080" />
+      <Poster uri="pkg:/images/grad_left.png" width="1920" height="1080" />
+      <Poster uri="pkg:/images/grad_bottom.png" width="1920" height="1080" />
+      <Poster id="logo" translation="[96,330]" width="640" height="200" loadDisplayMode="scaleToFit" horizAlign="left" />
+      <Label id="headline" translation="[96,360]" width="1100" maxLines="2" lineSpacing="0" color="0xFFFFFFFF" />
+      <Label id="kind" translation="[96,548]" width="1100" color="0xFFFFFFFF" />
+      <Label id="text" translation="[96,596]" width="1100" height="92" wrap="true" maxLines="2" color="0xFFFFFFDD" />
+      <RvButton id="bPlay" translation="[96,694]" look="primary" />
+      <RvButton id="bLike" translation="[500,696]" look="round" icon="heart" h="72" />
+      <RvButton id="bNext" translation="[590,696]" look="round" icon="skip" h="72" />
+      <Group id="dots" translation="[1700,740]" />
+    </Group>
+    <RowList id="rows" itemComponentName="RowItem" translation="[0,830]" itemSize="[1920,405]" numRows="3" itemSpacing="[0,76]" rowFocusAnimationStyle="floatingFocus" vertFocusAnimationStyle="fixedFocus" focusBitmapUri="pkg:/images/ring.9.png" focusFootprintBitmapUri="pkg:/images/blank.png" visible="true" drawFocusFeedback="true" showRowLabel="[true]" />
+    <Label id="empty" translation="[0,500]" width="1920" horizAlign="center" color="0xC6A3B3FF" visible="false" wrap="true" />
+    <Animation id="aMode" duration="0.3" easeFunction="outQuad">
+      <Vector2DFieldInterpolator id="iRows" fieldToInterp="rows.translation" key="[0,1]" keyValue="[[0,830],[0,130]]" />
+      <FloatFieldInterpolator id="iHero" fieldToInterp="hero.opacity" key="[0,1]" keyValue="[1,0]" />
+    </Animation>
+    <Animation id="aFade" duration="0.5" easeFunction="linear">
+      <FloatFieldInterpolator id="iFade" fieldToInterp="heroImg.opacity" key="[0,1]" keyValue="[0.15,1]" />
+    </Animation>
+    <Timer id="rot" duration="10" repeat="true" />
+  </children>
+</component>

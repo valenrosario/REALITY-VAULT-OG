@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="ClosedScreen" extends="Group">
+  <interface>
+    <field id="msg" type="string" onChange="onMsg" />
+    <field id="retry" type="boolean" alwaysNotify="true" />
+    <field id="quit" type="boolean" alwaysNotify="true" />
+    <function name="takeFocus" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/ClosedScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Util.brs" />
+  <children>
+    <Rectangle color="0x000000FF" width="1920" height="1080" />
+    <Poster uri="pkg:/images/logo.png" translation="[660,250]" width="600" height="91" loadDisplayMode="scaleToFit" />
+    <Label id="t" text="No disponible por ahora" translation="[0,400]" width="1920" horizAlign="center" color="0xFFFFFFFF" />
+    <Label id="m" translation="[460,490]" width="1000" horizAlign="center" wrap="true" maxLines="3" color="0xC6A3B3FF" />
+    <RvButton id="b0" text="Reintentar" look="primary" translation="[690,650]" />
+    <RvButton id="b1" text="Salir" look="glass" translation="[1000,650]" />
+  </children>
+</component>

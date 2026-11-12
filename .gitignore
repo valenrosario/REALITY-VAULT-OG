@@ -1,3 +1,5 @@
 .DS_Store
 node_modules/
 .vercel
+app-roku/build/
+app-roku/source/Config.brs

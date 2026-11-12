@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="AccountScreen" extends="Group">
+  <interface>
+    <field id="args" type="assocarray" />
+    <field id="nav" type="assocarray" alwaysNotify="true" />
+    <function name="takeFocus" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/AccountScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Util.brs" />
+  <children>
+    <Label id="heading" text="Cuenta" translation="[96,132]" width="800" color="0xFFFFFFFF" />
+    <Poster id="av" translation="[96,250]" width="160" height="160" />
+    <Label id="email" translation="[296,276]" width="1200" color="0xFFFFFFFF" />
+    <Label id="role" translation="[296,336]" width="1200" color="0xF5A3C4FF" />
+    <RvButton id="b0" translation="[96,500]" look="primary" />
+    <RvButton id="b1" translation="[96,600]" look="glass" />
+    <Label id="ver" translation="[96,960]" width="1700" color="0x8C6B7AFF" />
+  </children>
+</component>

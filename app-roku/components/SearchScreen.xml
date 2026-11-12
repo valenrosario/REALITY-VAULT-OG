@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="SearchScreen" extends="Group">
+  <interface>
+    <field id="args" type="assocarray" />
+    <field id="nav" type="assocarray" alwaysNotify="true" />
+    <function name="takeFocus" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/SearchScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Util.brs" />
+  <children>
+    <Label id="heading" text="Buscar" translation="[96,132]" width="800" color="0xFFFFFFFF" />
+    <MiniKeyboard id="kb" translation="[96,214]" />
+    <MarkupGrid id="grid" translation="[720,214]" itemComponentName="RowItem" itemSize="[200,300]" itemSpacing="[22,34]" numColumns="5" numRows="2" vertFocusAnimationStyle="floatingFocus" focusBitmapUri="pkg:/images/ring.9.png" focusFootprintBitmapUri="pkg:/images/blank.png" />
+    <Label id="empty" translation="[720,420]" width="1100" wrap="true" color="0xC6A3B3FF" />
+  </children>
+</component>
