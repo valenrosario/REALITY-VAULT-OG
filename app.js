@@ -2404,8 +2404,11 @@ function renderEpisodesTab(t, seasons){
 }
 function renderSuggTab(t){
   const pub = published().filter(x=>x.id!==t.id);
-  let list = pub.filter(x => (x.genres||[]).some(g => (t.genres||[]).includes(g)));
-  if (list.length < 6) list = [...list, ...pub.filter(x=>!list.includes(x))].slice(0, 12);
+  const tg = new Set((t.genres||[]).map(g=>String(g).toLowerCase())), tt = new Set((t.tags||[]).map(g=>String(g).toLowerCase()));
+  const score = x => (x.genres||[]).filter(g=>tg.has(String(g).toLowerCase())).length*3 + (x.tags||[]).filter(g=>tt.has(String(g).toLowerCase())).length + (x.type===t.type?1:0);
+  // solo los más parecidos (máx. 8), del más al menos afín
+  let list = pub.map(x=>[x,score(x)]).filter(r=>r[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,8).map(r=>r[0]);
+  if (list.length < 4) list = [...list, ...pub.filter(x=>!list.includes(x)).slice(0, 4-list.length)];
   return list.length ? `<div class="sugg">${list.map(card).join('')}</div>` : '<p class="empty-note" style="padding:0">Todavía no hay otros títulos para sugerir.</p>';
 }
 function renderDetailsTab(t, seasons){
