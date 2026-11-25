@@ -150,15 +150,15 @@ object AdminData {
 
     /** [ancho máx, alto máx, transparencia] — los mismos tamaños que usa la web. */
     val SPECS = mapOf(
-        "tv" to Triple(1920, 1080, false), "frow" to Triple(1000, 1480, false), "mobilebanner" to Triple(1350, 1700, false),
-        "mobile" to Triple(1600, 1000, false), "sitelogo" to Triple(1400, 460, true), "poster" to Triple(1200, 1800, false),
+        "tv" to Triple(1920, 1080, false), "frow" to Triple(1000, 1480, false), "mobilebanner" to Triple(1080, 1920, false),
+        "mobile" to Triple(1080, 1200, false), "sitelogo" to Triple(1400, 460, true), "poster" to Triple(1200, 1800, false),
         "backdrop" to Triple(2560, 1440, false), "logo" to Triple(1400, 560, true), "thumb" to Triple(1280, 720, false),
         "face" to Triple(400, 400, false), "banner" to Triple(3000, 1000, false), "coll" to Triple(3000, 1000, false)
     )
     /** Proporción de recorte de cada tipo (los logos no se recortan: conservan sus bordes transparentes). */
     val ASPECT = mapOf(
         "tv" to 16f / 9f, "frow" to 3f / 4.45f, "poster" to 2f / 3f, "backdrop" to 16f / 9f, "banner" to 3f, "coll" to 3f,
-        "mobilebanner" to 4f / 5f, "mobile" to 16f / 10f, "thumb" to 16f / 9f, "face" to 1f
+        "mobilebanner" to 9f / 16f, "mobile" to 9f / 10f, "thumb" to 16f / 9f, "face" to 1f
     )
 
     /** Abre la imagen elegida, achicada para no gastar memoria (y derecha según la foto). */

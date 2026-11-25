@@ -360,7 +360,7 @@ fun HomeScreen(nav: Nav) {
 @Composable
 private fun Hero(all: List<Slide>, nav: Nav) {
     val cfg = LocalConfiguration.current
-    val h = minOf(cfg.screenWidthDp * 1.72f, cfg.screenHeightDp * 0.82f).dp
+    val h = minOf(cfg.screenWidthDp * 1.78f, cfg.screenHeightDp * 0.82f).dp
     val pager = rememberPagerState { all.size }
     // pasa solo cada 7 s; si la persona lo está arrastrando, espera
     LaunchedEffect(pager.currentPage, pager.isScrollInProgress, all.size) {

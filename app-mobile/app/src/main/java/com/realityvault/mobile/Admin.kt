@@ -462,9 +462,9 @@ private fun TitleImages(doc: Doc) {
     }
     ACard("Celular", "Las que usa la app del celular y la web en pantallas chicas.") {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            AImage("Portada del inicio", "mobilebanner", doc.str("bannerImageMobile"), "4:5 · deja libre la parte de abajo", modifier = Modifier.weight(1f),
+            AImage("Portada del inicio", "mobilebanner", doc.str("bannerImageMobile"), "9:16 · 1080 × 1920 · deja libre la parte de abajo", modifier = Modifier.weight(1f),
                 fallback = doc.str("bannerImage").ifBlank { doc.str("backdrop") }) { doc.set("bannerImageMobile", it) }
-            AImage("Fondo de la ficha", "mobile", doc.str("backdropMobile"), "16:10 · 1600 × 1000", modifier = Modifier.weight(1f), fallback = doc.str("backdrop")) { doc.set("backdropMobile", it) }
+            AImage("Fondo de la ficha", "mobile", doc.str("backdropMobile"), "9:10 · 1080 × 1200 · el logo va abajo", modifier = Modifier.weight(1f), fallback = doc.str("backdrop")) { doc.set("backdropMobile", it) }
         }
     }
     ACard("Computadora y TV") {
@@ -810,7 +810,7 @@ private fun AdminBanner(id: String, nav: Nav) {
             item {
                 ACard("Imágenes", "La del celular es vertical: dejá libre la parte de abajo, ahí van el logo y el texto.") {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        AImage("Celular", "mobilebanner", doc.str("imageMobile"), "4:5 · tocá Encuadrar para moverla", modifier = Modifier.weight(1f),
+                        AImage("Celular", "mobilebanner", doc.str("imageMobile"), "9:16 · 1080 × 1920 · tocá Encuadrar", modifier = Modifier.weight(1f),
                             fallback = t?.optString("bannerImageMobile")?.ifBlank { null } ?: doc.str("image").ifBlank { t?.optString("bannerImage")?.ifBlank { null } ?: t?.optString("backdrop") ?: "" }) { doc.set("imageMobile", it) }
                         Column(Modifier.weight(1f)) {
                             AImage("Computadora", "banner", doc.str("image"), "3:1 · 2400 × 800",

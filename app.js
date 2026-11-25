@@ -93,8 +93,16 @@ function removeMedia(urls){
 }
 /* --- crop before upload --- */
 // [aspect ratio, output width]; logos are not cropped (they keep their transparent edges)
-const CROP_SPECS = { tv:[16/9,1920], frow:[3/4.45,900], poster:[2/3,1200], backdrop:[16/9,2560], banner:[3,3000], mobilebanner:[4/5,1350], mobile:[16/10,1600], thumb:[16/9,1280], face:[1,400] };
-function cropImage(file, aspect, outW){
+const CROP_SPECS = { tv:[16/9,1920], frow:[3/4.45,900], poster:[2/3,1200], backdrop:[16/9,2560], banner:[3,3000], mobilebanner:[9/16,1080], mobile:[9/10,1080], thumb:[16/9,1280], face:[1,400] };
+// Cómo se ve cada imagen en la app: se dibuja encima del recorte, en vivo, para ver qué tapan el logo, el texto y los botones
+const CROP_LIVE = {
+  mobilebanner: { label:'Portada del inicio (celular)', html:'<i class="cl-top"></i><i class="cl-fade" style="top:48%"></i><div class="cl-stack" style="bottom:7%;align-items:center;text-align:center"><b class="cl-logo" style="width:56%"></b><b class="cl-line" style="width:72%"></b><b class="cl-line" style="width:54%"></b><b class="cl-btn" style="width:86%"></b></div>' },
+  mobile: { label:'Ficha del título (celular)', html:'<i class="cl-fade" style="top:38%"></i><div class="cl-stack" style="bottom:6%;align-items:center;text-align:center"><b class="cl-logo" style="width:60%"></b><b class="cl-line" style="width:44%"></b><b class="cl-btn" style="width:90%"></b></div>' },
+  banner: { label:'Banner (computadora)', html:'<i class="cl-left"></i><i class="cl-fade" style="top:62%"></i><div class="cl-stack" style="left:4%;bottom:12%;width:34%"><b class="cl-logo" style="width:70%"></b><b class="cl-line" style="width:90%"></b><b class="cl-line" style="width:70%"></b><b class="cl-btn" style="width:46%"></b></div>' },
+  tv: { label:'Pantalla de la TV', html:'<i class="cl-left"></i><i class="cl-fade" style="top:66%"></i><div class="cl-stack" style="left:5%;bottom:14%;width:34%"><b class="cl-logo" style="width:70%"></b><b class="cl-line" style="width:90%"></b><b class="cl-line" style="width:70%"></b><b class="cl-btn" style="width:40%"></b></div>' },
+  backdrop: { label:'Fondo de la ficha', html:'<i class="cl-left"></i><i class="cl-fade" style="top:66%"></i><div class="cl-stack" style="left:5%;bottom:14%;width:34%"><b class="cl-logo" style="width:70%"></b><b class="cl-line" style="width:90%"></b><b class="cl-btn" style="width:40%"></b></div>' }
+};
+function cropImage(file, aspect, outW, kind){
   return new Promise(async (resolve, reject) => {
     const src = URL.createObjectURL(file);
     const img = new Image();
@@ -102,17 +110,20 @@ function cropImage(file, aspect, outW){
     const iw = img.naturalWidth, ih = img.naturalHeight;
     const root = document.createElement('div');
     root.className = 'crop-modal';
+    const live = CROP_LIVE[kind];
     const ratioTxt = aspect >= 1 ? `${Math.round(aspect*100)/100}:1` : `1:${Math.round(100/aspect)/100}`;
     root.innerHTML = `<div class="crop-card" role="dialog" aria-modal="true" aria-label="Recortar imagen">
       <h3>Elegí qué parte se ve</h3>
       <p class="crop-hint">Arrastrá la imagen para moverla y usá la barra (o la rueda del mouse) para acercar.</p>
-      <div class="crop-frame" style="aspect-ratio:${aspect};width:min(100%, calc(58vh * ${aspect}))"><img class="crop-img" alt="" draggable="false"><span class="crop-grid" aria-hidden="true"></span></div>
+      <div class="crop-frame" style="aspect-ratio:${aspect};width:min(100%, calc(58vh * ${aspect}))"><img class="crop-img" alt="" draggable="false"><span class="crop-grid" aria-hidden="true"></span>${live ? `<div class="crop-live" aria-hidden="true">${live.html}</div>` : ''}</div>
+      ${live ? `<label class="crop-live-toggle"><input type="checkbox" checked> Ver cómo queda en la app: ${live.label} (logo, texto y botones de ejemplo)</label>` : ''}
       <div class="crop-zoom-row"><span>−</span><input type="range" class="crop-zoom" min="1" max="4" step="0.01" value="1" aria-label="Acercar"><span>+</span></div>
       <div class="crop-actions"><button class="btn btn-line" data-c="cancel" type="button">Cancelar</button><button class="btn btn-line" data-c="full" type="button">Usar sin recortar</button><button class="btn btn-primary" data-c="ok" type="button">Usar recorte</button></div>
     </div>`;
     document.body.appendChild(root);
     const frame = root.querySelector('.crop-frame'), el = root.querySelector('.crop-img'), zoomIn = root.querySelector('.crop-zoom');
     el.src = src;
+    root.querySelector('.crop-live-toggle input')?.addEventListener('change', ev => frame.classList.toggle('nolive', !ev.target.checked));
     let W, H, base, z = 1, x = 0, y = 0;
     const clamp = () => { const dw = iw*base*z, dh = ih*base*z; x = Math.min(0, Math.max(W - dw, x)); y = Math.min(0, Math.max(H - dh, y)); };
     const paint = () => { el.style.width = (iw*base*z) + 'px'; el.style.height = (ih*base*z) + 'px'; el.style.transform = `translate(${x}px,${y}px)`; };
@@ -879,8 +890,8 @@ function renderEditor(){
       </div>
       <h3 style="margin-top:8px">Versión celular <small>opcional · si no las cargás, se usan las de arriba</small></h3>
       <div class="imgs imgs-m">
-        <div class="field"><span>Banner principal · celular</span>${slot('mobilebanner','bannerImageMobile',E.bannerImageMobile,'r45','Subir banner para celular')}<span class="hint"><b>1080 × 1350 px</b> (vertical 4:5). Ocupa toda la portada del celular; el logo y los botones van abajo al centro.</span></div>
-        <div class="field"><span>Fondo de la ficha · celular</span>${slot('mobile','backdropMobile',E.backdropMobile,'r1610','Subir fondo para celular')}<span class="hint"><b>1280 × 800 px</b> (16:10). Se muestra arriba al abrir el título en el celular.</span></div>
+        <div class="field"><span>Banner principal · celular</span>${slot('mobilebanner','bannerImageMobile',E.bannerImageMobile,'r916','Subir banner para celular')}<span class="hint"><b>1080 × 1920 px</b> (vertical 9:16, como la portada de la app del celular). El logo, el texto y los botones van encima, abajo; el logo y los botones van abajo al centro.</span></div>
+        <div class="field"><span>Fondo de la ficha · celular</span>${slot('mobile','backdropMobile',E.backdropMobile,'r910','Subir fondo para celular')}<span class="hint"><b>1080 × 1200 px</b> (casi cuadrada, 9:10, como la ficha de la app del celular). Se muestra arriba al abrir el título; el logo va encima, abajo.</span></div>
       </div>
       <h3 style="margin-top:8px">Versión TV <small>opcional · solo para la app de la tele · si no las cargás, se usan las de arriba</small></h3>
       <div class="imgs imgs-m">
@@ -907,7 +918,7 @@ function renderEditor(){
       <p class="hint" style="margin:0 0 12px">Cuando esta serie aparece en el banner del inicio, se ve la imagen unos segundos y después arranca este video sin sonido (con un botón para activarlo). Al terminar, pasa al siguiente banner. Tiene que ser un archivo de video: los enlaces de YouTube no sirven acá.</p>
       <div class="vid-grid">
         ${vidField(E, 'previewVideo', 'Computadora', '1920 × 1080 px (horizontal 16:9)', 'Se recorta arriba y abajo para llenar el banner: dejá lo importante en la franja del medio.')}
-        ${vidField(E, 'previewVideoMobile', 'Celular (opcional)', '1080 × 1350 px (vertical 4:5)', 'Si no cargás uno, en el celular se usa el de computadora recortado al centro.')}
+        ${vidField(E, 'previewVideoMobile', 'Celular (opcional)', '1080 × 1920 px (vertical 9:16)', 'Si no cargás uno, en el celular se usa el de computadora recortado al centro.')}
       </div>
       <span class="hint">Formato MP4 (H.264) o WebM · entre 15 y 40 segundos · hasta 200 MB (ideal menos de 20 MB para que cargue rápido).</span>
     </div>
@@ -1220,8 +1231,8 @@ function renderBanners(){
         <div class="field">${slot('banner','banner:'+b.id, img, 'r31', 'Subir imagen del banner')}
           <span class="hint"><b>2400 × 800 px</b> (3:1). Lo importante en el centro y la derecha.</span>
           <span style="font-size:12.5px;font-weight:700;color:var(--muted);margin-top:6px">Versión celular (opcional)</span>
-          ${slot('mobilebanner','bannerm:'+b.id, b.imageMobile || t?.bannerImageMobile, 'r45', 'Subir imagen para celular')}
-          <span class="hint"><b>1080 × 1350 px</b> (vertical 4:5). El logo y los botones van abajo al centro: dejá libre la parte de abajo. Si no la cargás, se usa la del título o un recorte de la de escritorio.</span>
+          ${slot('mobilebanner','bannerm:'+b.id, b.imageMobile || t?.bannerImageMobile, 'r916', 'Subir imagen para celular')}
+          <span class="hint"><b>1080 × 1920 px</b> (vertical 9:16, como la app del celular). El logo y los botones van encima, abajo al centro: dejá libre esa parte. Si no la cargás, se usa la del título o un recorte de la de escritorio.</span>
           <span class="hint">${b.image ? 'Imagen propia de este banner.' : t?.bannerImage ? 'Usando la imagen de banner del título. Tocá para cambiarla.' : t?.backdrop ? 'Usando el fondo de la ficha. Cargá una imagen de banner en el título o tocá acá.' : 'Sin imagen todavía.'}</span>
           <div class="order"><span class="code">#${i+1}</span>
             <button class="iconbtn" data-bmove="${esc(b.id)}" data-d="-1" aria-label="Subir" ${i===0?'disabled':''}>↑</button>
@@ -2263,7 +2274,7 @@ app.addEventListener('click', async e => {
         try { blob = await fetchImageBlob(url); } catch { toast(CORS_MSG + ' Por ahora se guarda el enlace tal cual.', true); }
         if (blob && !/gif|svg/.test(blob.type)){
           slotEl?.classList.add('busy');
-          const cropped = await cropImage(blob, spec[0], spec[1]);
+          const cropped = await cropImage(blob, spec[0], spec[1], kind);
           if (!cropped){ slotEl?.classList.remove('busy'); return; }
           const ref = await uploadImage(cropped, kind); await applyImage(d.slotUrl, ref); return;
         }
@@ -2279,7 +2290,7 @@ app.addEventListener('click', async e => {
     try {
       let blob; try { blob = await fetchImageBlob(cur); } catch { toast(CORS_MSG, true); slotEl.classList.remove('busy'); return; }
       if (/gif|svg/.test(blob.type)){ toast('Esta imagen no se puede recortar', true); slotEl.classList.remove('busy'); return; }
-      const cropped = await cropImage(blob, spec[0], spec[1]);
+      const cropped = await cropImage(blob, spec[0], spec[1], kind);
       if (!cropped){ slotEl.classList.remove('busy'); return; }
       const ref = await uploadImage(cropped, kind); await applyImage(d.slotCrop, ref);
     } catch(err){ slotEl.classList.remove('busy'); toast(err.message || 'No se pudo guardar', true); }
@@ -2291,7 +2302,7 @@ app.addEventListener('click', async e => {
     let toUpload = file;
     const spec = CROP_SPECS[d.slot];
     if (spec && !/gif|svg/.test(file.type)){
-      try { toUpload = await cropImage(file, spec[0], spec[1]); } catch { toUpload = file; }
+      try { toUpload = await cropImage(file, spec[0], spec[1], d.slot); } catch { toUpload = file; }
       if (!toUpload) return;
     }
     t.classList.add('busy');
