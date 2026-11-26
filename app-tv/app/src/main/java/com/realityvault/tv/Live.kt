@@ -416,9 +416,17 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
         return
     }
     val sc = remember(ch, Store.titles, Store.live) { buildSched(ch, Store.live?.ads ?: emptyList()) }
+    // huella de la grilla: si el catálogo se recarga y la programación es la misma, no se toca la emisión
+    val schedKey = remember(sc, ch) { ch.id + ":" + ch.epoch + ":" + sc.segs.joinToString("|") { "${it.url}@${it.from}-${it.to}" }.hashCode() }
     val ctx = LocalContext.current
     val player = remember {
-        ExoPlayer.Builder(ctx).setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(ctx, rvExtractors())).build().apply {
+        // buffer medido en tiempo y no en bytes: con video 1080p el tope por bytes cortaba la precarga a ~20 s
+        // y el bloque siguiente (la vuelta de la tanda) arrancaba sin cargar. Así lo que sigue ya está listo.
+        val load = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(40_000, 120_000, 1_500, 3_000)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+        ExoPlayer.Builder(ctx).setLoadControl(load).setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(ctx, rvExtractors())).build().apply {
             playWhenReady = true
             trackSelectionParameters = trackSelectionParameters.buildUpon().setPreferredTextLanguage("es").build()
         }
@@ -439,7 +447,7 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
         val sg = sc.segs[i]
         val clip = MediaItem.ClippingConfiguration.Builder()
             .setStartPositionMs((sg.from * 1000).toLong())
-            .setEndPositionMs(if (sg.last) M3C.TIME_END_OF_SOURCE else (sg.to * 1000).toLong()).build()
+            .setEndPositionMs(if (sg.to > sg.from) (sg.to * 1000).toLong() else M3C.TIME_END_OF_SOURCE).build()
         val b = MediaItem.Builder().setUri(sg.url).setMediaId("${q.tag++}:$i").setClippingConfiguration(clip)
         if (sg.url.substringBefore('?').lowercase().endsWith(".m3u8")) b.setMimeType(MimeTypes.APPLICATION_M3U8)
         if (!sg.ad && ch.captions && sg.subs.startsWith("http")) {
@@ -467,7 +475,7 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
         fill(); player.prepare(); player.play()
         segIdx = i
     }
-    DisposableEffect(player, sc) {
+    DisposableEffect(player, schedKey) {
         val l = object : M3Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 segIdx = idxOf(mediaItem); cue = ""
@@ -487,9 +495,12 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
         onDispose { player.removeListener(l) }
     }
     // al cambiar de canal (o si cambió la programación en el panel) se vuelve a sintonizar
-    LaunchedEffect(sc) { tune(); banner++ }
-    // control: si se trabó o se atrasó (internet lento), salta a lo que va en vivo, como la tele
-    LaunchedEffect(sc) {
+    LaunchedEffect(schedKey) { tune(); banner++ }
+    // Control de sincronía con el horario. Nunca vuelve para atrás en medio de un programa (eso repetía escenas):
+    //  - en una tanda o en los primeros segundos de un bloque corrige enseguida (no se nota);
+    //  - en medio de un programa solo salta si quedó muy atrasado (internet lento) o muy desfasado;
+    //  - si se queda cargando más de 16 s, salta a lo que va en vivo, como la tele.
+    LaunchedEffect(schedKey) {
         var stuck = 0
         while (true) {
             delay(4000)
@@ -497,20 +508,27 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
             val st = player.playbackState
             stuck = if (st == M3Player.STATE_BUFFERING) stuck + 1 else 0
             val i = idxOf(player.currentMediaItem)
-            if (i < 0 || st == M3Player.STATE_IDLE || st == M3Player.STATE_ENDED || stuck >= 3) { tune(); stuck = 0; continue }
+            if (i < 0 || st == M3Player.STATE_IDLE || st == M3Player.STATE_ENDED || stuck >= 4) { tune(); stuck = 0; continue }
             if (st == M3Player.STATE_READY) {
-                val actual = sc.starts[i] + player.currentPosition / 1000.0
+                val pos = player.currentPosition / 1000.0
+                val actual = sc.starts[i] + pos
                 val (_, _, exp) = liveAt(sc, ch)
                 var diff = exp - actual
                 if (diff > sc.cycle / 2) diff -= sc.cycle
                 if (diff < -sc.cycle / 2) diff += sc.cycle
-                if (kotlin.math.abs(diff) > 6) tune()
+                val s = sc.segs[i]
+                val fix = when {
+                    s.ad -> kotlin.math.abs(diff) > 3
+                    pos < 5 -> diff > 3
+                    else -> diff > 30 || diff < -150
+                }
+                if (fix) tune()
             }
         }
     }
     // la tele en vivo no se pausa: si la app se va al fondo se corta, y al volver sintoniza lo que va ahora
     val owner = LocalContext.current as? androidx.lifecycle.LifecycleOwner
-    DisposableEffect(owner, player, sc) {
+    DisposableEffect(owner, player, schedKey) {
         val ob = androidx.lifecycle.LifecycleEventObserver { _, e ->
             when (e) {
                 androidx.lifecycle.Lifecycle.Event.ON_STOP -> player.stop()
@@ -537,7 +555,7 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
     // y al arrancar el bloque siguiente vuelve la imagen y el logo aparece recién a los 2-3 segundos.
     var segPos by remember { mutableLongStateOf(0L) }
     var segLeft by remember { mutableLongStateOf(Long.MAX_VALUE) }
-    LaunchedEffect(player, sc) {
+    LaunchedEffect(player, schedKey) {
         while (true) {
             val i = idxOf(player.currentMediaItem)
             val s = sc.segs.getOrNull(i)
