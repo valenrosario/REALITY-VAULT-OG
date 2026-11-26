@@ -1536,18 +1536,18 @@ function saveFrows(now){
   frowSaveT = setTimeout(run, 600);
 }
 /* ===================== TV en vivo: canales (documento site/live) =====================
-   El mismo cálculo de la emisión está en la app de la tele (Live.kt): si se cambia acá, cambiarlo allá. */
-let liveSaveT = null;
+   El mismo cálculo de la emisión está en la app de la tele (Live.kt): si se cambia acá, cambiarlo allá.
+   Los canales se editan en un borrador (S.lvEd) y se guardan con el botón "Guardar". */
 function liveData(){ if (!S.live) S.live = { ads: [], channels: [] }; S.live.ads = S.live.ads || []; S.live.channels = S.live.channels || []; return S.live; }
-function saveLive(now){
-  clearTimeout(liveSaveT);
-  const run = async () => { try { await S.db.doc('site/live').set({ ...liveData(), updatedAt: Date.now() }); } catch(err){ toast('No se pudieron guardar los canales', true); } };
-  if (now) return run();
-  liveSaveT = setTimeout(run, 700);
-}
-const lvCh = id => liveData().channels.find(c => c.id === id);
+async function saveLive(){ try { await S.db.doc('site/live').set({ ...liveData(), updatedAt: Date.now() }); return true; } catch(err){ toast('No se pudieron guardar los canales', true); return false; } }
+const lvClone = o => JSON.parse(JSON.stringify(o || { ads: [], channels: [] }));
+// en el editor todo se lee del borrador; fuera del editor, de lo guardado
+const lvSrc = () => S.lvEd ? S.lvEd.d : liveData();
+const lvCh = id => lvSrc().channels.find(c => c.id === id);
 const mmss = s => { s = Math.max(0, Math.round(+s || 0)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60; return (h ? h + ':' + String(m).padStart(2,'0') : m) + ':' + String(x).padStart(2,'0'); };
+const hm = s => { s = Math.round(+s||0); const h = Math.floor(s/3600), m = Math.round(s%3600/60); return h ? `${h} h ${m} min` : `${m} min`; };
 const parseMmss = v => { const p = String(v||'').trim().split(':').map(Number); if (!p.length || p.some(isNaN)) return NaN; return p.reduce((a,b) => a*60 + b, 0); };
+const clock = ms => new Date(ms).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
 function measureDur(url){
   return new Promise(res => {
     const v = document.createElement('video'); v.preload = 'metadata'; v.muted = true;
@@ -1559,16 +1559,14 @@ function measureDur(url){
   });
 }
 const isFileUrl = u => /^https?:\/\//i.test(String(u||'').trim()) && !/youtube|youtu\.be|vimeo|drive\.google|<iframe/i.test(u);
+const lvEp = it => { const t = byId(it.titleId); return +it.season > 0 ? (t?.seasons||[]).find(s => +s.number === +it.season)?.episodes?.find((e, i) => +(e.number || i+1) === +it.episode) : null; };
 function lvResolve(it){
   const t = byId(it.titleId); if (!t) return it;
-  if (+it.season > 0){
-    const ep = (t.seasons||[]).find(s => +s.number === +it.season)?.episodes?.find((e, i) => +(e.number || i+1) === +it.episode);
-    return ep ? { ...it, url: isFileUrl(ep.url) ? ep.url.trim() : it.url, subs: (ep.subs||'').trim() || it.subs } : it;
-  }
+  if (+it.season > 0){ const ep = lvEp(it); return ep ? { ...it, url: isFileUrl(ep.url) ? ep.url.trim() : it.url, subs: (ep.subs||'').trim() || it.subs } : it; }
   return { ...it, url: isFileUrl(t.url) ? t.url.trim() : it.url, subs: (t.subs||'').trim() || it.subs };
 }
-function liveSchedule(ch){
-  const ads = liveData().ads.filter(a => +a.dur > 1 && /^https?:/.test(a.url||''));
+function liveSchedule(ch, data){
+  const ads = (data || lvSrc()).ads.filter(a => +a.dur > 1 && /^https?:/.test(a.url||''));
   const per = Math.min(Math.max(0, +(ch.adsPerBreak ?? 2)), ads.length);
   const segs = [], blocks = []; let t = 0, k = 0;
   const add = s => { segs.push({ ...s, start: t }); t += s.to - s.from; };
@@ -1581,106 +1579,221 @@ function liveSchedule(ch){
     let prev = 0;
     for (const c of cuts){ add({ ad:false, url:it.url, from:prev, to:c, i }); pod(); prev = c; }
     add({ ad:false, url:it.url, from:prev, to:dur, i }); pod();
-    blocks.push({ it, i, start, end: t });
+    blocks.push({ it: raw, i, start, end: t });
   });
   return { segs, blocks, cycle: t };
 }
-function liveNow(ch){
-  const sc = liveSchedule(ch); if (!sc.cycle) return null;
-  const t = ((((Date.now() - (+ch.epoch||0)) / 1000) % sc.cycle) + sc.cycle) % sc.cycle;
+function liveNow(ch, data){
+  const sc = liveSchedule(ch, data); if (!sc.cycle) return null;
+  const now = Date.now();
+  const t = ((((now - (+ch.epoch||0)) / 1000) % sc.cycle) + sc.cycle) % sc.cycle;
   const seg = sc.segs.filter(s => s.start <= t).pop();
-  const b = sc.blocks.find(x => t >= x.start && t < x.end);
-  return { sc, t, seg, b, left: b ? b.end - t : 0 };
+  const bi = sc.blocks.findIndex(x => t >= x.start && t < x.end);
+  const b = sc.blocks[bi];
+  // los que siguen, con su hora real
+  const next = []; let base = now - t * 1000;
+  for (let n = 0, j = bi; n < 8 && sc.blocks.length; n++){ const x = sc.blocks[j]; next.push({ ...x, s: base + x.start*1000, e: base + x.end*1000 }); j++; if (j >= sc.blocks.length){ j = 0; base += sc.cycle*1000; } }
+  return { sc, t, seg, b, left: b ? b.end - t : 0, next };
 }
-const lvLabel = it => { const t = byId(it.titleId); const name = t?.title || it.label || 'Programa';
-  if (+it.season > 0){ const ep = (t?.seasons||[]).find(s => +s.number === +it.season)?.episodes?.find((e,i) => +(e.number||i+1) === +it.episode); return `${name} · T${it.season} E${it.episode}${ep?.title ? ' · ' + ep.title : ''}`; }
-  return name; };
+const lvName = it => byId(it.titleId)?.title || it.label || 'Programa';
+const lvSub = it => { if (+it.season > 0){ const ep = lvEp(it); return `T${it.season} · E${it.episode}${ep?.title ? ' · ' + ep.title : ''}`; } return 'Película'; };
+const lvLabel = it => `${lvName(it)} · ${lvSub(it)}`;
+const lvThumb = it => { const t = byId(it.titleId); return lvEp(it)?.thumb || t?.thumbWide || t?.backdrop || t?.bannerImage || ''; };
 const autoBreaks = dur => dur > 600 ? [Math.round(dur/3), Math.round(dur*2/3)] : [];
-function renderLiveAdmin(){
-  const L = liveData();
-  const opts = `<option value="">Elegí una serie o película…</option>` + S.titles.slice().sort((a,b)=>(a.title||'').localeCompare(b.title||'')).map(t => `<option value="${esc(t.id)}">${esc(t.title||'Sin título')}${t.type==='serie'?' (serie)':''}</option>`).join('');
-  const ccPos = { tl:'top:7%;left:7%', tr:'top:7%;right:7%', bl:'bottom:7%;left:7%', br:'bottom:7%;right:7%' };
-  return `<div class="panel-head"><h1>Canales en vivo</h1><button class="btn btn-primary" data-lv-add>+ Nuevo canal</button></div>
-    <p style="margin:0;color:var(--muted);max-width:72ch">Canales que se emiten todo el tiempo en la app de la tele (pestaña <b>En vivo</b>), como la tele de antes: no se pausan ni se adelantan, y todas las teles ven lo mismo al mismo tiempo. Mezclá series y películas, poné tandas de publicidad donde quieras y el logo del canal a baja opacidad. Los cambios se guardan solos.</p>
-    ${L.channels.length ? L.channels.map(ch => { const nw = liveNow(ch); const th = nw?.b ? (byId(nw.b.it.titleId)?.thumbWide || byId(nw.b.it.titleId)?.backdrop || '') : '';
-      return `<div class="fs live-ed" data-lv-ch="${esc(ch.id)}">
-      <div class="lv-head">
-        <input class="input" style="max-width:320px" data-lv-f="name" value="${esc(ch.name||'')}" placeholder="Nombre del canal">
-        <label class="field lv-num"><span>Canal N.º</span><input class="input" type="number" min="1" data-lv-f="number" value="${esc(ch.number||1)}"></label>
-        <label class="check"><input type="checkbox" data-lv-f="active" ${ch.active!==false?'checked':''}> Al aire</label>
-        <span class="spacer"></span>
-        <span data-row="lvdel-${esc(ch.id)}"><button class="btn btn-danger btn-sm" data-lv-del="${esc(ch.id)}">Eliminar canal</button></span>
-      </div>
-      <p class="lv-now">${nw?.b ? `<b>● Ahora en el aire:</b> ${esc(lvLabel(nw.b.it))}${nw.seg?.ad ? ' — <i>en tanda</i>' : ''} · quedan ${Math.ceil(nw.left/60)} min · ciclo completo de ${mmss(nw.sc.cycle)}` : 'Todavía no hay nada para emitir: agregá programas abajo.'}</p>
-      <div class="lv-grid">
-        <div>
-          <div class="field"><span>Logo del canal (PNG transparente)</span>${slot('sitelogo','chlogo:'+ch.id, ch.logo, 'r31 contain', 'Subir logo del canal')}<span class="hint">Se ve siempre encima del programa y desaparece en las tandas.</span></div>
-          <div class="lv-row">
-            <label class="field"><span>Posición</span><select class="select" data-lv-f="logoPos">${[['tl','Arriba a la izquierda'],['tr','Arriba a la derecha'],['bl','Abajo a la izquierda'],['br','Abajo a la derecha']].map(([v,l])=>`<option value="${v}" ${(ch.logoPos||'br')===v?'selected':''}>${l}</option>`).join('')}</select></label>
-            <label class="field"><span>Opacidad · <b data-lv-out="op">${Math.round((ch.logoOpacity??.35)*100)}%</b></span><input type="range" min="5" max="100" data-lv-f="logoOpacity" value="${Math.round((ch.logoOpacity??.35)*100)}"></label>
-            <label class="field"><span>Tamaño · <b data-lv-out="sz">${ch.logoSize||56}</b></span><input type="range" min="24" max="140" data-lv-f="logoSize" value="${ch.logoSize||56}"></label>
-          </div>
-          <div class="lv-row">
-            <label class="check"><input type="checkbox" data-lv-f="captions" ${ch.captions!==false?'checked':''}> Subtítulos siempre (estilo closed caption 2003)</label>
-            <label class="field"><span>Publicidades por tanda</span><select class="select" data-lv-f="adsPerBreak">${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${(+(ch.adsPerBreak??2))===n?'selected':''}>${n===0?'Sin tandas':n}</option>`).join('')}</select></label>
-          </div>
-        </div>
-        <div><span class="lv-cap">Así se ve en la tele (en vivo)</span>
-          <div class="lv-tv"><div class="lv-43" ${th?`data-src="${esc(th)}"`:''}>
-            ${ch.logo ? `<img class="lv-bug" src="${esc(ch.logo)}" alt="" style="${ccPos[ch.logoPos||'br']};opacity:${ch.logoOpacity??.35};height:${(ch.logoSize||56)/10.8}%">` : `<b class="lv-bug lv-bugt" style="${ccPos[ch.logoPos||'br']};opacity:${ch.logoOpacity??.35}">${esc((ch.name||'').toUpperCase())}</b>`}
-            ${ch.captions!==false ? `<div class="lv-cc" style="bottom:${/^b/.test(ch.logoPos||'br') ? 17 : 9.3}%"><span>PARIS: ¿QUÉ ES WAL-MART?</span><span>¿VENDEN COSAS PARA LA PARED?</span></div>` : ''}
-          </div></div>
-        </div>
-      </div>
-      <h3 class="lv-h">Programación <span>(se repite en loop)</span></h3>
-      <div class="lv-addrow">
-        <select class="select" data-lv-pick="${esc(ch.id)}">${opts}</select>
-        <select class="select" data-lv-season="${esc(ch.id)}" hidden></select>
-        <button class="btn btn-line btn-sm" data-lv-additem="${esc(ch.id)}">+ Agregar</button>
-      </div>
-      <div class="lv-items">${(ch.items||[]).map((it, ii) => `<div class="lv-item ${(+it.dur||0) < 5 ? 'bad' : ''}">
-        <span class="lv-i">${ii+1}</span>
-        <span class="lv-lbl" title="${esc(lvLabel(it))}">${esc(lvLabel(it))}</span>
-        <label class="lv-mini"><span>Duración</span><input class="input" data-lv-item="${esc(ch.id)}" data-i="${ii}" data-lv-k="dur" value="${it.dur ? mmss(it.dur) : ''}" placeholder="mm:ss"></label>
-        <label class="lv-mini lv-cuts"><span>Tandas en (min:seg)</span><input class="input" data-lv-item="${esc(ch.id)}" data-i="${ii}" data-lv-k="breaks" value="${esc((it.breaks||[]).map(mmss).join(', '))}" placeholder="7:00, 14:00"></label>
-        <span class="lv-act">
-          <button class="iconbtn" data-lv-imove="${esc(ch.id)}" data-i="${ii}" data-d="-1" ${ii===0?'disabled':''} aria-label="Subir">↑</button>
-          <button class="iconbtn" data-lv-imove="${esc(ch.id)}" data-i="${ii}" data-d="1" ${ii===(ch.items.length-1)?'disabled':''} aria-label="Bajar">↓</button>
-          <button class="iconbtn" data-lv-idel="${esc(ch.id)}" data-i="${ii}" aria-label="Quitar">✕</button></span>
-      </div>`).join('') || '<p class="empty-note" style="padding:6px 0">Sin programas todavía.</p>'}</div>
-      ${(ch.items||[]).length ? `<div class="lv-tools">
-        <button class="btn btn-line btn-sm" data-lv-auto="${esc(ch.id)}">Tandas automáticas en todos (a 1/3 y 2/3)</button>
-        <button class="btn btn-line btn-sm" data-lv-measure="${esc(ch.id)}">Volver a medir duraciones</button>
-        <button class="btn btn-line btn-sm" data-lv-shuffle="${esc(ch.id)}">Mezclar el orden</button>
-        <button class="btn btn-line btn-sm" data-lv-restart="${esc(ch.id)}">Arrancar desde el primero ahora</button>
-      </div>` : ''}
-    </div>`; }).join('') : '<p class="empty-note" style="padding:12px 0">Todavía no hay canales. Tocá “+ Nuevo canal”.</p>'}
-    <div class="fs live-ed">
-      <div class="lv-head"><h3 class="lv-h" style="margin:0">Publicidades</h3><span class="spacer"></span>
-        <button class="btn btn-line btn-sm" data-lv-adup>Subir publicidad</button><button class="btn btn-line btn-sm" data-lv-adurl>Pegar enlace</button></div>
-      <p class="hint" style="margin:0">Se usan en todas las tandas de todos los canales, rotando en este orden. MP4 con audio AAC.</p>
-      <div class="lv-items">${L.ads.map((a, ai) => `<div class="lv-item ${(+a.dur||0) < 1 ? 'bad' : ''}">
-        <span class="lv-i">${ai+1}</span>
-        <input class="input lv-lbl" data-lv-ad="${ai}" data-lv-k="name" value="${esc(a.name||'')}" placeholder="Nombre (ej: Coca-Cola 2003)">
-        <label class="lv-mini"><span>Duración</span><input class="input" data-lv-ad="${ai}" data-lv-k="dur" value="${a.dur ? mmss(a.dur) : ''}" placeholder="mm:ss"></label>
-        <span class="lv-act"><a class="iconbtn" href="${esc(a.url)}" target="_blank" rel="noopener" aria-label="Ver">▶</a><button class="iconbtn" data-lv-addel="${ai}" aria-label="Quitar">✕</button></span>
-      </div>`).join('') || '<p class="empty-note" style="padding:6px 0">Sin publicidades: los canales se emiten sin tandas.</p>'}</div>
-    </div>`;
+
+/* estilos de subtítulos de la época: mismas medidas que ccSpec() en Live.kt (proporción del alto del cuadro 4:3) */
+const CC_STYLES = [
+  { id:'cc608', name:'Closed caption de TV', era:'EE.UU. · 1990–2006', desc:'El clásico de FOX y las cadenas: mayúsculas, letra de ancho fijo, blanco sobre cajas negras. Aparece de a bloques.', mono:1, upper:1, box:1, size:.0493, bottom:.093, bottomLogo:.173 },
+  { id:'cc608mixed', name:'Closed caption con minúsculas', era:'EE.UU. · fines de los 90 en adelante', desc:'El mismo closed caption, pero con mayúsculas y minúsculas, como lo empezaron a hacer algunos subtituladores.', mono:1, upper:0, box:1, size:.0493, bottom:.093, bottomLogo:.173 },
+  { id:'rollup', name:'Closed caption en vivo (roll-up)', era:'Noticieros y deportes', desc:'Las líneas suben de a una desde abajo, como en los noticieros y transmisiones en vivo. Quedan las últimas 3.', mono:1, upper:1, box:1, size:.0493, bottom:.093, bottomLogo:.173, left:1 },
+  { id:'teletext', name:'Teletexto (página 888)', era:'Europa · TV analógica', desc:'Subtítulos del teletexto: cajas negras y colores para distinguir quién habla (blanco, amarillo, celeste).', mono:1, upper:0, box:1, size:.046, bottom:.08, bottomLogo:.16, multi:1 },
+  { id:'dvd', name:'DVD de la época', era:'DVD · 2000–2005', desc:'Letra blanca en negrita con borde negro, sin caja, como los subtítulos de los DVD.', mono:0, upper:0, box:0, size:.056, bottom:.06, bottomLogo:.15, outline:1, color:'#fff' },
+  { id:'dvdyellow', name:'DVD / VHS amarillo', era:'DVD y VHS subtitulados', desc:'La versión amarilla con borde negro que usaban muchas ediciones subtituladas.', mono:0, upper:0, box:0, size:.056, bottom:.06, bottomLogo:.15, outline:1, color:'#f7e43a' }
+];
+const ccStyleOf = id => CC_STYLES.find(x => x.id === id) || CC_STYLES[0];
+const CC_SAMPLE = ['Paris: ¿Qué es Wal-Mart?', '¿Venden cosas para la pared?'];
+function ccHtml(st, logoBottom, lines){
+  lines = lines || CC_SAMPLE;
+  const lc = st.upper ? lines.map(l => l.toUpperCase()) : lines;
+  const color = st.multi ? ['#fff','#ff0','#0ff'] : [st.color || '#fff'];
+  return `<div class="cc-wrap ${st.left ? 'left' : ''}" style="bottom:${(logoBottom ? st.bottomLogo : st.bottom)*100}%">${lc.map((l, i) =>
+    `<span class="cc-l ${st.mono ? 'mono' : 'sans'} ${st.box ? 'box' : ''} ${st.outline ? 'outline' : ''}" style="font-size:${st.size*100}cqh;color:${color[i % color.length]}">${esc(l)}</span>`).join('')}</div>`;
 }
-// mide varias duraciones a la vez (de a 6) y va guardando: con 50 episodios tarda segundos, no minutos
-async function lvMeasureItems(items, onStep){
-  let next = 0, done = 0;
-  const work = async () => {
-    while (next < items.length){
-      const it = items[next++]; const r = lvResolve(it);
-      if (isFileUrl(r.url)){ const d = await measureDur(r.url);
-        // se escribe en los datos actuales (pueden haberse recargado mientras medía), buscando por id
-        const cur = liveData().channels.flatMap(c => c.items || []).find(x => x.id === it.id) || it;
-        if (d > 0){ for (const o of new Set([it, cur])){ o.dur = d; if (!o.breaks || !o.breaks.length) o.breaks = autoBreaks(d); } } }
-      done++; if (onStep) onStep(done, items.length);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(6, items.length) }, work));
+/** La tele, en chiquito: cuadro 4:3 con el programa al aire, el logo y los subtítulos, igual que en LiveWatch. */
+function lvTvHtml(ch, opts = {}){
+  const nw = liveNow(ch); const it = nw?.b?.it || (ch.items||[])[0];
+  const img = it ? lvThumb(it) : '';
+  const pos = { tl:'top:7%;left:7%', tr:'top:7%;right:7%', bl:'bottom:7%;left:7%', br:'bottom:7%;right:7%' }[ch.logoPos || 'br'];
+  const op = ch.logoOpacity ?? .35;
+  const st = ccStyleOf(ch.ccStyle);
+  return `<div class="lv-tv ${opts.small ? 'sm' : ''}"><div class="lv-43" ${img ? `style="background-image:url('${esc(img)}')"` : ''}>
+    ${ch.logo ? `<img class="lv-bug" src="${esc(ch.logo)}" alt="" style="${pos};opacity:${op};height:${(ch.logoSize||56)/10.8}%">` : `<b class="lv-bug lv-bugt" style="${pos};opacity:${op}">${esc((ch.name||'').toUpperCase())}</b>`}
+    ${ch.captions !== false ? ccHtml(st, /^b/.test(ch.logoPos || 'br')) : ''}
+  </div></div>`;
+}
+/** Fila de la guía de la tele, en chiquito. */
+function lvGuideRowHtml(ch){
+  const nw = liveNow(ch); const it = nw?.b?.it;
+  const th = ch.guideImage || (it ? lvThumb(it) : '');
+  const nx = nw?.next?.[1];
+  return `<div class="lv-grow">
+    <div class="lv-gch">${ch.logo ? `<img src="${esc(ch.logo)}" alt="">` : `<b>${esc((ch.name||'Canal').toUpperCase())}</b>`}<i>${esc(ch.number||1)}</i></div>
+    <div class="lv-gth" ${th ? `style="background-image:url('${esc(th)}')"` : ''}></div>
+    <div class="lv-gbk now"><small>${nw?.b ? `QUEDAN ${Math.max(1, Math.ceil(nw.left/60))} MIN` : 'SIN PROGRAMAS'}</small><b>${esc(it ? lvName(it) : '—')}</b><span>${esc(it ? lvSub(it) : 'Agregá programas')}</span></div>
+    ${nx ? `<div class="lv-gbk"><small>${clock(nx.s)} – ${clock(nx.e)}</small><b>${esc(lvName(nx.it))}</b><span>${esc(lvSub(nx.it))}</span></div>` : ''}
+    <i class="lv-gnow"></i>
+  </div>`;
+}
+
+const LV_STEPS = [['canal','Canal'],['programa','Programación'],['tandas','Tandas'],['pantalla','En pantalla']];
+function renderLiveAdmin(){ return S.lvEd ? renderLiveEditor() : renderLiveList(); }
+function renderLiveList(){
+  const L = liveData();
+  return `<div class="panel-head"><h1>Canales en vivo</h1><button class="btn btn-primary" data-lv-new>+ Nuevo canal</button></div>
+    <p class="lv-intro">Canales que se emiten todo el tiempo en la app de la tele, como la tele de antes: no se pausan ni se adelantan y todas las teles ven lo mismo al mismo tiempo.</p>
+    ${L.channels.length ? `<div class="lv-cards">${L.channels.slice().sort((a,b) => (a.number||0)-(b.number||0)).map(ch => { const nw = liveNow(ch, L);
+      return `<button class="lv-card" data-lv-open="${esc(ch.id)}">
+        ${lvTvHtml(ch, { small: 1 })}
+        <span class="lv-card-b">
+          <span class="lv-card-t"><b>${esc(ch.name || 'Sin nombre')}</b><i class="lv-pill ${ch.active !== false && nw ? 'on' : ''}">${ch.active === false ? 'Apagado' : nw ? '● Al aire' : 'Sin programas'}</i></span>
+          <span class="lv-card-m">Canal ${esc(ch.number||1)} · ${(ch.items||[]).length} programas${nw ? ' · ciclo de ' + hm(nw.sc.cycle) : ''}</span>
+          ${nw?.b ? `<span class="lv-card-n">Ahora: ${esc(lvLabel(nw.b.it))}</span>` : ''}
+        </span></button>`; }).join('')}</div>`
+    : `<div class="lv-empty"><div class="lv-empty-tv">📺</div><h2>Armá tu primer canal</h2><p>Elegí series y películas, poné el logo del canal y las tandas, y se emite solo en la tele, en loop.</p><button class="btn btn-primary" data-lv-new>+ Crear un canal</button></div>`}`;
+}
+function renderLiveEditor(){
+  const E = S.lvEd, ch = lvCh(E.id); if (!ch){ S.lvEd = null; return renderLiveList(); }
+  const nw = liveNow(ch);
+  const done = { canal: !!(ch.name && ch.name !== 'Nuevo canal'), programa: (ch.items||[]).some(x => +x.dur > 5), tandas: (ch.items||[]).some(x => (x.breaks||[]).length) && E.d.ads.length > 0, pantalla: !!ch.logo };
+  const body = E.step === 'programa' ? lvStepPrograma(ch) : E.step === 'tandas' ? lvStepTandas(ch) : E.step === 'pantalla' ? lvStepPantalla(ch) : lvStepCanal(ch);
+  return `<div class="lv-ed live-ed" data-lv-ch="${esc(ch.id)}">
+    <div class="lv-ed-top">
+      <button class="adm-ghost" data-lv-back>← Canales</button>
+      <div class="lv-ed-title"><b>${esc(ch.name || 'Nuevo canal')}</b><span>Canal ${esc(ch.number||1)} · ${ch.active === false ? 'apagado' : 'al aire'}${E.isNew ? ' · nuevo' : ''}</span></div>
+      <span class="spacer"></span>
+      ${E.isNew ? '' : `<span data-row="lvdel"><button class="btn btn-danger btn-sm" data-lv-del>Eliminar</button></span>`}
+      <button class="btn btn-primary" data-lv-save ${E.dirty ? '' : 'disabled'}>${E.dirty ? 'Guardar canal' : 'Guardado ✓'}</button>
+    </div>
+    <nav class="lv-steps">${LV_STEPS.map(([id, label], i) => `<button data-lv-step="${id}" aria-current="${E.step === id}" class="${done[id] ? 'ok' : ''}"><i>${done[id] ? '✓' : i+1}</i>${label}</button>`).join('')}</nav>
+    <div class="lv-ed-grid">
+      <div class="lv-ed-main">${body}</div>
+      <aside class="lv-ed-side">
+        <span class="lv-cap">Así se ve en la tele</span>
+        ${lvTvHtml(ch)}
+        <span class="lv-cap" style="margin-top:16px">En la guía</span>
+        ${lvGuideRowHtml(ch)}
+        ${nw ? `<span class="lv-cap" style="margin-top:16px">Ahora y después</span>
+        <ol class="lv-next">${nw.next.slice(0, 6).map((x, i) => `<li class="${i === 0 ? 'now' : ''}"><time>${i === 0 ? 'AHORA' : clock(x.s)}</time><span><b>${esc(lvName(x.it))}</b><small>${esc(lvSub(x.it))}</small></span></li>`).join('')}</ol>` : ''}
+      </aside>
+    </div>
+    <div class="lv-savebar ${E.dirty ? 'on' : ''}"><span>Tenés cambios sin guardar</span><button class="btn btn-line" data-lv-discard>Descartar</button><button class="btn btn-primary" data-lv-save>Guardar canal</button></div>
+  </div>`;
+}
+function lvStepCanal(ch){
+  return `<section class="lv-sec"><h2>El canal</h2><p class="lv-help">El nombre y el número con los que aparece en la guía de la tele.</p>
+    <div class="lv-row2">
+      <label class="field"><span>Nombre</span><input class="input" data-lv-f="name" value="${esc(ch.name === 'Nuevo canal' ? '' : ch.name || '')}" placeholder="Ej: Simple Life TV"></label>
+      <label class="field lv-num"><span>Número</span><input class="input" type="number" min="1" data-lv-f="number" value="${esc(ch.number||1)}"></label>
+    </div>
+    <label class="lv-switch"><input type="checkbox" data-lv-f="active" ${ch.active !== false ? 'checked' : ''}><i></i><span><b>Al aire</b><small>Si lo apagás, desaparece de la guía de la tele.</small></span></label>
+  </section>
+  <section class="lv-sec"><h2>Logo del canal</h2><p class="lv-help">PNG con fondo transparente. Se ve siempre encima del programa, a baja opacidad, y desaparece en las tandas. La posición y la opacidad se eligen en “En pantalla”.</p>
+    <div class="lv-slot-logo">${slot('sitelogo','chlogo:'+ch.id, ch.logo, 'r31 contain', 'Subir logo del canal')}</div>
+  </section>
+  <section class="lv-sec"><h2>Imagen en la guía</h2><p class="lv-help">La foto que aparece al lado del nombre del canal en la guía. Si no elegís una, se usa la del programa que se está emitiendo.</p>
+    <div class="lv-slot-guide">${slot('thumb','chguide:'+ch.id, ch.guideImage, 'r169', 'Elegir imagen para la guía')}</div>
+  </section>
+  <div class="lv-nextstep"><button class="btn btn-primary" data-lv-step="programa">Siguiente: programación →</button></div>`;
+}
+function lvStepPrograma(ch){
+  const E = S.lvEd; const q = (E.q || '').toLowerCase();
+  const list = S.titles.filter(t => t.status !== 'borrador' && (!q || (t.title||'').toLowerCase().includes(q))).sort((a,b) => (a.title||'').localeCompare(b.title||''));
+  const pick = E.pick && byId(E.pick);
+  const nw = liveNow(ch);
+  return `<section class="lv-sec"><h2>Agregar a la programación</h2><p class="lv-help">Elegí una serie o película. Se agrega al final y todo se repite en loop.</p>
+    <input class="input lv-search" data-lv-q value="${esc(E.q || '')}" placeholder="Buscar en el catálogo…">
+    <div class="lv-posters">${list.slice(0, 60).map(t => `<button class="lv-poster ${E.pick === t.id ? 'on' : ''}" data-lv-pick="${esc(t.id)}" title="${esc(t.title)}"><span ${t.poster ? `style="background-image:url('${esc(t.poster)}')"` : ''}>${t.poster ? '' : esc(t.title)}</span><b>${esc(t.title)}</b></button>`).join('') || '<p class="lv-help">No hay resultados.</p>'}</div>
+    ${pick ? `<div class="lv-pickbar"><b>${esc(pick.title)}</b>${pick.type === 'serie'
+      ? `<button class="btn btn-primary btn-sm" data-lv-addt="${esc(pick.id)}" data-season="">+ Todas las temporadas</button>${(pick.seasons||[]).map(s => `<button class="btn btn-line btn-sm" data-lv-addt="${esc(pick.id)}" data-season="${esc(s.number)}">Temporada ${esc(s.number)}</button>`).join('')}`
+      : `<button class="btn btn-primary btn-sm" data-lv-addt="${esc(pick.id)}" data-season="">+ Agregar película</button>`}</div>` : ''}
+  </section>
+  <section class="lv-sec"><div class="lv-sec-h"><h2>Programación</h2><span class="lv-chips"><i>${(ch.items||[]).length} programas</i>${nw ? `<i>ciclo de ${hm(nw.sc.cycle)}</i>` : ''}</span></div>
+    ${(ch.items||[]).length ? `<div class="lv-tools">
+      <button class="btn btn-line btn-sm" data-lv-shuffle>Mezclar el orden</button>
+      <button class="btn btn-line btn-sm" data-lv-measure>Medir duraciones</button>
+      <button class="btn btn-line btn-sm" data-lv-restart>Arrancar desde el primero</button>
+      <span data-row="lvclear"><button class="btn btn-line btn-sm" data-lv-clear>Vaciar</button></span></div>` : ''}
+    <div class="lv-prog">${(ch.items||[]).map((it, ii) => `<div class="lv-pi ${(+it.dur||0) < 5 ? 'bad' : ''} ${nw?.b?.i === ii ? 'now' : ''}">
+      <span class="lv-pi-n">${ii+1}</span>
+      <span class="lv-pi-th" ${lvThumb(it) ? `style="background-image:url('${esc(lvThumb(it))}')"` : ''}></span>
+      <span class="lv-pi-t"><b>${esc(lvName(it))}</b><small>${esc(lvSub(it))}${nw?.b?.i === ii ? ' · <em>al aire</em>' : ''}</small></span>
+      <label class="lv-pi-d">${(+it.dur||0) < 5 ? '<small>Sin duración</small>' : ''}<input class="input" data-lv-item="${ii}" data-lv-k="dur" value="${it.dur ? mmss(it.dur) : ''}" placeholder="mm:ss" aria-label="Duración"></label>
+      <span class="lv-act"><button class="iconbtn" data-lv-imove="${ii}" data-d="-1" ${ii===0?'disabled':''} aria-label="Subir">↑</button><button class="iconbtn" data-lv-imove="${ii}" data-d="1" ${ii===(ch.items.length-1)?'disabled':''} aria-label="Bajar">↓</button><button class="iconbtn" data-lv-idel="${ii}" aria-label="Quitar">✕</button></span>
+    </div>`).join('') || '<p class="lv-help">Todavía no hay programas. Elegí algo del catálogo de arriba.</p>'}</div>
+  </section>
+  ${(ch.items||[]).length ? `<div class="lv-nextstep"><button class="btn btn-primary" data-lv-step="tandas">Siguiente: tandas →</button></div>` : ''}`;
+}
+function lvStepTandas(ch){
+  const A = S.lvEd.d.ads; const per = +(ch.adsPerBreak ?? 2);
+  return `<section class="lv-sec"><h2>Publicidades</h2><p class="lv-help">Se comparten entre todos los canales y rotan en este orden. MP4 con audio AAC.</p>
+    <div class="lv-tools"><button class="btn btn-primary btn-sm" data-lv-adup>Subir publicidad</button><button class="btn btn-line btn-sm" data-lv-adurl>Pegar enlace</button></div>
+    <div class="lv-ads">${A.map((a, ai) => `<div class="lv-ad ${(+a.dur||0) < 1 ? 'bad' : ''}">
+      <video src="${esc(a.url)}#t=1" preload="metadata" muted playsinline></video>
+      <input class="input" data-lv-ad="${ai}" data-lv-k="name" value="${esc(a.name||'')}" placeholder="Nombre (ej: Coca-Cola 2003)">
+      <input class="input lv-ad-d" data-lv-ad="${ai}" data-lv-k="dur" value="${a.dur ? mmss(a.dur) : ''}" placeholder="mm:ss" aria-label="Duración">
+      <span class="lv-act"><button class="iconbtn" data-lv-admove="${ai}" data-d="-1" ${ai===0?'disabled':''} aria-label="Subir">↑</button><button class="iconbtn" data-lv-addel="${ai}" aria-label="Quitar">✕</button></span>
+    </div>`).join('') || '<p class="lv-help">Sin publicidades todavía: el canal se emite sin tandas.</p>'}</div>
+  </section>
+  <section class="lv-sec"><h2>Publicidades por tanda</h2>
+    <div class="lv-seg">${[0,1,2,3,4,5].map(n => `<button data-lv-per="${n}" aria-pressed="${per === n}">${n === 0 ? 'Sin tandas' : n}</button>`).join('')}</div>
+    <p class="lv-help">Además de los cortes que marques, hay una tanda entre un programa y el siguiente.</p>
+  </section>
+  <section class="lv-sec"><div class="lv-sec-h"><h2>Dónde corta cada programa</h2><button class="btn btn-line btn-sm" data-lv-auto>Cortes automáticos en todos (a 1/3 y 2/3)</button></div>
+    <p class="lv-help">Tocá la barra para poner un corte en ese minuto; tocá un corte para sacarlo. También podés escribirlos (ej: 7:00, 14:30).</p>
+    <div class="lv-cuts">${(ch.items||[]).map((it, ii) => { const d = +it.dur || 0;
+      return `<div class="lv-cut ${d < 5 ? 'bad' : ''}">
+        <span class="lv-cut-t"><b>${esc(lvName(it))}</b><small>${esc(lvSub(it))} · ${d ? mmss(d) : 'sin duración'}</small></span>
+        <div class="lv-bar" data-lv-bar="${ii}" ${d < 5 ? 'aria-disabled="true"' : ''}>${(it.breaks||[]).filter(b => b < d).map(b => `<button class="lv-mk" data-lv-mk="${ii}" data-at="${b}" style="left:${b/d*100}%" title="Corte en ${mmss(b)} (tocá para sacarlo)"><span>${mmss(b)}</span></button>`).join('')}</div>
+        <input class="input lv-cut-in" data-lv-item="${ii}" data-lv-k="breaks" value="${esc((it.breaks||[]).map(mmss).join(', '))}" placeholder="7:00, 14:00" aria-label="Cortes">
+      </div>`; }).join('') || '<p class="lv-help">Primero agregá programas.</p>'}</div>
+  </section>
+  <div class="lv-nextstep"><button class="btn btn-primary" data-lv-step="pantalla">Siguiente: en pantalla →</button></div>`;
+}
+function lvStepPantalla(ch){
+  const op = Math.round((ch.logoOpacity ?? .35) * 100), sz = ch.logoSize || 56, pos = ch.logoPos || 'br';
+  return `<section class="lv-sec"><h2>Logo en pantalla</h2><p class="lv-help">Como los canales de antes: a baja opacidad, en una esquina. Se va solo durante las tandas.</p>
+    <div class="lv-posgrid">
+      <div class="lv-pos43">${['tl','tr','bl','br'].map(p => `<button class="${p} ${pos === p ? 'on' : ''}" data-lv-pos="${p}" aria-label="${{tl:'Arriba a la izquierda',tr:'Arriba a la derecha',bl:'Abajo a la izquierda',br:'Abajo a la derecha'}[p]}"></button>`).join('')}</div>
+      <div class="lv-sliders">
+        <label class="field"><span>Opacidad · <b data-lv-out="op">${op}%</b></span><input type="range" min="5" max="100" data-lv-f="logoOpacity" value="${op}"></label>
+        <label class="field"><span>Tamaño · <b data-lv-out="sz">${sz}</b></span><input type="range" min="24" max="160" data-lv-f="logoSize" value="${sz}"></label>
+        ${ch.logo ? '' : '<p class="lv-help">Todavía no subiste el logo: se muestra el nombre del canal. <button class="linkbtn" data-lv-step="canal">Subir logo</button></p>'}
+      </div>
+    </div>
+  </section>
+  <section class="lv-sec"><div class="lv-sec-h"><h2>Subtítulos</h2>
+    <label class="lv-switch sm"><input type="checkbox" data-lv-f="captions" ${ch.captions !== false ? 'checked' : ''}><i></i><span><b>Siempre activados</b></span></label></div>
+    <p class="lv-help">Usan los subtítulos en español (.vtt) de cada episodio. Elegí cómo se ven:</p>
+    <div class="lv-ccs">${CC_STYLES.map(st => `<button class="lv-cc ${(ch.ccStyle || 'cc608') === st.id ? 'on' : ''}" data-lv-cc="${st.id}">
+      <span class="lv-cc-demo">${ccHtml(st, false, st.left ? ['Y AHORA, EL CLIMA', 'PARA ESTE FIN DE SEMANA'] : undefined)}</span>
+      <b>${esc(st.name)}</b><small class="lv-cc-era">${esc(st.era)}</small><small>${esc(st.desc)}</small></button>`).join('')}</div>
+  </section>`;
+}
+
+/* ---------- acciones del editor ---------- */
+function lvDirty(){ if (!S.lvEd) return; S.lvEd.dirty = true; const bar = app.querySelector('.lv-savebar'); if (bar) bar.classList.add('on'); app.querySelectorAll('.lv-ed-top [data-lv-save]').forEach(b => { b.disabled = false; b.textContent = 'Guardar canal'; }); }
+function lvRefreshSide(){ const ch = S.lvEd && lvCh(S.lvEd.id); const side = app.querySelector('.lv-ed-side'); if (!ch || !side) return;
+  const nw = liveNow(ch); const tv = side.querySelector('.lv-tv'); if (tv) tv.outerHTML = lvTvHtml(ch); const gr = side.querySelector('.lv-grow'); if (gr) gr.outerHTML = lvGuideRowHtml(ch); }
+function lvOpen(id, fresh){ S.lvEd = { id, d: lvClone(liveData()), step: 'canal', dirty: !!fresh, isNew: !!fresh, q: '', pick: '' }; if (fresh) S.lvEd.d.channels.push(fresh); rerenderPanel(); window.scrollTo(0, 0); }
+async function lvSaveNow(){
+  const E = S.lvEd; if (!E) return;
+  const ch = lvCh(E.id); if (ch && (!ch.name || ch.name === 'Nuevo canal')){ toast('Ponele un nombre al canal', true); E.step = 'canal'; rerenderPanel(); return; }
+  // se guardan este canal y las publicidades; los demás canales quedan como estaban guardados
+  const L = liveData(); const others = L.channels.filter(c => c.id !== E.id);
+  const next = { ...L, ads: lvClone(E.d.ads), channels: [...others, lvClone(ch)] };
+  const prev = S.live; S.live = next;
+  if (await saveLive()){ E.dirty = false; E.isNew = false; E.d = lvClone(next); toast('Canal guardado ✓ — la tele lo toma en menos de un minuto'); rerenderPanel(); }
+  else S.live = prev;
 }
 function lvItemsFor(t, season){
   if (t.type !== 'serie') return [{ id: uid('li'), titleId: t.id, season: 0, episode: 0, label: t.title || '', url: isFileUrl(t.url) ? t.url.trim() : '', subs: (t.subs||'').trim(), dur: 0 }];
@@ -1691,73 +1804,86 @@ function lvItemsFor(t, season){
   }));
   return out;
 }
+// mide varias duraciones a la vez (de a 6): con 50 episodios tarda segundos, no minutos
+async function lvMeasureItems(items, onStep){
+  let next = 0, done = 0;
+  const work = async () => { while (next < items.length){ const it = items[next++]; const r = lvResolve(it);
+    if (isFileUrl(r.url)){ const d = await measureDur(r.url); if (d > 0){ it.dur = d; if (!it.breaks || !it.breaks.length) it.breaks = autoBreaks(d); } }
+    done++; if (onStep) onStep(done, items.length); } };
+  await Promise.all(Array.from({ length: Math.min(6, items.length) }, work));
+}
+function lvTwoTap(b, label, fn){ if (!b.dataset.sure){ b.dataset.sure = '1'; const t = b.textContent; b.textContent = label; setTimeout(() => { if (b.isConnected){ delete b.dataset.sure; b.textContent = t; } }, 3000); return; } fn(); }
+window.addEventListener('beforeunload', e => { if (S.lvEd?.dirty){ e.preventDefault(); e.returnValue = ''; } });
 document.addEventListener('click', async e => {
-  const b = e.target.closest('[data-lv-add],[data-lv-del],[data-lv-additem],[data-lv-imove],[data-lv-idel],[data-lv-auto],[data-lv-measure],[data-lv-shuffle],[data-lv-restart],[data-lv-adup],[data-lv-adurl],[data-lv-addel]');
-  if (!b || !S.owner) return; const d = b.dataset; const L = liveData();
-  if ('lvAdd' in d){ L.channels.push({ id: uid('ch'), name: 'Nuevo canal', number: L.channels.length + 1, logo: '', logoPos: 'br', logoOpacity: .35, logoSize: 56, active: true, epoch: Date.now(), captions: true, adsPerBreak: 2, items: [] }); await saveLive(true); rerenderPanel(); return; }
-  if (d.lvDel){ const wrap = b.closest('[data-row]'); if (!b.dataset.sure){ b.dataset.sure = '1'; b.textContent = '¿Seguro? Tocá de nuevo'; setTimeout(() => { if (b.isConnected){ delete b.dataset.sure; b.textContent = 'Eliminar canal'; } }, 3000); return; }
-    L.channels = L.channels.filter(c => c.id !== d.lvDel); await saveLive(true); rerenderPanel(); return; }
-  if (d.lvAdditem){ const ch = lvCh(d.lvAdditem); const sel = app.querySelector(`[data-lv-pick="${d.lvAdditem}"]`); const t = byId(sel?.value); if (!ch || !t){ toast('Elegí una serie o película', true); return; }
-    const sn = app.querySelector(`[data-lv-season="${d.lvAdditem}"]`)?.value || '';
-    const items = lvItemsFor(t, sn); if (!items.length){ toast('Ese título no tiene videos de archivo (MP4) para emitir', true); return; }
-    // se agregan y se guardan al instante; las duraciones se completan solas en segundo plano
-    ch.items = [...(ch.items||[]), ...items];
-    if ((ch.name||'') === 'Nuevo canal') ch.name = t.title || ch.name;
-    await saveLive(true); rerenderPanel();
-    let last = 0;
-    await lvMeasureItems(items, (n, tot) => { toast(`Midiendo duraciones… ${n}/${tot}`); if (n - last >= 6 || n === tot){ last = n; saveLive(); } });
-    const ids = new Set(items.map(x => x.id)); const bad = (lvCh(ch.id)?.items || []).filter(x => ids.has(x.id) && !(x.dur > 0)).length;
-    await saveLive(true); rerenderPanel(); toast(bad ? `Listo. ${bad} video${bad>1?'s':''} sin duración: escribila a mano o no se emite${bad>1?'n':''}.` : `Listo: ${items.length} programa${items.length>1?'s':''} al aire`, !!bad); return; }
-  if (d.lvImove){ const ch = lvCh(d.lvImove), i = +d.i, j = i + (+d.d); if (ch && ch.items[j]){ [ch.items[i], ch.items[j]] = [ch.items[j], ch.items[i]]; await saveLive(true); rerenderPanel(); } return; }
-  if (d.lvIdel){ const ch = lvCh(d.lvIdel); if (ch){ ch.items.splice(+d.i, 1); await saveLive(true); rerenderPanel(); } return; }
-  if (d.lvAuto){ const ch = lvCh(d.lvAuto); if (ch){ ch.items.forEach(it => it.breaks = autoBreaks(+it.dur||0)); await saveLive(true); rerenderPanel(); toast('Tandas puestas a 1/3 y 2/3 de cada programa'); } return; }
-  if (d.lvMeasure){ const ch = lvCh(d.lvMeasure); if (ch){ b.disabled = true; await lvMeasureItems(ch.items, (n, tot) => toast(`Midiendo duraciones… ${n}/${tot}`)); await saveLive(true); rerenderPanel(); toast('Duraciones actualizadas'); } return; }
-  if (d.lvShuffle){ const ch = lvCh(d.lvShuffle); if (ch){ for (let i = ch.items.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [ch.items[i], ch.items[j]] = [ch.items[j], ch.items[i]]; } await saveLive(true); rerenderPanel(); } return; }
-  if (d.lvRestart){ const ch = lvCh(d.lvRestart); if (ch){ ch.epoch = Date.now(); await saveLive(true); rerenderPanel(); toast('El canal arranca ahora desde el primer programa'); } return; }
+  const b = e.target.closest('[data-lv-new],[data-lv-open],[data-lv-back],[data-lv-save],[data-lv-discard],[data-lv-del],[data-lv-step],[data-lv-pick],[data-lv-addt],[data-lv-imove],[data-lv-idel],[data-lv-shuffle],[data-lv-measure],[data-lv-restart],[data-lv-clear],[data-lv-adup],[data-lv-adurl],[data-lv-addel],[data-lv-admove],[data-lv-per],[data-lv-auto],[data-lv-mk],[data-lv-bar],[data-lv-pos],[data-lv-cc]');
+  if (!b || !S.owner) return; const d = b.dataset; const E = S.lvEd; const ch = E && lvCh(E.id);
+  if ('lvNew' in d){ const L = liveData(); const n = Math.max(0, ...L.channels.map(c => +c.number || 0)) + 1;
+    const c = { id: uid('ch'), name: 'Nuevo canal', number: n, logo: '', guideImage: '', logoPos: 'br', logoOpacity: .35, logoSize: 56, active: true, epoch: Date.now(), captions: true, ccStyle: 'cc608', adsPerBreak: 2, items: [] };
+    lvOpen(c.id, c); return; }
+  if (d.lvOpen){ lvOpen(d.lvOpen); return; }
+  if ('lvBack' in d){ if (E?.dirty) return lvTwoTap(b, '¿Salir sin guardar? Tocá de nuevo', () => { S.lvEd = null; rerenderPanel(); }); S.lvEd = null; rerenderPanel(); return; }
+  if (!E || !ch) return;
+  if ('lvSave' in d){ b.disabled = true; await lvSaveNow(); return; }
+  if ('lvDiscard' in d){ return lvTwoTap(b, '¿Seguro? Tocá de nuevo', () => { if (E.isNew){ S.lvEd = null; } else { E.d = lvClone(liveData()); E.dirty = false; } rerenderPanel(); }); }
+  if ('lvDel' in d){ return lvTwoTap(b, '¿Eliminar el canal? Tocá de nuevo', async () => { const L = liveData(); S.live = { ...L, channels: L.channels.filter(c => c.id !== E.id) }; S.lvEd = null; await saveLive(); toast('Canal eliminado'); rerenderPanel(); }); }
+  if (d.lvStep){ E.step = d.lvStep; rerenderPanel(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  if (d.lvPick){ E.pick = E.pick === d.lvPick ? '' : d.lvPick; rerenderPanel(); return; }
+  if (d.lvAddt){ const t = byId(d.lvAddt); if (!t) return; const items = lvItemsFor(t, d.season);
+    if (!items.length){ toast('Ese título no tiene videos de archivo (MP4) para emitir', true); return; }
+    ch.items = [...(ch.items||[]), ...items]; if (!ch.name || ch.name === 'Nuevo canal') ch.name = t.title || ch.name;
+    E.pick = ''; lvDirty(); rerenderPanel();
+    await lvMeasureItems(items, (n, tot) => toast(`Midiendo duraciones… ${n}/${tot}`));
+    const bad = items.filter(x => !(x.dur > 0)).length;
+    if (S.lvEd === E) rerenderPanel();
+    toast(bad ? `${bad} video${bad>1?'s':''} sin duración: escribila a mano o no se emite${bad>1?'n':''}. Después tocá Guardar.` : `Listo: ${items.length} programa${items.length>1?'s':''}. Tocá Guardar canal.`, !!bad); return; }
+  if (d.lvImove != null){ const i = +d.lvImove, j = i + (+d.d); if (ch.items[j]){ [ch.items[i], ch.items[j]] = [ch.items[j], ch.items[i]]; lvDirty(); rerenderPanel(); } return; }
+  if (d.lvIdel != null){ ch.items.splice(+d.lvIdel, 1); lvDirty(); rerenderPanel(); return; }
+  if ('lvShuffle' in d){ for (let i = ch.items.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [ch.items[i], ch.items[j]] = [ch.items[j], ch.items[i]]; } lvDirty(); rerenderPanel(); return; }
+  if ('lvMeasure' in d){ b.disabled = true; await lvMeasureItems(ch.items, (n, tot) => toast(`Midiendo duraciones… ${n}/${tot}`)); lvDirty(); rerenderPanel(); toast('Duraciones actualizadas. Tocá Guardar canal.'); return; }
+  if ('lvRestart' in d){ ch.epoch = Date.now(); lvDirty(); rerenderPanel(); toast('Al guardar, el canal arranca desde el primer programa'); return; }
+  if ('lvClear' in d){ return lvTwoTap(b, '¿Vaciar todo? Tocá de nuevo', () => { ch.items = []; lvDirty(); rerenderPanel(); }); }
   if ('lvAdup' in d){ const f = await pickFile('video/mp4,video/webm,.mp4,.webm,.m4v'); if (!f) return;
     try { toast('Subiendo publicidad…'); const url = await uploadVideo(f, p => toast(`Subiendo publicidad… ${p}%`)); const dur = await measureDur(url);
-      L.ads.push({ id: uid('ad'), name: f.name.replace(/\.[^.]+$/, ''), url, dur }); await saveLive(true); rerenderPanel(); toast(dur ? 'Publicidad agregada' : 'Subida, pero no pude medir la duración: escribila a mano', !dur); }
+      E.d.ads.push({ id: uid('ad'), name: f.name.replace(/\.[^.]+$/, ''), url, dur }); lvDirty(); rerenderPanel(); toast(dur ? 'Publicidad agregada. Tocá Guardar canal.' : 'Subida, pero no pude medir la duración: escribila a mano', !dur); }
     catch(err){ toast(err.message || 'No se pudo subir', true); } return; }
   if ('lvAdurl' in d){ const url = (prompt('Enlace directo al video de la publicidad (.mp4):') || '').trim(); if (!url) return; if (!isFileUrl(url)){ toast('Tiene que ser un enlace directo a un archivo de video', true); return; }
-    const dur = await measureDur(url); L.ads.push({ id: uid('ad'), name: '', url, dur }); await saveLive(true); rerenderPanel(); toast(dur ? 'Publicidad agregada' : 'No pude medir la duración: escribila a mano', !dur); return; }
-  if (d.lvAddel != null){ L.ads.splice(+d.lvAddel, 1); await saveLive(true); rerenderPanel(); return; }
+    const dur = await measureDur(url); E.d.ads.push({ id: uid('ad'), name: '', url, dur }); lvDirty(); rerenderPanel(); toast(dur ? 'Publicidad agregada' : 'No pude medir la duración: escribila a mano', !dur); return; }
+  if (d.lvAddel != null){ E.d.ads.splice(+d.lvAddel, 1); lvDirty(); rerenderPanel(); return; }
+  if (d.lvAdmove != null){ const i = +d.lvAdmove, j = i + (+d.d); const a = E.d.ads; if (a[j]){ [a[i], a[j]] = [a[j], a[i]]; lvDirty(); rerenderPanel(); } return; }
+  if (d.lvPer != null){ ch.adsPerBreak = +d.lvPer; lvDirty(); rerenderPanel(); return; }
+  if ('lvAuto' in d){ ch.items.forEach(it => it.breaks = autoBreaks(+it.dur||0)); lvDirty(); rerenderPanel(); toast('Cortes puestos a 1/3 y 2/3 de cada programa'); return; }
+  if (d.lvMk != null){ e.stopPropagation(); const it = ch.items[+d.lvMk]; if (it){ it.breaks = (it.breaks||[]).filter(x => x !== +d.at); lvDirty(); rerenderPanel(); } return; }
+  if (d.lvBar != null){ const it = ch.items[+d.lvBar]; const dur = +it?.dur || 0; if (!it || dur < 5) return;
+    const r = b.getBoundingClientRect(); const at = Math.round((e.clientX - r.left) / r.width * dur);
+    if (at <= 20 || at >= dur - 20){ toast('Muy pegado al principio o al final', true); return; }
+    it.breaks = [...new Set([...(it.breaks||[]), at])].sort((a,b) => a-b); lvDirty(); rerenderPanel(); return; }
+  if (d.lvPos){ ch.logoPos = d.lvPos; lvDirty(); rerenderPanel(); return; }
+  if (d.lvCc){ ch.ccStyle = d.lvCc; lvDirty(); rerenderPanel(); return; }
 });
 document.addEventListener('input', e => {
-  const el = e.target; if (!S.owner || !el.closest?.('.live-ed')) return;
-  const card = el.closest('[data-lv-ch]'); const ch = card && lvCh(card.dataset.lvCh);
-  if (el.dataset.lvF && ch){
-    const f = el.dataset.lvF;
-    if (f === 'name') ch.name = el.value;
-    else if (f === 'number') ch.number = Math.max(1, parseInt(el.value) || 1);
-    else if (f === 'logoOpacity'){ ch.logoOpacity = (+el.value) / 100; card.querySelector('[data-lv-out="op"]').textContent = el.value + '%'; card.querySelectorAll('.lv-bug').forEach(x => x.style.opacity = ch.logoOpacity); }
-    else if (f === 'logoSize'){ ch.logoSize = +el.value; card.querySelector('[data-lv-out="sz"]').textContent = el.value; const im = card.querySelector('img.lv-bug'); if (im) im.style.height = (ch.logoSize/10.8) + '%'; }
-    else return;
-    saveLive();
-  }
+  const el = e.target; const E = S.lvEd; if (!S.owner || !E || !el.closest?.('.live-ed')) return;
+  if (el.dataset.lvQ != null){ E.q = el.value; const pos = el.selectionStart; rerenderPanel(); const n = app.querySelector('[data-lv-q]'); if (n){ n.focus(); n.setSelectionRange(pos, pos); } return; }
+  const ch = lvCh(E.id); if (!ch || !el.dataset.lvF) return;
+  const f = el.dataset.lvF;
+  if (f === 'name'){ ch.name = el.value; const t = app.querySelector('.lv-ed-title b'); if (t) t.textContent = el.value || 'Nuevo canal'; }
+  else if (f === 'number') ch.number = Math.max(1, parseInt(el.value) || 1);
+  else if (f === 'logoOpacity'){ ch.logoOpacity = (+el.value) / 100; app.querySelector('[data-lv-out="op"]').textContent = el.value + '%'; }
+  else if (f === 'logoSize'){ ch.logoSize = +el.value; app.querySelector('[data-lv-out="sz"]').textContent = el.value; }
+  else return;
+  lvDirty(); lvRefreshSide();
 });
-document.addEventListener('change', async e => {
-  const el = e.target; if (!S.owner || !el.closest?.('.live-ed')) return;
-  const card = el.closest('[data-lv-ch]'); const ch = card && lvCh(card.dataset.lvCh); const L = liveData();
-  if (el.dataset.lvF && ch){
-    const f = el.dataset.lvF;
-    if (f === 'active' || f === 'captions') ch[f] = el.checked;
-    else if (f === 'logoPos') ch.logoPos = el.value;
-    else if (f === 'adsPerBreak') ch.adsPerBreak = +el.value;
-    else return;
-    await saveLive(true); rerenderPanel(); return;
-  }
-  if (el.dataset.lvPick){ const t = byId(el.value); const s = app.querySelector(`[data-lv-season="${el.dataset.lvPick}"]`); if (!s) return;
-    if (t?.type === 'serie' && (t.seasons||[]).length > 1){ s.innerHTML = `<option value="">Todas las temporadas</option>` + t.seasons.map(x => `<option value="${esc(x.number)}">Temporada ${esc(x.number)}</option>`).join(''); s.hidden = false; }
-    else { s.innerHTML = ''; s.hidden = true; } return; }
-  if (el.dataset.lvItem){ const c = lvCh(el.dataset.lvItem); const it = c?.items[+el.dataset.i]; if (!it) return;
+document.addEventListener('change', e => {
+  const el = e.target; const E = S.lvEd; if (!S.owner || !E || !el.closest?.('.live-ed')) return;
+  const ch = lvCh(E.id); if (!ch) return;
+  if (el.dataset.lvF === 'active' || el.dataset.lvF === 'captions'){ ch[el.dataset.lvF] = el.checked; lvDirty(); rerenderPanel(); return; }
+  if (el.dataset.lvItem != null){ const it = ch.items[+el.dataset.lvItem]; if (!it) return;
     if (el.dataset.lvK === 'dur'){ const v = parseMmss(el.value); if (!(v > 0)){ toast('Escribí la duración como minutos:segundos (ej: 21:34)', true); return; } it.dur = v; if (!it.breaks || !it.breaks.length) it.breaks = autoBreaks(v); }
-    else { const vals = el.value.split(/[,;\s]+/).filter(Boolean).map(parseMmss); if (vals.some(x => isNaN(x))){ toast('Escribí los cortes como 7:00, 14:30', true); return; }
-      it.breaks = [...new Set(vals)].sort((a,b) => a-b); const off = it.breaks.filter(x => x <= 20 || x >= (+it.dur||0) - 20); if (off.length) toast('Los cortes muy pegados al principio o al final no se usan', true); }
-    await saveLive(true); rerenderPanel(); return; }
-  if (el.dataset.lvAd != null){ const a = L.ads[+el.dataset.lvAd]; if (!a) return;
+    else { const vals = el.value.split(/[,;\s]+/).filter(Boolean).map(parseMmss); if (vals.some(x => isNaN(x))){ toast('Escribí los cortes como 7:00, 14:30', true); return; } it.breaks = [...new Set(vals)].sort((a,b) => a-b); }
+    lvDirty(); rerenderPanel(); return; }
+  if (el.dataset.lvAd != null){ const a = E.d.ads[+el.dataset.lvAd]; if (!a) return;
     if (el.dataset.lvK === 'name') a.name = el.value.trim();
     else { const v = parseMmss(el.value); if (!(v > 0)){ toast('Escribí la duración como minutos:segundos', true); return; } a.dur = v; }
-    await saveLive(true); rerenderPanel(); return; }
+    lvDirty(); return; }
 });
 function renderFrowsAdmin(){
   const opts = sel => `<option value="">Elegí un título…</option>` + S.titles.slice().sort((a,b)=>(a.title||'').localeCompare(b.title||'')).map(t => `<option value="${esc(t.id)}" ${sel===t.id?'selected':''}>${esc(t.title||'Sin título')}</option>`).join('');
@@ -2262,7 +2388,7 @@ async function fetchImageBlob(url){
 }
 const CORS_MSG = 'Ese sitio no deja descargar la imagen para recortarla. Bajala a tu computadora y subila desde ahí.';
 async function applyImage(path, ref){
-  if (path.startsWith('chlogo:')){ const c = lvCh(path.slice(7)); if (c){ c.logo = ref; await saveLive(true); rerenderPanel(); } return; }
+  if (path.startsWith('chlogo:') || path.startsWith('chguide:')){ const [k, id] = path.split(':'); const c = lvCh(id); if (c){ c[k === 'chlogo' ? 'logo' : 'guideImage'] = ref; lvDirty(); rerenderPanel(); toast('Listo. Tocá Guardar canal.'); } return; }
   if (path.startsWith('colllogo:')){ const c = S.colls.find(x => x.id === path.slice(9)); if (c){ c.logo = ref; await saveColls(true); rerenderPanel(); } return; }
   if (path.startsWith('coll:')){ const c = S.colls.find(x => x.id === path.slice(5)); if (c){ c.image = ref; await saveColls(true); rerenderPanel(); } return; }
   if (path.startsWith('frow:')){ const [, rid, idx] = path.split(':'); const r = S.frows.find(x => x.id === rid); if (r && r.items[+idx]){ r.items[+idx].image = ref; await saveFrows(true); rerenderPanel(); } return; }
@@ -2426,7 +2552,7 @@ app.addEventListener('click', async e => {
   if (!S.owner) return;
   if (d.backupDl !== undefined){ downloadBackup(); return; }
   if (d.backupUp !== undefined){ importBackup(); return; }
-  if (d.tab){ if (S.dirty && S.editing){ toast('Guardá o cancelá los cambios primero', true); return; } S.adminTab = d.tab; S.editing=null; render(); animatePanel(); return; }
+  if (d.tab){ if (S.dirty && S.editing){ toast('Guardá o cancelá los cambios primero', true); return; } if (S.lvEd?.dirty && d.tab !== 'canales'){ toast('Guardá o descartá los cambios del canal primero', true); return; } if (d.tab !== 'canales') S.lvEd = null; S.adminTab = d.tab; S.editing=null; render(); animatePanel(); return; }
   if (d.catfilter){ S.catalogFilter = d.catfilter; document.querySelectorAll('[data-catfilter]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.catfilter===d.catfilter))); syncPillSegs(); const g=document.getElementById('catGrid'); if (g){ g.innerHTML = catalogGridHtml(); hydrate(g); g.classList.remove('grid-in'); void g.offsetWidth; g.classList.add('grid-in'); } return; }
   if (d.etab){ S.editorTab = d.etab; rerenderPanel(true); return; }
   if (d.nuevoOpen !== undefined){ S.catalogPicker = true; rerenderPanel(); return; }
@@ -2481,7 +2607,7 @@ app.addEventListener('click', async e => {
   if (d.exX){ const [si,xi]=d.exX.split('.').map(Number); E.seasons[si].extras.splice(xi,1); markDirty(); rerenderPanel(); return; }
   if (d.exUp){ const [si,xi]=d.exUp.split('.').map(Number); const a = E.seasons[si].extras; [a[xi-1], a[xi]] = [a[xi], a[xi-1]]; markDirty(); rerenderPanel(); return; }
   if (d.clear){ e.stopPropagation();
-    if (d.clear.startsWith('chlogo:')){ const c = lvCh(d.clear.slice(7)); if (c){ c.logo = ''; await saveLive(true); rerenderPanel(); } return; }
+    if (d.clear.startsWith('chlogo:') || d.clear.startsWith('chguide:')){ const [k, id] = d.clear.split(':'); const c = lvCh(id); if (c){ c[k === 'chlogo' ? 'logo' : 'guideImage'] = ''; lvDirty(); rerenderPanel(); } return; }
     if (d.clear.startsWith('colllogo:')){ const c = S.colls.find(x => x.id === d.clear.slice(9)); if (c){ c.logo = ''; await saveColls(true); rerenderPanel(); } return; }
     if (d.clear.startsWith('coll:')){ const c = S.colls.find(x => x.id === d.clear.slice(5)); if (c){ c.image = ''; await saveColls(true); rerenderPanel(); } return; }
     if (d.clear.startsWith('frow:')){ const [, rid, idx] = d.clear.split(':'); const r = S.frows.find(x => x.id === rid); if (r && r.items[+idx]){ r.items[+idx].image = ''; await saveFrows(true); rerenderPanel(); } return; }
@@ -4235,9 +4361,9 @@ async function checkOwner(){
     else if (S.route === 'home' && S.loaded.t){ const y = window.scrollY; render(); window.scrollTo(0, y); }
   }, () => {});
   db.doc('site/live').onSnapshot(snap => {
-    if (S.route === 'admin' && S.adminTab === 'canales' && document.activeElement?.closest?.('.live-ed')) { S.live = snap.exists ? snap.data() : S.live; return; }
     S.live = snap.exists ? snap.data() : { ads: [], channels: [] };
-    if (S.route === 'admin' && S.owner && S.adminTab === 'canales') rerenderPanel();
+    // con un canal abierto en el editor no se toca nada (se trabaja sobre el borrador hasta "Guardar")
+    if (S.route === 'admin' && S.owner && S.adminTab === 'canales' && !S.lvEd) rerenderPanel();
   }, () => {});
   db.doc('site/collections').onSnapshot(snap => {
     const list = snap.exists ? (snap.data().list || []) : [];

@@ -44,6 +44,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.clipToBounds
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
@@ -63,7 +66,11 @@ data class LiveItem(
 data class LiveChannel(
     val id: String, val name: String, val number: Int, val logo: String, val logoPos: String,
     val logoOpacity: Float, val logoSize: Int, val active: Boolean, val epoch: Long,
-    val captions: Boolean, val adsPerBreak: Int, val items: List<LiveItem>
+    val captions: Boolean, val adsPerBreak: Int, val items: List<LiveItem>,
+    /** Imagen del canal en la guía (si está vacía, la del programa que se está emitiendo). */
+    val guideImage: String = "",
+    /** Estilo de subtítulos: cc608, cc608mixed, rollup, teletext, dvd, dvdyellow. */
+    val ccStyle: String = "cc608"
 )
 data class LiveData(val ads: List<LiveAd>, val channels: List<LiveChannel>)
 
@@ -89,7 +96,8 @@ fun parseLive(d: JSONObject): LiveData {
         LiveChannel(c.str("id"), c.str("name"), c.num("number", (i + 1).toDouble()).toInt(), c.str("logo"),
             c.str("logoPos").ifBlank { "br" }, c.num("logoOpacity", .35).toFloat().coerceIn(.05f, 1f),
             c.num("logoSize", 56.0).toInt().coerceIn(20, 160), c.opt("active") != false,
-            c.optLong("epoch", 0L), c.opt("captions") != false, c.num("adsPerBreak", 2.0).toInt().coerceIn(0, 8), items)
+            c.optLong("epoch", 0L), c.opt("captions") != false, c.num("adsPerBreak", 2.0).toInt().coerceIn(0, 8), items,
+            c.str("guideImage"), c.str("ccStyle").ifBlank { "cc608" })
     }
     return LiveData(ads, chans)
 }
@@ -190,6 +198,10 @@ fun blocksBetween(sc: Sched, ch: LiveChannel, fromMs: Long, toMs: Long): List<Tr
 
 /* ---------------- la guía (pestaña "En vivo" del menú de arriba) ---------------- */
 
+private val Pink = Color(0xFFFF3D8B)
+private const val GUIDE_HOURS = 8
+private const val VIEW_MIN = 120          // minutos visibles a la vez
+
 @Composable
 fun LiveGuide(nav: Nav, firstReq: FocusRequester) {
     val chans = liveChannels()
@@ -197,42 +209,83 @@ fun LiveGuide(nav: Nav, firstReq: FocusRequester) {
     LaunchedEffect(Unit) { while (true) { delay(15_000); now = System.currentTimeMillis() } }
     // canales nuevos o cambios de programación: se consultan al abrir la guía y cada minuto mientras está abierta
     LaunchedEffect(Unit) { while (true) { Store.refreshLive(); delay(60_000) } }
+    val bg = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF2A1430), Color(0xFF141120), Color(0xFF0B0A12)),
+        start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(1400f, 1600f)))
     if (chans.isEmpty()) {
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF1C1218), Color.Black))), contentAlignment = Alignment.Center) {
+        Box(bg, contentAlignment = Alignment.Center) {
             Text("Todavía no hay canales. Se crean desde el panel web, en la sección Canales en vivo.", style = ts(20, color = C.muted))
         }
         return
     }
-    Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF1C1218), Color.Black))).padding(top = 104.dp)) {
-        // ventana de 2 horas que arranca en la media hora actual
-        val winStart = now - (now % (30 * 60_000L))
-        val winEnd = winStart + 120 * 60_000L
-        val leftW = 160.dp; val thumbW = 190.dp; val gap = 6.dp
-        BoxWithConstraints(Modifier.fillMaxSize().padding(start = 48.dp)) {
+    // la grilla arranca en la media hora actual y llega hasta 8 horas después; se corre sola siguiendo el foco
+    val t0 = now - (now % (30 * 60_000L))
+    val tEnd = t0 + GUIDE_HOURS * 3600_000L
+    var note by remember { mutableStateOf("") }
+    LaunchedEffect(note) { if (note.isNotBlank()) { delay(3200); note = "" } }
+    val scrollMs = remember { androidx.compose.animation.core.Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val leftW = 150.dp; val thumbW = 176.dp; val gap = 8.dp
+    Box(bg) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 100.dp, start = 48.dp, end = 40.dp)) {
             val lineW = maxWidth - leftW - thumbW - gap * 2
-            fun x(ms: Long) = lineW * ((ms - winStart).toFloat() / (winEnd - winStart)).coerceIn(0f, 1f)
+            val perMin = lineW / VIEW_MIN.toFloat()
+            fun xOf(ms: Long) = perMin * ((ms - t0) / 60_000f - scrollMs.value)
+            /** Lleva la grilla para que el programa enfocado quede a la vista. */
+            fun reveal(s: Long, e: Long) {
+                val sMin = ((s - t0) / 60_000f).coerceAtLeast(0f); val eMin = (e - t0) / 60_000f
+                var target = scrollMs.value
+                if (eMin > target + VIEW_MIN) target = minOf(sMin - 10f, eMin - VIEW_MIN + 4f)
+                if (sMin < target) target = sMin - 10f
+                target = target.coerceIn(0f, (GUIDE_HOURS * 60f - VIEW_MIN))
+                if (target != scrollMs.value) scope.launch { scrollMs.animateTo(target, tween(320)) }
+            }
             Column {
-                // horas
-                Box(Modifier.fillMaxWidth().height(34.dp)) {
-                    Text("HOY", style = ts(14, FontWeight.Bold, C.muted), modifier = Modifier.padding(top = 6.dp))
-                    for (h in 0..3) {
-                        val ms = winStart + h * 30 * 60_000L
-                        Text(hhmm(ms), style = ts(14, FontWeight.Bold, C.muted),
-                            modifier = Modifier.padding(top = 6.dp).offset(x = leftW + thumbW + gap * 2 + x(ms) + 10.dp))
-                    }
-                }
-                Box(Modifier.fillMaxSize()) {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 60.dp, end = 48.dp)) {
-                        itemsIndexed(chans, key = { _, c -> c.id }) { i, ch ->
-                            GuideRow(ch, now, winStart, winEnd, leftW, thumbW, gap, lineW, if (i == 0) firstReq else null) {
-                                val target = Screen.LiveTv(ch.id)
-                                if (Store.session == null) nav.go(Screen.Login(target)) else nav.go(target)
+                // cabecera: HOY, horarios y reloj
+                Box(Modifier.fillMaxWidth().height(46.dp)) {
+                    Text("HOY", style = ts(13, FontWeight.Bold, C.muted).copy(letterSpacing = 1.5.sp), modifier = Modifier.align(Alignment.CenterStart))
+                    Box(Modifier.padding(start = leftW + thumbW + gap * 2).width(lineW).fillMaxHeight().clipToBounds()) {
+                        var m = t0
+                        while (m <= tEnd) {
+                            val x = xOf(m)
+                            if (x > -80.dp && x < lineW) Row(Modifier.offset(x = x).align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.width(1.dp).height(14.dp).background(Color.White.copy(alpha = .25f)))
+                                Text("  " + hhmm(m), style = ts(14, FontWeight.Bold, Color.White.copy(alpha = .62f)))
                             }
+                            m += 30 * 60_000L
                         }
                     }
-                    // línea de "ahora"
-                    Box(Modifier.offset(x = leftW + thumbW + gap * 2 + x(now) - 1.5.dp).width(3.dp).fillMaxHeight().background(Color(0xFFFF3D8B)))
                 }
+                Box(Modifier.weight(1f)) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)) {
+                        itemsIndexed(chans, key = { _, c -> c.id }) { i, ch ->
+                            GuideRow(ch, now, t0, tEnd, leftW, thumbW, gap, lineW, ::xOf, if (i == 0) firstReq else null,
+                                onFocusBlock = { s, e -> reveal(s, e) },
+                                onPick = { s, live ->
+                                    if (live) { val target = Screen.LiveTv(ch.id); if (Store.session == null) nav.go(Screen.Login(target)) else nav.go(target) }
+                                    else note = "Se emite a las ${hhmm(s)} · en vivo no se puede adelantar"
+                                })
+                        }
+                    }
+                }
+            }
+            // línea de "ahora": rosa, con un resplandor solo hacia atrás (lo que ya pasó) y el rayito arriba
+            val nx = leftW + thumbW + gap * 2 + xOf(now)
+            if (xOf(now) >= 0.dp && xOf(now) <= lineW) {
+                Box(Modifier.offset(x = nx - 110.dp, y = 46.dp).width(110.dp).fillMaxHeight()
+                    .background(Brush.horizontalGradient(listOf(Color.Transparent, Pink.copy(alpha = .10f), Pink.copy(alpha = .26f)))))
+                Box(Modifier.offset(x = nx - 1.5.dp, y = 30.dp).width(3.dp).fillMaxHeight().background(Pink))
+                Box(Modifier.offset(x = nx - 15.dp, y = 8.dp).size(30.dp).background(Pink, androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+                    Text("⚡", style = ts(14, FontWeight.Bold, Color.White))
+                }
+            }
+        }
+        // reloj, como la tele
+        Box(Modifier.align(Alignment.TopEnd).padding(top = 104.dp, end = 40.dp).background(Color.White.copy(alpha = .09f), RoundedCornerShape(99.dp)).padding(horizontal = 18.dp, vertical = 8.dp)) {
+            Text(hhmm(now), style = ts(16, FontWeight.Bold, Color.White))
+        }
+        AnimatedVisibility(note.isNotBlank(), Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp), enter = fadeIn(), exit = fadeOut()) {
+            Box(Modifier.background(Color(0xEE1A1520), RoundedCornerShape(99.dp)).padding(horizontal = 24.dp, vertical = 12.dp)) {
+                Text(note, style = ts(16, FontWeight.Bold, Color.White))
             }
         }
     }
@@ -240,46 +293,45 @@ fun LiveGuide(nav: Nav, firstReq: FocusRequester) {
 
 @Composable
 private fun GuideRow(
-    ch: LiveChannel, now: Long, winStart: Long, winEnd: Long, leftW: androidx.compose.ui.unit.Dp, thumbW: androidx.compose.ui.unit.Dp,
-    gap: androidx.compose.ui.unit.Dp, lineW: androidx.compose.ui.unit.Dp, req: FocusRequester?, onOpen: () -> Unit
+    ch: LiveChannel, now: Long, t0: Long, tEnd: Long, leftW: androidx.compose.ui.unit.Dp, thumbW: androidx.compose.ui.unit.Dp,
+    gap: androidx.compose.ui.unit.Dp, lineW: androidx.compose.ui.unit.Dp, xOf: (Long) -> androidx.compose.ui.unit.Dp, req: FocusRequester?,
+    onFocusBlock: (Long, Long) -> Unit, onPick: (Long, Boolean) -> Unit
 ) {
     val sc = remember(ch, Store.titles, Store.live) { buildSched(ch, Store.live?.ads ?: emptyList()) }
-    val blocks = remember(sc, winStart) { blocksBetween(sc, ch, winStart, winEnd) }
+    val blocks = remember(sc, t0) { blocksBetween(sc, ch, t0, tEnd) }
     val cur = blocks.firstOrNull { now in it.second until it.third }
-    val h = 112.dp
+    val h = 104.dp
     Row(Modifier.fillMaxWidth().height(h), horizontalArrangement = Arrangement.spacedBy(gap)) {
-        Column(Modifier.width(leftW).fillMaxHeight().background(Color.White.copy(alpha = .04f), RoundedCornerShape(6.dp)),
-            verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-            if (ch.logo.isNotBlank()) Img(ch.logo, Modifier.width(120.dp).height(44.dp), scale = ContentScale.Fit)
-            else Text(ch.name, style = ts(17, FontWeight.Bold, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text("CANAL ${ch.number}", style = ts(12, color = C.muted), modifier = Modifier.padding(top = 4.dp))
+        Box(Modifier.width(leftW).fillMaxHeight().background(Color.White.copy(alpha = .035f), RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
+            if (ch.logo.isNotBlank()) Img(ch.logo, Modifier.width(112.dp).height(40.dp), scale = ContentScale.Fit)
+            else Text(ch.name.uppercase(), style = ts(15, FontWeight.Bold, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 10.dp))
+            Text("${ch.number}", style = ts(11, FontWeight.Bold, C.muted), modifier = Modifier.align(Alignment.TopStart).padding(8.dp))
         }
-        Box(Modifier.width(thumbW).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(C.surface)) {
-            val th = cur?.first?.item?.let { itemThumb(it) } ?: ""
+        Box(Modifier.width(thumbW).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(Color(0xFF1E1A26))) {
+            val th = ch.guideImage.ifBlank { cur?.first?.item?.let { itemThumb(it) } ?: "" }
             if (th.isNotBlank()) Img(th, Modifier.fillMaxSize())
         }
-        Box(Modifier.width(lineW).fillMaxHeight()) {
-            blocks.forEach { (b, s, e) ->
-                val x0 = lineW * ((s - winStart).toFloat() / (winEnd - winStart)).coerceIn(0f, 1f)
-                val x1 = lineW * ((e - winStart).toFloat() / (winEnd - winStart)).coerceIn(0f, 1f)
-                val w = (x1 - x0 - 4.dp).coerceAtLeast(0.dp)
-                if (w < 8.dp) return@forEach
-                val isNow = cur != null && cur.first === b && cur.second == s
-                val inner: @Composable (Boolean) -> Unit = { f ->
-                    Column(Modifier.fillMaxSize().background(if (f) Color.White.copy(alpha = .16f) else Color.White.copy(alpha = if (isNow) .09f else .05f))
-                        .padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        val mins = ((e - now) / 60_000L).coerceAtLeast(1)
-                        Text(if (isNow) "QUEDAN $mins MIN" else "${hhmm(s)} – ${hhmm(e)}", style = ts(12, FontWeight.Bold, C.muted), maxLines = 1)
-                        Text(itemTitle(b.item), style = ts(19, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(itemSub(b.item), style = ts(13, color = C.muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
+        Box(Modifier.width(lineW).fillMaxHeight().clipToBounds()) {
+            if (blocks.isEmpty()) Focusable({ onPick(now, true) }, Modifier.fillMaxSize(), shape = RoundedCornerShape(6.dp), scale = 1f, requester = req) { f ->
+                Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = if (f) .14f else .05f)), contentAlignment = Alignment.CenterStart) {
+                    Text("Sintonizar", style = ts(18, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 20.dp))
                 }
-                if (isNow) Focusable(onOpen, Modifier.offset(x = x0).width(w).fillMaxHeight(), shape = RoundedCornerShape(6.dp), scale = 1f, requester = req) { f -> inner(f) }
-                else Box(Modifier.offset(x = x0).width(w).fillMaxHeight().clip(RoundedCornerShape(6.dp))) { inner(false) }
             }
-            if (cur == null) Focusable(onOpen, Modifier.fillMaxSize(), shape = RoundedCornerShape(6.dp), scale = 1f, requester = req) { f ->
-                Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = if (f) .16f else .05f)), contentAlignment = Alignment.CenterStart) {
-                    Text("   Sintonizar", style = ts(18, FontWeight.Bold, Color.White))
+            blocks.forEach { (b, s, e) ->
+                val x0 = xOf(maxOf(s, t0)); val x1 = xOf(e)
+                val w = (x1 - x0 - 6.dp).coerceAtLeast(0.dp)
+                if (w < 10.dp) return@forEach
+                val isNow = now in s until e
+                Focusable({ onPick(s, isNow) }, Modifier.offset(x = x0).width(w).fillMaxHeight(), shape = RoundedCornerShape(6.dp), scale = 1f,
+                    requester = if (isNow) req else null, onFocus = { onFocusBlock(maxOf(s, t0), e) }) { f ->
+                    Column(Modifier.fillMaxSize().background(
+                        when { f -> Color.White.copy(alpha = .15f); isNow -> Color.White.copy(alpha = .085f); else -> Color.White.copy(alpha = .045f) })
+                        .padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val mins = ((e - now) / 60_000L).coerceAtLeast(1)
+                        Text(if (isNow) "QUEDAN $mins MIN" else "${hhmm(s)} – ${hhmm(e)}", style = ts(11.5f, FontWeight.Bold, Color.White.copy(alpha = .55f)).copy(letterSpacing = 1.sp), maxLines = 1)
+                        Text(itemTitle(b.item), style = ts(18, FontWeight.Bold, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(itemSub(b.item), style = ts(12.5f, color = Color.White.copy(alpha = .55f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
         }
@@ -290,11 +342,51 @@ private fun GuideRow(
 
 /** Letra de los subtítulos: de ancho fijo y en negrita, como los closed captions analógicos (EIA-608). */
 private val CcFont = FontFamily(Font(R.font.cc_mono, FontWeight.Bold))
+/** Letra de los subtítulos de DVD de la época (tipo Arial en negrita). */
+private val CcSans = FontFamily(Font(R.font.cc_sans, FontWeight.Bold))
+
+/**
+ * Estilos de subtítulos de la época (los mismos que se eligen en el panel; ver CC_STYLES en app.js).
+ * Medidas en proporción a la altura del cuadro de la imagen, así se ven igual en la vista previa del panel.
+ */
+class CcSpec(val mono: Boolean, val upper: Boolean, val box: Boolean, val max: Int, val size: Float, val bottom: Float, val bottomLogo: Float, val left: Boolean = false, val outline: Boolean = false, val color: Color = Color.White, val multi: Boolean = false)
+fun ccSpec(id: String): CcSpec = when (id) {
+    "cc608mixed" -> CcSpec(true, false, true, 32, .0493f, .093f, .173f)
+    "rollup" -> CcSpec(true, true, true, 32, .0493f, .093f, .173f, left = true)
+    "teletext" -> CcSpec(true, false, true, 36, .046f, .08f, .16f, multi = true)
+    "dvd" -> CcSpec(false, false, false, 40, .056f, .06f, .15f, outline = true)
+    "dvdyellow" -> CcSpec(false, false, false, 40, .056f, .06f, .15f, outline = true, color = Color(0xFFF7E43A))
+    else -> CcSpec(true, true, true, 32, .0493f, .093f, .173f)
+}
+private val TeletextColors = listOf(Color.White, Color(0xFFFFFF00), Color(0xFF00FFFF))
+
+/** Dibuja las líneas con el estilo elegido, dentro del cuadro de la imagen (h = alto del cuadro). */
+@Composable
+fun CcBlock(spec: CcSpec, lines: List<String>, w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, logoBottom: Boolean, colorIdx: Int, modifier: Modifier = Modifier) {
+    if (lines.isEmpty()) return
+    val fs = with(LocalDensity.current) { (h * spec.size).toSp() }
+    val color = if (spec.multi) TeletextColors[colorIdx % TeletextColors.size] else spec.color
+    val base = TextStyle(fontFamily = if (spec.mono) CcFont else CcSans, fontWeight = FontWeight.Bold, fontSize = fs, color = color, lineHeight = fs * 1.18f)
+    Box(modifier.fillMaxSize()) {
+        Column(
+            Modifier.align(if (spec.left) Alignment.BottomStart else Alignment.BottomCenter)
+                .padding(start = if (spec.left) w * .1f else 0.dp, bottom = h * (if (logoBottom) spec.bottomLogo else spec.bottom)),
+            horizontalAlignment = if (spec.left) Alignment.Start else Alignment.CenterHorizontally
+        ) {
+            lines.forEach { ln ->
+                if (spec.outline) Box {
+                    Text(ln, style = base.copy(color = Color.Black, drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(width = with(LocalDensity.current) { (h * spec.size * .16f).toPx() }, join = androidx.compose.ui.graphics.StrokeJoin.Round)))
+                    Text(ln, style = base)
+                } else Text(ln, style = base, modifier = if (spec.box) Modifier.background(Color.Black).padding(horizontal = h * .02f) else Modifier)
+            }
+        }
+    }
+}
 
 /** Corta el texto en líneas de hasta 32 caracteres (el ancho de la grilla de los closed captions de la época). */
-fun ccLines(text: String, max: Int = 32): List<String> {
+fun ccLines(text: String, max: Int = 32, upper: Boolean = true): List<String> {
     val out = ArrayList<String>()
-    text.uppercase().split('\n').forEach { para ->
+    (if (upper) text.uppercase() else text).split('\n').forEach { para ->
         var line = ""
         para.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.forEach { w ->
             if (line.isEmpty()) line = w
@@ -331,6 +423,8 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
     val q = remember { LiveQ() }
     var segIdx by remember { mutableIntStateOf(-1) }
     var cue by remember { mutableStateOf("") }
+    var cueN by remember { mutableIntStateOf(0) }
+    var roll by remember { mutableStateOf(listOf<String>()) }
     var failed by remember { mutableStateOf(false) }
     var aspect by remember { mutableFloatStateOf(4f / 3f) }
     var banner by remember { mutableIntStateOf(0) }
@@ -422,6 +516,13 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
         owner?.lifecycle?.addObserver(ob)
         onDispose { owner?.lifecycle?.removeObserver(ob) }
     }
+    // roll-up: cada frase nueva entra por abajo y empuja las anteriores (quedan las últimas 3 líneas)
+    LaunchedEffect(cue) {
+        if (cue.isNotBlank()) {
+            cueN++
+            if (ccSpec(ch.ccStyle).left) roll = (roll + ccLines(cue, 32, true).filter { it !in roll.takeLast(3) }).takeLast(3)
+        } else { delay(6000); roll = emptyList() }
+    }
     LaunchedEffect(banner) { if (banner > 0) { showBanner = true; delay(5000); showBanner = false } }
 
     val seg = sc.segs.getOrNull(segIdx)
@@ -458,25 +559,23 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
                 setShutterBackgroundColor(android.graphics.Color.BLACK)
             }
         })
-        // el cuadro de la imagen (4:3 con barras negras): el logo y los subtítulos van adentro, como en la señal original
-        Box(Modifier.fillMaxHeight().aspectRatio(aspect.coerceIn(1f, 2.4f), matchHeightConstraintsFirst = true).align(Alignment.Center)) {
-            val pad = 5
+        // el cuadro de la imagen (4:3 con barras negras): el logo y los subtítulos van adentro, como en la señal original.
+        // Todo se mide en proporción al cuadro, igual que la vista previa del panel web.
+        BoxWithConstraints(Modifier.fillMaxHeight().aspectRatio(aspect.coerceIn(1f, 2.4f), matchHeightConstraintsFirst = true).align(Alignment.Center)) {
+            val bw = maxWidth; val bh = maxHeight
             val al = when (ch.logoPos) { "tl" -> Alignment.TopStart; "tr" -> Alignment.TopEnd; "bl" -> Alignment.BottomStart; else -> Alignment.BottomEnd }
-            if (ch.logo.isNotBlank()) Img(ch.logo, Modifier.align(al).padding(horizontal = (pad * 8).dp, vertical = (pad * 6).dp)
-                .height(ch.logoSize.dp).widthIn(max = (ch.logoSize * 4).dp).alpha(logoA), scale = ContentScale.Fit)
-            else Text(ch.name.uppercase(), style = ts(26, FontWeight.Bold, Color.White), modifier = Modifier.align(al).padding(horizontal = 40.dp, vertical = 30.dp).alpha(logoA))
-            val lines = if (!inAd && ch.captions && cue.isNotBlank()) ccLines(cue) else emptyList()
-            if (lines.isNotEmpty()) BoxWithConstraints(Modifier.fillMaxSize()) {
-                // 15 filas en la altura del cuadro, como la grilla de los closed captions
-                val rowH = maxHeight / 15
-                val fs = with(LocalDensity.current) { (rowH * .74f).toSp() }
-                Column(Modifier.align(Alignment.BottomCenter).padding(bottom = rowH * (if (ch.logoPos.startsWith("b")) 2.6f else 1.4f)), horizontalAlignment = Alignment.CenterHorizontally) {
-                    lines.forEach { ln ->
-                        Text(ln, style = TextStyle(fontFamily = CcFont, fontWeight = FontWeight.Bold, fontSize = fs, color = Color.White, lineHeight = fs * 1.18f),
-                            modifier = Modifier.background(Color.Black).padding(horizontal = rowH * .3f))
-                    }
-                }
+            val lm = Modifier.align(al).padding(horizontal = bw * .07f, vertical = bh * .07f).alpha(logoA)
+            if (ch.logo.isNotBlank()) Img(ch.logo, lm.height(bh * (ch.logoSize / 1080f)).widthIn(max = bw * .4f), scale = ContentScale.Fit)
+            else Text(ch.name.uppercase(), style = ts(with(LocalDensity.current) { (bh * .05f).toSp().value }, FontWeight.Bold, Color.White), modifier = lm)
+            val spec = ccSpec(ch.ccStyle)
+            val show = !inAd && ch.captions
+            val lines = when {
+                !show -> emptyList()
+                spec.left -> roll
+                cue.isNotBlank() -> ccLines(cue, spec.max, spec.upper)
+                else -> emptyList()
             }
+            CcBlock(spec, lines, bw, bh, ch.logoPos.startsWith("b"), cueN)
         }
         if (failed || sc.segs.isEmpty()) Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
             Text("SIN SEÑAL", style = TextStyle(fontFamily = CcFont, fontSize = 44.sp, color = Color.White))
