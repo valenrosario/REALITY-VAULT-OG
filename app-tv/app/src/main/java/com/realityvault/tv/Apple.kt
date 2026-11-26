@@ -134,6 +134,7 @@ fun App(nav: Nav, onExit: () -> Unit) {
         when (val s = nav.top) {
             Screen.Splash -> SplashScreen(nav)
             is Screen.Player -> PlayerScreen(s, nav)
+            is Screen.LiveTv -> LiveWatch(s, nav)
             // key: al pasar de una ficha a otra se arma una nueva desde cero (arriba de todo, con el foco en "Ver"),
             // en vez de reusar la pantalla de la anterior con su scroll y su foco
             is Screen.Detail -> androidx.compose.runtime.key(s.id) { DetailScreen(s.id, nav) }
@@ -150,11 +151,12 @@ fun App(nav: Nav, onExit: () -> Unit) {
                     Screen.Series -> GridScreen(nav, "series")
                     Screen.Movies -> GridScreen(nav, "peliculas")
                     Screen.MyList -> GridScreen(nav, "milista")
+                    Screen.Live -> LiveGuide(nav, heroReq)
                     Screen.Search -> SearchScreen(nav)
                     Screen.Account -> AccountScreen(nav)
                     else -> {}
                 }
-                TopNavBar(nav, Modifier.align(Alignment.TopStart), downTarget = if (s == Screen.Home) heroReq else null)
+                TopNavBar(nav, Modifier.align(Alignment.TopStart), downTarget = if (s == Screen.Home || s == Screen.Live) heroReq else null)
             }
         }
         // Aviso de actualización: se dibuja último para quedar siempre arriba de todo, pero
@@ -168,7 +170,7 @@ fun App(nav: Nav, onExit: () -> Unit) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TopNavBar(nav: Nav, modifier: Modifier = Modifier, downTarget: FocusRequester? = null) {
-    val items = listOf(Screen.Home to "Inicio", Screen.Series to "Series", Screen.Movies to "Películas", Screen.MyList to "Mi lista")
+    val items = listOf(Screen.Home to "Inicio", Screen.Series to "Series", Screen.Movies to "Películas", Screen.MyList to "Mi lista", Screen.Live to "En vivo")
     // Píldora que se desliza y cambia de ancho para "seguir" al ítem activo del menú,
     // igual a como se mueve el foco en Netflix/Apple TV: blanca y brillante cuando el
     // control está puesto ahí, tenue cuando solo indica la sección en la que estás.

@@ -57,7 +57,7 @@ import java.security.MessageDigest
 fun UpdateOverlay(nav: Nav) {
     val info = Updater.available ?: return
     val top = nav.top
-    if (top is Screen.Player || top is Screen.Splash || (top is Screen.Login && top.required)) return
+    if (top is Screen.Player || top is Screen.LiveTv || top is Screen.Splash || (top is Screen.Login && top.required)) return
 
     var dismissed by remember(info.versionCode) { mutableStateOf(false) }
     if (dismissed) return

@@ -228,6 +228,8 @@ object Store {
     var featRows by mutableStateOf<List<FeatRow>>(emptyList())
     var colls by mutableStateOf<List<Coll>>(emptyList())
     var siteLogo by mutableStateOf("")
+    /** Canales de la TV en vivo (documento site/live del panel). */
+    var live by mutableStateOf<LiveData?>(null)
     var top10 by mutableStateOf<List<String>>(emptyList())
     var myList by mutableStateOf<List<String>>(emptyList())
     var progress by mutableStateOf<List<Progress>>(emptyList())
@@ -314,6 +316,7 @@ object Store {
             val d = r.optJSONObject("data") ?: continue
             when (r.s("id")) {
                 "config" -> { siteLogo = d.s("logo"); applyClosed(d) }
+                "live" -> live = runCatching { parseLive(d) }.getOrNull()
                 "collections" -> {
                     val la = d.optJSONArray("list") ?: JSONArray()
                     cl = (0 until la.length()).mapNotNull { x ->

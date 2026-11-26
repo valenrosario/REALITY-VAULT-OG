@@ -77,6 +77,10 @@ sealed class Screen {
     data object MyList : Screen()
     data object Search : Screen()
     data object Account : Screen()
+    /** Guía de la TV en vivo (pestaña "En vivo"). */
+    data object Live : Screen()
+    /** Mirando un canal en vivo. */
+    data class LiveTv(val channelId: String) : Screen()
     data class Detail(val id: String) : Screen()
     data class Player(val titleId: String, val url: String, val season: Int?, val episode: Int?, val trailer: Boolean = false, val extra: Boolean = false, val restart: Boolean = false) : Screen()
     /** required = true: es la puerta de entrada obligatoria, no se puede saltear. */
@@ -85,7 +89,7 @@ sealed class Screen {
     data class Collection(val id: String) : Screen()
 }
 
-private val mainScreens = listOf(Screen.Search, Screen.Home, Screen.Series, Screen.Movies, Screen.MyList, Screen.Account)
+private val mainScreens = listOf(Screen.Search, Screen.Home, Screen.Series, Screen.Movies, Screen.MyList, Screen.Live, Screen.Account)
 
 /** Guarda dónde estaba parado el usuario en cada pantalla para volver justo ahí. */
 class Memory {
