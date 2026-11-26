@@ -425,6 +425,7 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
     var cue by remember { mutableStateOf("") }
     var cueN by remember { mutableIntStateOf(0) }
     var roll by remember { mutableStateOf(listOf<String>()) }
+    var fade by remember { mutableFloatStateOf(0f) }
     var failed by remember { mutableStateOf(false) }
     var aspect by remember { mutableFloatStateOf(4f / 3f) }
     var banner by remember { mutableIntStateOf(0) }
@@ -527,7 +528,33 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
 
     val seg = sc.segs.getOrNull(segIdx)
     val inAd = seg?.ad == true
-    val logoA by animateFloatAsState(if (seg != null && !inAd && !failed) ch.logoOpacity else 0f, tween(600), label = "bug")
+    // Transiciones como la tele de antes: el logo se va unos segundos antes de que termine el bloque
+    // (antes de una tanda o al final del episodio), la imagen y el sonido se van a negro rápido al cortar,
+    // y al arrancar el bloque siguiente vuelve la imagen y el logo aparece recién a los 2-3 segundos.
+    var segPos by remember { mutableLongStateOf(0L) }
+    var segLeft by remember { mutableLongStateOf(Long.MAX_VALUE) }
+    LaunchedEffect(player, sc) {
+        while (true) {
+            val i = idxOf(player.currentMediaItem)
+            val s = sc.segs.getOrNull(i)
+            if (s != null && player.playbackState == M3Player.STATE_READY) {
+                val pos = player.currentPosition.coerceAtLeast(0)
+                val len = player.duration.takeIf { it > 0 } ?: (s.len * 1000).toLong()
+                segPos = pos; segLeft = (len - pos).coerceAtLeast(0)
+            }
+            // fundido a negro: los últimos 450 ms de cada bloque y los primeros 350 ms del siguiente
+            val black = when {
+                segLeft < 450 -> 1f - segLeft / 450f
+                segPos < 350 -> 1f - segPos / 350f
+                else -> 0f
+            }.coerceIn(0f, 1f)
+            fade = black
+            player.volume = 1f - black
+            delay(40)
+        }
+    }
+    val logoOn = seg != null && !inAd && !failed && segPos > 2500 && segLeft > 3000
+    val logoA by animateFloatAsState(if (logoOn) ch.logoOpacity else 0f, tween(900), label = "bug")
     val req = remember { FocusRequester() }
     AutoFocus(req)
     fun zap(d: Int) {
@@ -577,6 +604,7 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
             }
             CcBlock(spec, lines, bw, bh, ch.logoPos.startsWith("b"), cueN)
         }
+        if (fade > 0.01f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = fade)))
         if (failed || sc.segs.isEmpty()) Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
             Text("SIN SEÑAL", style = TextStyle(fontFamily = CcFont, fontSize = 44.sp, color = Color.White))
         }
