@@ -29,9 +29,13 @@ sealed class Screen {
     data object Mine : Screen()
     /** Panel de control (solo cuenta de administrador). page: inicio, catalogo, titulo, banners, banner, colecciones, coleccion, filas, fila, generos, sitio. */
     data class Admin(val page: String = "inicio", val id: String = "") : Screen()
+    /** Pestaña "En vivo": canales que se emiten todo el tiempo. */
+    data object Live : Screen()
+    /** Mirando un canal en vivo. */
+    data class LiveTv(val channelId: String) : Screen()
 
     /** Las pantallas que muestran la barra de abajo. */
-    val isTab get() = this is Home || this is Search || this is Mine
+    val isTab get() = this is Home || this is Search || this is Live || this is Mine
 }
 
 /** Guarda dónde estaba el scroll de cada pantalla para volver justo ahí. */

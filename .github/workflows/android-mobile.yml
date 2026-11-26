@@ -10,6 +10,7 @@ on:
       - 'app-tv/app/src/main/java/com/realityvault/tv/UpdateCore.kt'
       - 'app-tv/app/src/main/java/com/realityvault/tv/LikeHeart.kt'
       - 'app-tv/app/src/main/java/com/realityvault/tv/FichaBlur.kt'
+      - 'app-tv/app/src/main/java/com/realityvault/tv/LiveCore.kt'
       - 'config.js'
       - '.github/workflows/android-mobile.yml'
   workflow_dispatch:

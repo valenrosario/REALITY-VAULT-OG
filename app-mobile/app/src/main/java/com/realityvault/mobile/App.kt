@@ -73,7 +73,7 @@ fun App(nav: Nav, onExit: () -> Unit) {
                     else -> fadeIn(tween(220)) togetherWith fadeOut(tween(160))
                 } as ContentTransform
             },
-            label = "screens", contentKey = { it::class.simpleName + (it as? Screen.Detail)?.id + (it as? Screen.Collection)?.id + (it as? Screen.Person)?.name + (it as? Screen.Genre)?.name + (it as? Screen.Admin)?.let { a -> a.page + a.id } }
+            label = "screens", contentKey = { it::class.simpleName + (it as? Screen.Detail)?.id + (it as? Screen.Collection)?.id + (it as? Screen.Person)?.name + (it as? Screen.Genre)?.name + (it as? Screen.Admin)?.let { a -> a.page + a.id } + (it as? Screen.LiveTv)?.channelId }
         ) { s ->
             when (s) {
                 Screen.Splash -> SplashScreen(nav)
@@ -92,6 +92,8 @@ fun App(nav: Nav, onExit: () -> Unit) {
                 is Screen.Admin -> AdminScreen(s, nav)
                 Screen.MyList -> GridScreen(nav, "milista")
                 Screen.Search -> SearchScreen(nav)
+                Screen.Live -> LiveGuideScreen(nav)
+                is Screen.LiveTv -> LiveWatchScreen(s, nav)
             }
         }
         // la barra de abajo queda fija mientras se cambia de sección (no parpadea con la transición)
@@ -113,8 +115,8 @@ fun App(nav: Nav, onExit: () -> Unit) {
 internal fun BottomBar(nav: Nav, haze: dev.chrisbanes.haze.HazeState, glass: GlassBackdrop) {
     val shape = RoundedCornerShape(36.dp)
     val thumbShape = RoundedCornerShape(30.dp)
-    val items = listOf(Screen.Home to "Inicio", Screen.Search to "Buscar", Screen.Mine to "Mi Vault")
-    val itemW = 96.dp
+    val items = listOf(Screen.Home to "Inicio", Screen.Search to "Buscar", Screen.Live to "En vivo", Screen.Mine to "Mi Vault")
+    val itemW = 84.dp
     val barW = itemW * items.size + 12.dp; val barH = 68.dp
     val idx = items.indexOfFirst { (sc, _) -> nav.top == sc || (sc == Screen.Mine && nav.top is Screen.Account) }
     // la lente de la pestaña activa: cada borde es un resorte (el de adelante sale primero), así se estira al
@@ -173,7 +175,7 @@ internal fun BottomBar(nav: Nav, haze: dev.chrisbanes.haze.HazeState, glass: Gla
                                 else Text("★", style = ts(12, color = Color.White))
                             }
                         }
-                        else -> Icon(if (sc == Screen.Home) Ic.home else Ic.search, label, tint = tint, modifier = Modifier.size(25.dp))
+                        else -> Icon(when (sc) { Screen.Home -> Ic.home; Screen.Live -> Ic.live; else -> Ic.search }, label, tint = tint, modifier = Modifier.size(25.dp))
                         }
                         Text(label, style = ts(11.5f, FontWeight.Bold, tint), modifier = Modifier.padding(top = 4.dp))
                     }

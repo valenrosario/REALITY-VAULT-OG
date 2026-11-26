@@ -101,6 +101,8 @@ private fun filled(path: String): ImageVector =
 object Ic {
     val search = icon("M4 11a7 7 0 1 0 14 0a7 7 0 1 0 -14 0", "M20 20l-3.5 -3.5")
     val home = icon("M3.5 10.5L12 4l8.5 6.5V20h-5.5v-5.5h-6V20H3.5z")
+    /** Tele con antena (pestaña En vivo). */
+    val live = icon("M3.5 8.5h17v11h-17z", "M8 3.5l4 4.5l4-4.5")
     val tv = icon("M3 8a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v8.5a2 2 0 0 1 -2 2H5a2 2 0 0 1 -2 -2z", "M8.5 2.5L12 6l3.5 -3.5")
     val film = icon("M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2H5a2 2 0 0 1 -2 -2V6a2 2 0 0 1 2 -2z", "M7.5 4v16M16.5 4v16M3 9h4.5M3 15h4.5M16.5 9H21M16.5 15H21")
     val plus = icon("M12 5v14M5 12h14", width = 2.4f)
