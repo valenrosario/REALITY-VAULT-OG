@@ -195,6 +195,8 @@ fun LiveGuide(nav: Nav, firstReq: FocusRequester) {
     val chans = liveChannels()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(15_000); now = System.currentTimeMillis() } }
+    // canales nuevos o cambios de programación: se consultan al abrir la guía y cada minuto mientras está abierta
+    LaunchedEffect(Unit) { while (true) { Store.refreshLive(); delay(60_000) } }
     if (chans.isEmpty()) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF1C1218), Color.Black))), contentAlignment = Alignment.Center) {
             Text("Todavía no hay canales. Se crean desde el panel web, en la sección Canales en vivo.", style = ts(20, color = C.muted))

@@ -254,6 +254,14 @@ object Store {
         if (closed && !isOwner) checkOwner()
     }
 
+    /** Solo los canales en vivo (pesa poco): al abrir la guía, para que un canal recién creado aparezca enseguida. */
+    suspend fun refreshLive() {
+        runCatching {
+            val a = JSONArray(Api.call("GET", "/rest/v1/site?select=data&id=eq.live"))
+            a.optJSONObject(0)?.optJSONObject("data")?.let { live = parseLive(it) }
+        }
+    }
+
     /** ¿La cuenta iniciada es la del admin? Si no hay internet se conserva lo último que se supo. */
     suspend fun checkOwner() {
         val tk = token()

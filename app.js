@@ -1667,15 +1667,20 @@ function renderLiveAdmin(){
       </div>`).join('') || '<p class="empty-note" style="padding:6px 0">Sin publicidades: los canales se emiten sin tandas.</p>'}</div>
     </div>`;
 }
-async function lvMeasureItems(items){
-  let n = 0;
-  for (const it of items){
-    const r = lvResolve(it);
-    if (!isFileUrl(r.url)) continue;
-    const d = await measureDur(r.url); n++;
-    if (d > 0){ it.dur = d; if (!it.breaks) it.breaks = autoBreaks(d); }
-    if (items.length > 3) toast(`Midiendo duraciones… ${n}/${items.length}`);
-  }
+// mide varias duraciones a la vez (de a 6) y va guardando: con 50 episodios tarda segundos, no minutos
+async function lvMeasureItems(items, onStep){
+  let next = 0, done = 0;
+  const work = async () => {
+    while (next < items.length){
+      const it = items[next++]; const r = lvResolve(it);
+      if (isFileUrl(r.url)){ const d = await measureDur(r.url);
+        // se escribe en los datos actuales (pueden haberse recargado mientras medía), buscando por id
+        const cur = liveData().channels.flatMap(c => c.items || []).find(x => x.id === it.id) || it;
+        if (d > 0){ for (const o of new Set([it, cur])){ o.dur = d; if (!o.breaks || !o.breaks.length) o.breaks = autoBreaks(d); } } }
+      done++; if (onStep) onStep(done, items.length);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(6, items.length) }, work));
 }
 function lvItemsFor(t, season){
   if (t.type !== 'serie') return [{ id: uid('li'), titleId: t.id, season: 0, episode: 0, label: t.title || '', url: isFileUrl(t.url) ? t.url.trim() : '', subs: (t.subs||'').trim(), dur: 0 }];
@@ -1695,15 +1700,18 @@ document.addEventListener('click', async e => {
   if (d.lvAdditem){ const ch = lvCh(d.lvAdditem); const sel = app.querySelector(`[data-lv-pick="${d.lvAdditem}"]`); const t = byId(sel?.value); if (!ch || !t){ toast('Elegí una serie o película', true); return; }
     const sn = app.querySelector(`[data-lv-season="${d.lvAdditem}"]`)?.value || '';
     const items = lvItemsFor(t, sn); if (!items.length){ toast('Ese título no tiene videos de archivo (MP4) para emitir', true); return; }
-    b.disabled = true; toast(`Midiendo la duración de ${items.length} video${items.length>1?'s':''}…`);
-    await lvMeasureItems(items); ch.items = [...(ch.items||[]), ...items];
+    // se agregan y se guardan al instante; las duraciones se completan solas en segundo plano
+    ch.items = [...(ch.items||[]), ...items];
     if ((ch.name||'') === 'Nuevo canal') ch.name = t.title || ch.name;
-    const bad = items.filter(x => !(x.dur > 0)).length;
-    await saveLive(true); rerenderPanel(); toast(bad ? `Agregado. ${bad} video${bad>1?'s':''} sin duración: escribila a mano o no se emite${bad>1?'n':''}.` : `Agregado: ${items.length} programa${items.length>1?'s':''}`, !!bad); return; }
+    await saveLive(true); rerenderPanel();
+    let last = 0;
+    await lvMeasureItems(items, (n, tot) => { toast(`Midiendo duraciones… ${n}/${tot}`); if (n - last >= 6 || n === tot){ last = n; saveLive(); } });
+    const ids = new Set(items.map(x => x.id)); const bad = (lvCh(ch.id)?.items || []).filter(x => ids.has(x.id) && !(x.dur > 0)).length;
+    await saveLive(true); rerenderPanel(); toast(bad ? `Listo. ${bad} video${bad>1?'s':''} sin duración: escribila a mano o no se emite${bad>1?'n':''}.` : `Listo: ${items.length} programa${items.length>1?'s':''} al aire`, !!bad); return; }
   if (d.lvImove){ const ch = lvCh(d.lvImove), i = +d.i, j = i + (+d.d); if (ch && ch.items[j]){ [ch.items[i], ch.items[j]] = [ch.items[j], ch.items[i]]; await saveLive(true); rerenderPanel(); } return; }
   if (d.lvIdel){ const ch = lvCh(d.lvIdel); if (ch){ ch.items.splice(+d.i, 1); await saveLive(true); rerenderPanel(); } return; }
   if (d.lvAuto){ const ch = lvCh(d.lvAuto); if (ch){ ch.items.forEach(it => it.breaks = autoBreaks(+it.dur||0)); await saveLive(true); rerenderPanel(); toast('Tandas puestas a 1/3 y 2/3 de cada programa'); } return; }
-  if (d.lvMeasure){ const ch = lvCh(d.lvMeasure); if (ch){ b.disabled = true; await lvMeasureItems(ch.items); await saveLive(true); rerenderPanel(); toast('Duraciones actualizadas'); } return; }
+  if (d.lvMeasure){ const ch = lvCh(d.lvMeasure); if (ch){ b.disabled = true; await lvMeasureItems(ch.items, (n, tot) => toast(`Midiendo duraciones… ${n}/${tot}`)); await saveLive(true); rerenderPanel(); toast('Duraciones actualizadas'); } return; }
   if (d.lvShuffle){ const ch = lvCh(d.lvShuffle); if (ch){ for (let i = ch.items.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [ch.items[i], ch.items[j]] = [ch.items[j], ch.items[i]]; } await saveLive(true); rerenderPanel(); } return; }
   if (d.lvRestart){ const ch = lvCh(d.lvRestart); if (ch){ ch.epoch = Date.now(); await saveLive(true); rerenderPanel(); toast('El canal arranca ahora desde el primer programa'); } return; }
   if ('lvAdup' in d){ const f = await pickFile('video/mp4,video/webm,.mp4,.webm,.m4v'); if (!f) return;
