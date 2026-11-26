@@ -1578,7 +1578,7 @@ function liveSchedule(ch, data){
     const cuts = [...new Set((it.breaks||[]).map(Number).filter(b => b > 20 && b < dur - 20))].sort((a,b) => a-b);
     let prev = 0;
     for (const c of cuts){ add({ ad:false, url:it.url, from:prev, to:c, i }); pod(); prev = c; }
-    add({ ad:false, url:it.url, from:prev, to:dur, i }); pod();
+    add({ ad:false, url:it.url, from:prev, to:dur, i }); if (ch.podBetween) pod();   // tanda entre programas: solo si la activaste
     blocks.push({ it: raw, i, start, end: t });
   });
   return { segs, blocks, cycle: t };
@@ -1746,10 +1746,10 @@ function lvStepTandas(ch){
   </section>
   <section class="lv-sec"><h2>Publicidades por tanda</h2>
     <div class="lv-seg">${[0,1,2,3,4,5].map(n => `<button data-lv-per="${n}" aria-pressed="${per === n}">${n === 0 ? 'Sin tandas' : n}</button>`).join('')}</div>
-    <p class="lv-help">Además de los cortes que marques, hay una tanda entre un programa y el siguiente.</p>
+    <label class="lv-switch"><input type="checkbox" data-lv-f="podBetween" ${ch.podBetween ? 'checked' : ''}><i></i><span><b>Tanda entre un programa y el siguiente</b><small>Apagado: solo hay tandas en los cortes que marques vos.</small></span></label>
   </section>
-  <section class="lv-sec"><div class="lv-sec-h"><h2>Dónde corta cada programa</h2><button class="btn btn-line btn-sm" data-lv-auto>Cortes automáticos en todos (a 1/3 y 2/3)</button></div>
-    <p class="lv-help">Tocá la barra para poner un corte en ese minuto; tocá un corte para sacarlo. También podés escribirlos (ej: 7:00, 14:30).</p>
+  <section class="lv-sec"><div class="lv-sec-h"><h2>Dónde corta cada programa</h2><span class="lv-tools"><span data-row="lvnocuts"><button class="btn btn-line btn-sm" data-lv-nocuts>Quitar todos los cortes</button></span><button class="btn btn-line btn-sm" data-lv-auto>Poner cortes a 1/3 y 2/3 en todos</button></span></div>
+    <p class="lv-help">Sin cortes, el programa va entero. Tocá la barra para poner un corte en ese minuto; tocá un corte para sacarlo. También podés escribirlos (ej: 7:00, 14:30).</p>
     <div class="lv-cuts">${(ch.items||[]).map((it, ii) => { const d = +it.dur || 0;
       return `<div class="lv-cut ${d < 5 ? 'bad' : ''}">
         <span class="lv-cut-t"><b>${esc(lvName(it))}</b><small>${esc(lvSub(it))} · ${d ? mmss(d) : 'sin duración'}</small></span>
@@ -1809,17 +1809,17 @@ function lvItemsFor(t, season){
 async function lvMeasureItems(items, onStep){
   let next = 0, done = 0;
   const work = async () => { while (next < items.length){ const it = items[next++]; const r = lvResolve(it);
-    if (isFileUrl(r.url)){ const d = await measureDur(r.url); if (d > 0){ it.dur = d; if (!it.breaks || !it.breaks.length) it.breaks = autoBreaks(d); } }
+    if (isFileUrl(r.url)){ const d = await measureDur(r.url); if (d > 0) it.dur = d; }
     done++; if (onStep) onStep(done, items.length); } };
   await Promise.all(Array.from({ length: Math.min(6, items.length) }, work));
 }
 function lvTwoTap(b, label, fn){ if (!b.dataset.sure){ b.dataset.sure = '1'; const t = b.textContent; b.textContent = label; setTimeout(() => { if (b.isConnected){ delete b.dataset.sure; b.textContent = t; } }, 3000); return; } fn(); }
 window.addEventListener('beforeunload', e => { if (S.lvEd?.dirty){ e.preventDefault(); e.returnValue = ''; } });
 document.addEventListener('click', async e => {
-  const b = e.target.closest('[data-lv-new],[data-lv-open],[data-lv-back],[data-lv-save],[data-lv-discard],[data-lv-del],[data-lv-step],[data-lv-pick],[data-lv-addt],[data-lv-imove],[data-lv-idel],[data-lv-shuffle],[data-lv-measure],[data-lv-restart],[data-lv-clear],[data-lv-adup],[data-lv-adurl],[data-lv-addel],[data-lv-admove],[data-lv-per],[data-lv-auto],[data-lv-mk],[data-lv-bar],[data-lv-pos],[data-lv-cc]');
+  const b = e.target.closest('[data-lv-new],[data-lv-open],[data-lv-back],[data-lv-save],[data-lv-discard],[data-lv-del],[data-lv-step],[data-lv-pick],[data-lv-addt],[data-lv-imove],[data-lv-idel],[data-lv-shuffle],[data-lv-measure],[data-lv-restart],[data-lv-clear],[data-lv-adup],[data-lv-adurl],[data-lv-addel],[data-lv-admove],[data-lv-per],[data-lv-auto],[data-lv-nocuts],[data-lv-mk],[data-lv-bar],[data-lv-pos],[data-lv-cc]');
   if (!b || !S.owner) return; const d = b.dataset; const E = S.lvEd; const ch = E && lvCh(E.id);
   if ('lvNew' in d){ const L = liveData(); const n = Math.max(0, ...L.channels.map(c => +c.number || 0)) + 1;
-    const c = { id: uid('ch'), name: 'Nuevo canal', number: n, logo: '', guideImage: '', logoPos: 'br', logoOpacity: .35, logoSize: 56, active: true, epoch: Date.now(), captions: true, ccStyle: 'cc608', adsPerBreak: 2, items: [] };
+    const c = { id: uid('ch'), name: 'Nuevo canal', number: n, logo: '', guideImage: '', logoPos: 'br', logoOpacity: .35, logoSize: 56, active: true, epoch: Date.now(), captions: true, ccStyle: 'cc608', adsPerBreak: 2, podBetween: false, items: [] };
     lvOpen(c.id, c); return; }
   if (d.lvOpen){ lvOpen(d.lvOpen); return; }
   if ('lvBack' in d){ if (E?.dirty) return lvTwoTap(b, '¿Salir sin guardar? Tocá de nuevo', () => { S.lvEd = null; rerenderPanel(); }); S.lvEd = null; rerenderPanel(); return; }
@@ -1852,6 +1852,7 @@ document.addEventListener('click', async e => {
   if (d.lvAddel != null){ E.d.ads.splice(+d.lvAddel, 1); lvDirty(); rerenderPanel(); return; }
   if (d.lvAdmove != null){ const i = +d.lvAdmove, j = i + (+d.d); const a = E.d.ads; if (a[j]){ [a[i], a[j]] = [a[j], a[i]]; lvDirty(); rerenderPanel(); } return; }
   if (d.lvPer != null){ ch.adsPerBreak = +d.lvPer; lvDirty(); rerenderPanel(); return; }
+  if ('lvNocuts' in d){ return lvTwoTap(b, '¿Quitar todos? Tocá de nuevo', () => { ch.items.forEach(it => it.breaks = []); lvDirty(); rerenderPanel(); toast('Sin cortes: los programas van enteros. Tocá Guardar canal.'); }); }
   if ('lvAuto' in d){ ch.items.forEach(it => it.breaks = autoBreaks(+it.dur||0)); lvDirty(); rerenderPanel(); toast('Cortes puestos a 1/3 y 2/3 de cada programa'); return; }
   if (d.lvMk != null){ e.stopPropagation(); const it = ch.items[+d.lvMk]; if (it){ it.breaks = (it.breaks||[]).filter(x => x !== +d.at); lvDirty(); rerenderPanel(); } return; }
   if (d.lvBar != null){ const it = ch.items[+d.lvBar]; const dur = +it?.dur || 0; if (!it || dur < 5) return;
@@ -1877,9 +1878,9 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const el = e.target; const E = S.lvEd; if (!S.owner || !E || !el.closest?.('.live-ed')) return;
   const ch = lvCh(E.id); if (!ch) return;
-  if (el.dataset.lvF === 'active' || el.dataset.lvF === 'captions'){ ch[el.dataset.lvF] = el.checked; lvDirty(); rerenderPanel(); return; }
+  if (el.dataset.lvF === 'active' || el.dataset.lvF === 'captions' || el.dataset.lvF === 'podBetween'){ ch[el.dataset.lvF] = el.checked; lvDirty(); rerenderPanel(); return; }
   if (el.dataset.lvItem != null){ const it = ch.items[+el.dataset.lvItem]; if (!it) return;
-    if (el.dataset.lvK === 'dur'){ const v = parseMmss(el.value); if (!(v > 0)){ toast('Escribí la duración como minutos:segundos (ej: 21:34)', true); return; } it.dur = v; if (!it.breaks || !it.breaks.length) it.breaks = autoBreaks(v); }
+    if (el.dataset.lvK === 'dur'){ const v = parseMmss(el.value); if (!(v > 0)){ toast('Escribí la duración como minutos:segundos (ej: 21:34)', true); return; } it.dur = v; }
     else { const vals = el.value.split(/[,;\s]+/).filter(Boolean).map(parseMmss); if (vals.some(x => isNaN(x))){ toast('Escribí los cortes como 7:00, 14:30', true); return; } it.breaks = [...new Set(vals)].sort((a,b) => a-b); }
     lvDirty(); rerenderPanel(); return; }
   if (el.dataset.lvAd != null){ const a = E.d.ads[+el.dataset.lvAd]; if (!a) return;

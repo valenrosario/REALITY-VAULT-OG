@@ -72,7 +72,9 @@ data class LiveChannel(
     /** Estilo de subtítulos: cc608, cc608mixed, rollup, teletext, dvd, dvdyellow. */
     val ccStyle: String = "cc608",
     /** Tamaño de los subtítulos en la tele (1 = normal). */
-    val ccScale: Float = 1f
+    val ccScale: Float = 1f,
+    /** Tanda entre un programa y el siguiente (si no, solo en los cortes marcados). */
+    val podBetween: Boolean = false
 )
 data class LiveData(val ads: List<LiveAd>, val channels: List<LiveChannel>)
 
@@ -99,7 +101,7 @@ fun parseLive(d: JSONObject): LiveData {
             c.str("logoPos").ifBlank { "br" }, c.num("logoOpacity", .35).toFloat().coerceIn(.05f, 1f),
             c.num("logoSize", 56.0).toInt().coerceIn(20, 160), c.opt("active") != false,
             c.optLong("epoch", 0L), c.opt("captions") != false, c.num("adsPerBreak", 2.0).toInt().coerceIn(0, 8), items,
-            c.str("guideImage"), c.str("ccStyle").ifBlank { "cc608" }, c.num("ccScaleTv", 1.0).toFloat().coerceIn(.6f, 1.8f))
+            c.str("guideImage"), c.str("ccStyle").ifBlank { "cc608" }, c.num("ccScaleTv", 1.0).toFloat().coerceIn(.6f, 1.8f), c.optBoolean("podBetween", false))
     }
     return LiveData(ads, chans)
 }
@@ -142,7 +144,7 @@ fun buildSched(ch: LiveChannel, ads: List<LiveAd>): Sched {
         val cuts = it.breaks.filter { b -> b > 20 && b < it.dur - 20 }.distinct().sorted()
         var prev = 0.0
         for (c in cuts) { add(Seg(false, it.url, it.subs, prev, c, i, false)); pod(); prev = c }
-        add(Seg(false, it.url, it.subs, prev, it.dur, i, true)); pod()   // tanda entre programas
+        add(Seg(false, it.url, it.subs, prev, it.dur, i, true)); if (ch.podBetween) pod()   // tanda entre programas: solo si está activada
         blocks += Block(it, start, t)
     }
     val starts = DoubleArray(segs.size); var acc = 0.0
