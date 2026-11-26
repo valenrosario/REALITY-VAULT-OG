@@ -1612,12 +1612,12 @@ const CC_STYLES = [
 ];
 const ccStyleOf = id => CC_STYLES.find(x => x.id === id) || CC_STYLES[0];
 const CC_SAMPLE = ['Paris: ¿Qué es Wal-Mart?', '¿Venden cosas para la pared?'];
-function ccHtml(st, logoBottom, lines){
+function ccHtml(st, logoBottom, lines, scale = 1){
   lines = lines || CC_SAMPLE;
   const lc = st.upper ? lines.map(l => l.toUpperCase()) : lines;
   const color = st.multi ? ['#fff','#ff0','#0ff'] : [st.color || '#fff'];
   return `<div class="cc-wrap ${st.left ? 'left' : ''}" style="bottom:${(logoBottom ? st.bottomLogo : st.bottom)*100}%">${lc.map((l, i) =>
-    `<span class="cc-l ${st.mono ? 'mono' : 'sans'} ${st.box ? 'box' : ''} ${st.outline ? 'outline' : ''}" style="font-size:${st.size*100}cqh;color:${color[i % color.length]}">${esc(l)}</span>`).join('')}</div>`;
+    `<span class="cc-l ${st.mono ? 'mono' : 'sans'} ${st.box ? 'box' : ''} ${st.outline ? 'outline' : ''}" style="font-size:${st.size*100*scale}cqh;color:${color[i % color.length]}">${esc(l)}</span>`).join('')}</div>`;
 }
 /** La tele, en chiquito: cuadro 4:3 con el programa al aire, el logo y los subtítulos, igual que en LiveWatch. */
 function lvTvHtml(ch, opts = {}){
@@ -1628,7 +1628,7 @@ function lvTvHtml(ch, opts = {}){
   const st = ccStyleOf(ch.ccStyle);
   return `<div class="lv-tv ${opts.small ? 'sm' : ''}"><div class="lv-43" ${img ? `style="background-image:url('${esc(img)}')"` : ''}>
     ${ch.logo ? `<img class="lv-bug" src="${esc(ch.logo)}" alt="" style="${pos};opacity:${op};height:${(ch.logoSize||56)/10.8}%">` : `<b class="lv-bug lv-bugt" style="${pos};opacity:${op}">${esc((ch.name||'').toUpperCase())}</b>`}
-    ${ch.captions !== false ? ccHtml(st, /^b/.test(ch.logoPos || 'br')) : ''}
+    ${ch.captions !== false ? ccHtml(st, /^b/.test(ch.logoPos || 'br'), undefined, ch.ccScaleTv || 1) : ''}
   </div></div>`;
 }
 /** Fila de la guía de la tele, en chiquito. */
@@ -1773,6 +1773,7 @@ function lvStepPantalla(ch){
   </section>
   <section class="lv-sec"><div class="lv-sec-h"><h2>Subtítulos</h2>
     <label class="lv-switch sm"><input type="checkbox" data-lv-f="captions" ${ch.captions !== false ? 'checked' : ''}><i></i><span><b>Siempre activados</b></span></label></div>
+    <label class="field lv-ccsize"><span>Tamaño en la tele · <b data-lv-out="cs">${Math.round((ch.ccScaleTv || 1) * 100)}%</b></span><input type="range" min="60" max="180" step="5" data-lv-f="ccScaleTv" value="${Math.round((ch.ccScaleTv || 1) * 100)}"><small class="lv-help">Solo cambia en la app de la tele (y en la vista previa de la derecha).</small></label>
     <p class="lv-help">Usan los subtítulos en español (.vtt) de cada episodio. Elegí cómo se ven:</p>
     <div class="lv-ccs">${CC_STYLES.map(st => `<button class="lv-cc ${(ch.ccStyle || 'cc608') === st.id ? 'on' : ''}" data-lv-cc="${st.id}">
       <span class="lv-cc-demo">${ccHtml(st, false, st.left ? ['Y AHORA, EL CLIMA', 'PARA ESTE FIN DE SEMANA'] : undefined)}</span>
@@ -1869,6 +1870,7 @@ document.addEventListener('input', e => {
   else if (f === 'number') ch.number = Math.max(1, parseInt(el.value) || 1);
   else if (f === 'logoOpacity'){ ch.logoOpacity = (+el.value) / 100; app.querySelector('[data-lv-out="op"]').textContent = el.value + '%'; }
   else if (f === 'logoSize'){ ch.logoSize = +el.value; app.querySelector('[data-lv-out="sz"]').textContent = el.value; }
+  else if (f === 'ccScaleTv'){ ch.ccScaleTv = (+el.value) / 100; app.querySelector('[data-lv-out="cs"]').textContent = el.value + '%'; }
   else return;
   lvDirty(); lvRefreshSide();
 });

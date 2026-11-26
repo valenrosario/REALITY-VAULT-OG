@@ -70,7 +70,9 @@ data class LiveChannel(
     /** Imagen del canal en la guía (si está vacía, la del programa que se está emitiendo). */
     val guideImage: String = "",
     /** Estilo de subtítulos: cc608, cc608mixed, rollup, teletext, dvd, dvdyellow. */
-    val ccStyle: String = "cc608"
+    val ccStyle: String = "cc608",
+    /** Tamaño de los subtítulos en la tele (1 = normal). */
+    val ccScale: Float = 1f
 )
 data class LiveData(val ads: List<LiveAd>, val channels: List<LiveChannel>)
 
@@ -97,7 +99,7 @@ fun parseLive(d: JSONObject): LiveData {
             c.str("logoPos").ifBlank { "br" }, c.num("logoOpacity", .35).toFloat().coerceIn(.05f, 1f),
             c.num("logoSize", 56.0).toInt().coerceIn(20, 160), c.opt("active") != false,
             c.optLong("epoch", 0L), c.opt("captions") != false, c.num("adsPerBreak", 2.0).toInt().coerceIn(0, 8), items,
-            c.str("guideImage"), c.str("ccStyle").ifBlank { "cc608" })
+            c.str("guideImage"), c.str("ccStyle").ifBlank { "cc608" }, c.num("ccScaleTv", 1.0).toFloat().coerceIn(.6f, 1.8f))
     }
     return LiveData(ads, chans)
 }
@@ -362,9 +364,9 @@ private val TeletextColors = listOf(Color.White, Color(0xFFFFFF00), Color(0xFF00
 
 /** Dibuja las líneas con el estilo elegido, dentro del cuadro de la imagen (h = alto del cuadro). */
 @Composable
-fun CcBlock(spec: CcSpec, lines: List<String>, w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, logoBottom: Boolean, colorIdx: Int, modifier: Modifier = Modifier) {
+fun CcBlock(spec: CcSpec, lines: List<String>, w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, logoBottom: Boolean, colorIdx: Int, modifier: Modifier = Modifier, scale: Float = 1f) {
     if (lines.isEmpty()) return
-    val fs = with(LocalDensity.current) { (h * spec.size).toSp() }
+    val fs = with(LocalDensity.current) { (h * spec.size * scale).toSp() }
     val color = if (spec.multi) TeletextColors[colorIdx % TeletextColors.size] else spec.color
     val base = TextStyle(fontFamily = if (spec.mono) CcFont else CcSans, fontWeight = FontWeight.Bold, fontSize = fs, color = color, lineHeight = fs * 1.18f)
     Box(modifier.fillMaxSize()) {
@@ -375,7 +377,7 @@ fun CcBlock(spec: CcSpec, lines: List<String>, w: androidx.compose.ui.unit.Dp, h
         ) {
             lines.forEach { ln ->
                 if (spec.outline) Box {
-                    Text(ln, style = base.copy(color = Color.Black, drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(width = with(LocalDensity.current) { (h * spec.size * .16f).toPx() }, join = androidx.compose.ui.graphics.StrokeJoin.Round)))
+                    Text(ln, style = base.copy(color = Color.Black, drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(width = with(LocalDensity.current) { (h * spec.size * scale * .16f).toPx() }, join = androidx.compose.ui.graphics.StrokeJoin.Round)))
                     Text(ln, style = base)
                 } else Text(ln, style = base, modifier = if (spec.box) Modifier.background(Color.Black).padding(horizontal = h * .02f) else Modifier)
             }
@@ -588,7 +590,7 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
         })
         // el cuadro de la imagen (4:3 con barras negras): el logo y los subtítulos van adentro, como en la señal original.
         // Todo se mide en proporción al cuadro, igual que la vista previa del panel web.
-        BoxWithConstraints(Modifier.fillMaxHeight().aspectRatio(aspect.coerceIn(1f, 2.4f), matchHeightConstraintsFirst = true).align(Alignment.Center)) {
+        BoxWithConstraints(Modifier.fillMaxHeight().aspectRatio(4f / 3f, matchHeightConstraintsFirst = true).align(Alignment.Center)) {
             val bw = maxWidth; val bh = maxHeight
             val al = when (ch.logoPos) { "tl" -> Alignment.TopStart; "tr" -> Alignment.TopEnd; "bl" -> Alignment.BottomStart; else -> Alignment.BottomEnd }
             val lm = Modifier.align(al).padding(horizontal = bw * .07f, vertical = bh * .07f).alpha(logoA)
@@ -602,7 +604,7 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
                 cue.isNotBlank() -> ccLines(cue, spec.max, spec.upper)
                 else -> emptyList()
             }
-            CcBlock(spec, lines, bw, bh, ch.logoPos.startsWith("b"), cueN)
+            CcBlock(spec, lines, bw, bh, ch.logoPos.startsWith("b"), cueN, scale = ch.ccScale)
         }
         if (fade > 0.01f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = fade)))
         if (failed || sc.segs.isEmpty()) Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
