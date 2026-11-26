@@ -145,7 +145,7 @@ fun buildSched(ch: LiveChannel, ads: List<LiveAd>): Sched {
         val cuts = it.breaks.filter { b -> b > 20 && b < it.dur - 20 }.distinct().sorted()
         var prev = 0.0
         for (c in cuts) { add(Seg(false, it.url, it.subs, prev, c, i, false)); pod(); prev = c }
-        add(Seg(false, it.url, it.subs, prev, it.dur, i, true)); if (ch.podBetween) pod()   // tanda entre programas: solo si está activada
+        add(Seg(false, it.url, it.subs, prev, it.dur, i, true)); pod()   // entre un programa y el siguiente siempre va una tanda
         blocks += Block(it, start, t)
     }
     val starts = DoubleArray(segs.size); var acc = 0.0
@@ -412,10 +412,15 @@ fun LiveSignal(ch: LiveChannel, sc: Sched, mono: FontFamily, sans: FontFamily, m
                 val len = player.duration.takeIf { it > 0 } ?: (s.len * 1000).toLong()
                 segPos = pos; segLeft = (len - pos).coerceAtLeast(0)
             }
-            // fundido a negro: los últimos 450 ms de cada bloque y los primeros 350 ms del siguiente
+            // fundido a negro rápido solo al pasar de programa a tanda o de tanda a programa;
+            // entre una publicidad y la siguiente es corte directo, como en la tele
+            val n = sc.segs.size
+            val cur = sc.segs.getOrNull(i)
+            val fadeOut = cur != null && (!cur.ad || !sc.segs[(i + 1) % n].ad)
+            val fadeIn = cur != null && (!cur.ad || !sc.segs[(i - 1 + n) % n].ad)
             val black = when {
-                segLeft < 450 -> 1f - segLeft / 450f
-                segPos < 350 -> 1f - segPos / 350f
+                fadeOut && segLeft < 450 -> 1f - segLeft / 450f
+                fadeIn && segPos < 350 -> 1f - segPos / 350f
                 else -> 0f
             }.coerceIn(0f, 1f)
             fade = black

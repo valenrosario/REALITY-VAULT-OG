@@ -1578,7 +1578,7 @@ function liveSchedule(ch, data){
     const cuts = [...new Set((it.breaks||[]).map(Number).filter(b => b > 20 && b < dur - 20))].sort((a,b) => a-b);
     let prev = 0;
     for (const c of cuts){ add({ ad:false, url:it.url, from:prev, to:c, i }); pod(); prev = c; }
-    add({ ad:false, url:it.url, from:prev, to:dur, i }); if (ch.podBetween) pod();   // tanda entre programas: solo si la activaste
+    add({ ad:false, url:it.url, from:prev, to:dur, i }); pod();   // entre un programa y el siguiente siempre va una tanda
     blocks.push({ it: raw, i, start, end: t });
   });
   return { segs, blocks, cycle: t };
@@ -1746,7 +1746,7 @@ function lvStepTandas(ch){
   </section>
   <section class="lv-sec"><h2>Publicidades por tanda</h2>
     <div class="lv-seg">${[0,1,2,3,4,5].map(n => `<button data-lv-per="${n}" aria-pressed="${per === n}">${n === 0 ? 'Sin tandas' : n}</button>`).join('')}</div>
-    <label class="lv-switch"><input type="checkbox" data-lv-f="podBetween" ${ch.podBetween ? 'checked' : ''}><i></i><span><b>Tanda entre un programa y el siguiente</b><small>Apagado: solo hay tandas en los cortes que marques vos.</small></span></label>
+    <p class="lv-help"><b>Entre un programa y el siguiente siempre va una tanda</b> con esta cantidad de publicidades. Dentro de cada programa, solo en los cortes que marques vos.</p>
   </section>
   <section class="lv-sec"><div class="lv-sec-h"><h2>Dónde corta cada programa</h2><span class="lv-tools"><span data-row="lvnocuts"><button class="btn btn-line btn-sm" data-lv-nocuts>Quitar todos los cortes</button></span><button class="btn btn-line btn-sm" data-lv-auto>Poner cortes a 1/3 y 2/3 en todos</button></span></div>
     <p class="lv-help">Sin cortes, el programa va entero. Tocá la barra para poner un corte en ese minuto; tocá un corte para sacarlo. También podés escribirlos (ej: 7:00, 14:30).</p>
