@@ -37,6 +37,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.realityvault.tv.LiveChannel
+import com.realityvault.tv.R
 import com.realityvault.tv.LiveSignal
 import com.realityvault.tv.Store
 import com.realityvault.tv.blocksBetween
