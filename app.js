@@ -3435,7 +3435,7 @@ document.addEventListener('click', e => {
   if (m && !m.hidden && !e.target.closest('.acc-menu')) m.hidden = true;
   if (m && e.target.closest('.acc-menu a, .acc-menu button')) m.hidden = true;
 });
-const LANDING_LOGO = 'https://kfyxwoezrzboikbvpdtv.supabase.co/storage/v1/object/public/media/sitelogo/mmv6hs7ss2u4hxm.webp';
+const LANDING_LOGO = '/site-logo.png';
 
 /* ---------- landing para visitantes ---------- */
 const isLanding = () => S.route==='home' && !S.session && !S.q.trim() && !S.noDb && !!S.sb && S.authReady && S.loaded.t && published().length > 0;
