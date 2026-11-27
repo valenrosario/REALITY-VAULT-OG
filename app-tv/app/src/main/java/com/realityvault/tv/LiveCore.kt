@@ -61,9 +61,15 @@ import java.util.Calendar
    ====================================================================== */
 
 data class LiveAd(val id: String, val name: String, val url: String, val dur: Double)
+/** Screen bug: PNG de cuadro entero (16:9 o 4:3), se usa tal cual. `lift` = cuánto suben los subtítulos (proporción del cuadro 4:3). */
+data class LiveBug(val url: String, val ar: Float, val lift: Float)
 data class LiveItem(
     val id: String, val titleId: String, val season: Int, val episode: Int,
-    val label: String, val url: String, val subs: String, val dur: Double, val breaks: List<Double>
+    val label: String, val url: String, val subs: String, val dur: Double, val breaks: List<Double>,
+    /** Screen bug propio de este programa (null = el del canal). */
+    val bug: LiveBug? = null,
+    /** true = sin screen bug: se ve el logo común. */
+    val bugOff: Boolean = false
 )
 data class LiveChannel(
     val id: String, val name: String, val number: Int, val logo: String, val logoPos: String,
@@ -78,7 +84,9 @@ data class LiveChannel(
     /** Tanda entre un programa y el siguiente (si no, solo en los cortes marcados). */
     val podBetween: Boolean = false,
     /** Grilla ya armada por el panel al guardar: la misma para todas las teles y celulares. */
-    val plan: List<PlanSeg> = emptyList()
+    val plan: List<PlanSeg> = emptyList(),
+    /** Screen bug del canal. */
+    val bug: LiveBug? = null
 )
 /** Un tramo de la grilla publicada (a = publicidad, i = programa de la lista, f/t = segundos del archivo, u = enlace de la publicidad). */
 data class PlanSeg(val ad: Boolean, val url: String, val from: Double, val to: Double, val i: Int)
@@ -87,6 +95,10 @@ data class LiveData(val ads: List<LiveAd>, val channels: List<LiveChannel>)
 private fun JSONObject.str(k: String) = when (val v = opt(k)) { null, JSONObject.NULL -> ""; else -> v.toString().trim() }
 private fun JSONObject.num(k: String, d: Double = 0.0) = str(k).toDoubleOrNull() ?: d
 
+private fun parseBug(o: JSONObject?): LiveBug? {
+    val u = o?.str("u").orEmpty(); if (u.isBlank()) return null
+    return LiveBug(u, o!!.optDouble("ar", 16.0 / 9).toFloat(), o.optDouble("lift", 0.0).toFloat().coerceIn(0f, .45f))
+}
 private fun parsePlan(p: JSONObject?): List<PlanSeg> {
     val a = p?.optJSONArray("segs") ?: return emptyList()
     return (0 until a.length()).mapNotNull { x ->
@@ -109,13 +121,14 @@ fun parseLive(d: JSONObject): LiveData {
             val o = ia.optJSONObject(k) ?: return@mapNotNull null
             val ba = o.optJSONArray("breaks") ?: JSONArray()
             LiveItem(o.str("id"), o.str("titleId"), o.num("season").toInt(), o.num("episode").toInt(), o.str("label"),
-                o.str("url"), o.str("subs"), o.num("dur"), (0 until ba.length()).map { ba.optDouble(it, 0.0) })
+                o.str("url"), o.str("subs"), o.num("dur"), (0 until ba.length()).map { ba.optDouble(it, 0.0) },
+                parseBug(o.optJSONObject("bug")), o.optJSONObject("bug")?.optInt("off", 0) == 1)
         }
         LiveChannel(c.str("id"), c.str("name"), c.num("number", (i + 1).toDouble()).toInt(), c.str("logo"),
             c.str("logoPos").ifBlank { "br" }, c.num("logoOpacity", .35).toFloat().coerceIn(.05f, 1f),
             c.num("logoSize", 56.0).toInt().coerceIn(20, 160), c.opt("active") != false,
             c.optLong("epoch", 0L), c.opt("captions") != false, c.num("adsPerBreak", 2.0).toInt().coerceIn(0, 8), items,
-            c.str("guideImage"), c.str("ccStyle").ifBlank { "cc608" }, c.num("ccScaleTv", 1.0).toFloat().coerceIn(.6f, 1.8f), c.optBoolean("podBetween", false), parsePlan(c.optJSONObject("plan")))
+            c.str("guideImage"), c.str("ccStyle").ifBlank { "cc608" }, c.num("ccScaleTv", 1.0).toFloat().coerceIn(.6f, 1.8f), c.optBoolean("podBetween", false), parsePlan(c.optJSONObject("plan")), parseBug(c.optJSONObject("bug")))
     }
     return LiveData(ads, chans)
 }
@@ -267,7 +280,7 @@ private val TeletextColors = listOf(Color.White, Color(0xFFFFFF00), Color(0xFF00
 
 /** Dibuja las líneas con el estilo elegido, dentro del cuadro de la imagen (h = alto del cuadro). */
 @Composable
-fun CcBlock(spec: CcSpec, lines: List<String>, w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, logoBottom: Boolean, colorIdx: Int, mono: FontFamily, sans: FontFamily, modifier: Modifier = Modifier, scale: Float = 1f) {
+fun CcBlock(spec: CcSpec, lines: List<String>, w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, logoBottom: Boolean, colorIdx: Int, mono: FontFamily, sans: FontFamily, modifier: Modifier = Modifier, scale: Float = 1f, lift: Float = 0f) {
     if (lines.isEmpty()) return
     val fs = with(LocalDensity.current) { (h * spec.size * scale).toSp() }
     val color = if (spec.multi) TeletextColors[colorIdx % TeletextColors.size] else spec.color
@@ -281,7 +294,7 @@ fun CcBlock(spec: CcSpec, lines: List<String>, w: androidx.compose.ui.unit.Dp, h
             if (spec.kabel) androidx.compose.ui.text.style.LineHeightStyle.Trim.None else androidx.compose.ui.text.style.LineHeightStyle.Trim.Both),
         platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
     )
-    val bottomPad = h * (if (logoBottom) spec.bottomLogo else spec.bottom)
+    val bottomPad = h * maxOf(if (logoBottom) spec.bottomLogo else spec.bottom, lift)
     Box(modifier.fillMaxSize()) {
         if (spec.outline) {
             // texto con borde: un solo bloque centrado (el borde se dibuja debajo del relleno)
@@ -529,7 +542,13 @@ fun LiveSignal(ch: LiveChannel, sc: Sched, mono: FontFamily, sans: FontFamily, m
         }
     }
     val logoOn = seg != null && !inAd && !failed && segPos > 2500 && segLeft > 3000
-    val logoA by animateFloatAsState(if (logoOn) ch.logoOpacity else 0f, tween(900), label = "bug")
+    // screen bug del programa que va al aire (el suyo, el del canal o ninguno)
+    val curItem = if (seg != null) ch.items.getOrNull(seg.itemIdx) else null
+    val bug: LiveBug? = if (curItem?.bugOff == true) null else curItem?.bug ?: ch.bug
+    val logoA by animateFloatAsState(if (logoOn && bug == null) ch.logoOpacity else 0f, tween(900), label = "bug")
+    val bugA by animateFloatAsState(if (logoOn && bug != null) 1f else 0f, tween(900), label = "screenbug")
+    var lastBug by remember { mutableStateOf<LiveBug?>(null) }
+    if (bug != null) lastBug = bug
 
     Box(modifier.background(Color.Black)) {
         AndroidView(modifier = Modifier.fillMaxSize(), factory = { c ->
@@ -543,6 +562,14 @@ fun LiveSignal(ch: LiveChannel, sc: Sched, mono: FontFamily, sans: FontFamily, m
         // el cuadro de la imagen (4:3 con barras negras): el logo y los subtítulos van adentro, como en la señal original.
         // Todo se mide en proporción al cuadro, igual que la vista previa del panel web.
         BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            // screen bug 16:9: cubre la imagen entera, tal cual (sin recortar); los 4:3 van adentro del cuadro 4:3
+            lastBug?.takeIf { it.ar > 1.5f }?.let { b ->
+                val fit16 = maxHeight * (16f / 9f) <= maxWidth
+                val w16 = if (fit16) maxHeight * (16f / 9f) else maxWidth
+                val h16 = if (fit16) maxHeight else maxWidth * (9f / 16f)
+                coil.compose.AsyncImage(model = b.url, contentDescription = null, contentScale = ContentScale.FillBounds,
+                    modifier = Modifier.size(w16, h16).alpha(bugA))
+            }
             val fitW = maxHeight * (4f / 3f) <= maxWidth
             val bw = if (fitW) maxHeight * (4f / 3f) else maxWidth
             val bh = if (fitW) maxHeight else maxWidth * (3f / 4f)
@@ -553,6 +580,10 @@ fun LiveSignal(ch: LiveChannel, sc: Sched, mono: FontFamily, sans: FontFamily, m
                     modifier = lm.height(bh * (ch.logoSize / 1080f)).widthIn(max = bw * .4f))
                 else Text(ch.name.uppercase(), style = TextStyle(fontFamily = sans, fontWeight = FontWeight.Bold, color = Color.White,
                     fontSize = with(LocalDensity.current) { (bh * .05f).toSp() }), modifier = lm)
+                lastBug?.takeIf { it.ar <= 1.5f }?.let { b ->
+                    coil.compose.AsyncImage(model = b.url, contentDescription = null, contentScale = ContentScale.FillBounds,
+                        modifier = Modifier.fillMaxSize().alpha(bugA))
+                }
                 val spec = ccSpec(ch.ccStyle)
                 val lines = when {
                     inAd || !ch.captions -> emptyList()
@@ -560,7 +591,7 @@ fun LiveSignal(ch: LiveChannel, sc: Sched, mono: FontFamily, sans: FontFamily, m
                     cue.isNotBlank() -> ccLines(cue, spec.max, spec.upper)
                     else -> emptyList()
                 }
-                CcBlock(spec, lines, bw, bh, ch.logoPos.startsWith("b"), cueN, mono, sans, scale = ch.ccScale)
+                CcBlock(spec, lines, bw, bh, bug == null && ch.logoPos.startsWith("b"), cueN, mono, sans, scale = ch.ccScale, lift = bug?.lift ?: 0f)
             }
         }
         if (fade > 0.01f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = fade)))

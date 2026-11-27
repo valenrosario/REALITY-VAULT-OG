@@ -1612,12 +1612,27 @@ const CC_STYLES = [
 ];
 const ccStyleOf = id => CC_STYLES.find(x => x.id === id) || CC_STYLES[0];
 const CC_SAMPLE = ['Paris: ¿Qué es Wal-Mart?', '¿Venden cosas para la pared?'];
-function ccHtml(st, logoBottom, lines, scale = 1){
+/* ---------- screen bugs (PNG de pantalla completa, se usan tal cual, sin recortar) ----------
+   Cada PNG es un cuadro entero (16:9 o 4:3) con el logo ya ubicado. Se pone encima del programa a su tamaño real:
+   los 16:9 cubren la imagen, los 4:3 cubren el cuadro 4:3 del medio. `b` = dónde está el logo (proporciones del PNG);
+   `lift` = cuánto hay que subir los subtítulos (proporción del cuadro 4:3) para que queden arriba del logo. */
+const BUG_BASE = 'https://reality-vault.vercel.app/bugs/';
+const BUG_PRESETS = [{"id": "mtv-redondo", "name": "MTV redondo", "ar": 1.3333, "b": [0.8027, 0.5651, 0.9014, 0.6966]}, {"id": "fox-1999", "name": "FOX 1999–2013", "ar": 1.3333, "b": [0.8105, 0.849, 0.9092, 0.9076]}, {"id": "fox-2019", "name": "FOX 2019–hoy", "ar": 1.7778, "b": [0.8693, 0.8611, 0.9573, 0.9426]}, {"id": "mtv-latam-2021", "name": "MTV Europa / Latinoamérica / Brasil 2021", "ar": 1.7778, "b": [0.0648, 0.075, 0.1539, 0.1625]}, {"id": "mtv-2021", "name": "MTV 2021–hoy", "ar": 1.7778, "b": [0.8594, 0.8463, 0.9255, 0.925]}, {"id": "mtv-ucrania", "name": "MTV Ucrania 2011–2013", "ar": 1.3333, "b": [0.068, 0.0773, 0.1613, 0.1538]}, {"id": "mtv-usa-2014", "name": "MTV EE.UU. 2014–hoy", "ar": 1.7778, "b": [0.8695, 0.8597, 0.9367, 0.9347]}].map(p => ({ ...p, u: BUG_BASE + p.id + '.png' }));
+const lvBugLib = () => [...BUG_PRESETS, ...((lvSrc().bugs) || [])];
+function lvBugLift(ar, b){
+  let x0 = b[0], x1 = b[2]; if (ar > 1.5){ x0 = (x0 - .125) / .75; x1 = (x1 - .125) / .75; }   // el 4:3 ocupa del 12,5% al 87,5% de un 16:9
+  return (b[3] > .72 && x1 > .04 && x0 < .96) ? Math.min(.45, Math.round(((1 - b[1]) + .02) * 1000) / 1000) : 0;
+}
+const lvBugRes = p => ({ id: p.id, u: p.u, ar: p.ar, lift: lvBugLift(p.ar, p.b) });
+/** El screen bug que corresponde a un programa: el suyo, el del canal, o ninguno (se ve el logo común). */
+const lvBugOf = (ch, it) => { const b = it && it.bug; if (b && b.off) return null; return b && b.u ? b : (ch.bug && ch.bug.u ? ch.bug : null); };
+const lvBugVal = b => !b ? '' : b.off ? 'off' : (lvBugLib().find(x => x.u === b.u)?.id || '');
+function ccHtml(st, logoBottom, lines, scale = 1, lift = 0){
   lines = lines || CC_SAMPLE;
   const lc = st.upper ? lines.map(l => l.toUpperCase()) : lines;
   const color = st.multi ? ['#fff','#ff0','#0ff'] : [st.color || '#fff'];
-  if (st.kabel) return `<div class="cc-wrap" style="bottom:${(logoBottom ? st.bottomLogo : st.bottom)*100}%;left:3.47%;transform:scaleY(${st.sy});transform-origin:50% 100%"><span class="cc-l kabel outline" style="font-size:${st.size*100*scale}cqh;line-height:${st.lh};-webkit-text-stroke:${st.stroke}em #000;color:${color[0]};text-align:center">${lc.map(esc).join('<br>')}</span></div>`;
-  return `<div class="cc-wrap ${st.left ? 'left' : ''}" style="bottom:${(logoBottom ? st.bottomLogo : st.bottom)*100}%">${lc.map((l, i) =>
+  if (st.kabel) return `<div class="cc-wrap" style="bottom:${Math.max(logoBottom ? st.bottomLogo : st.bottom, lift)*100}%;left:3.47%;transform:scaleY(${st.sy});transform-origin:50% 100%"><span class="cc-l kabel outline" style="font-size:${st.size*100*scale}cqh;line-height:${st.lh};-webkit-text-stroke:${st.stroke}em #000;color:${color[0]};text-align:center">${lc.map(esc).join('<br>')}</span></div>`;
+  return `<div class="cc-wrap ${st.left ? 'left' : ''}" style="bottom:${Math.max(logoBottom ? st.bottomLogo : st.bottom, lift)*100}%">${lc.map((l, i) =>
     `<span class="cc-l ${st.mono ? 'mono' : 'sans'} ${st.box ? 'box' : ''} ${st.outline ? 'outline' : ''}" style="font-size:${st.size*100*scale}cqh;color:${color[i % color.length]}">${esc(l)}</span>`).join('')}</div>`;
 }
 /** La tele, en chiquito: cuadro 4:3 con el programa al aire, el logo y los subtítulos, igual que en LiveWatch. */
@@ -1626,10 +1641,10 @@ function lvTvHtml(ch, opts = {}){
   const img = it ? lvThumb(it) : '';
   const pos = { tl:'top:7%;left:7%', tr:'top:7%;right:7%', bl:'bottom:7%;left:7%', br:'bottom:7%;right:7%' }[ch.logoPos || 'br'];
   const op = ch.logoOpacity ?? .35;
-  const st = ccStyleOf(ch.ccStyle);
+  const st = ccStyleOf(ch.ccStyle); const bg = lvBugOf(ch, it);
   return `<div class="lv-tv ${opts.small ? 'sm' : ''}"><div class="lv-43" ${img ? `style="background-image:url('${esc(img)}')"` : ''}>
-    ${ch.logo ? `<img class="lv-bug" src="${esc(ch.logo)}" alt="" style="${pos};opacity:${op};height:${(ch.logoSize||56)/10.8}%">` : `<b class="lv-bug lv-bugt" style="${pos};opacity:${op}">${esc((ch.name||'').toUpperCase())}</b>`}
-    ${ch.captions !== false ? ccHtml(st, /^b/.test(ch.logoPos || 'br'), undefined, ch.ccScaleTv || 1) : ''}
+    ${bg ? `<img class="lv-bugf ${bg.ar > 1.5 ? 'w' : ''}" src="${esc(bg.u)}" alt="">` : ch.logo ? `<img class="lv-bug" src="${esc(ch.logo)}" alt="" style="${pos};opacity:${op};height:${(ch.logoSize||56)/10.8}%">` : `<b class="lv-bug lv-bugt" style="${pos};opacity:${op}">${esc((ch.name||'').toUpperCase())}</b>`}
+    ${ch.captions !== false ? ccHtml(st, !bg && /^b/.test(ch.logoPos || 'br'), undefined, ch.ccScaleTv || 1, bg?.lift || 0) : ''}
   </div></div>`;
 }
 /** Fila de la guía de la tele, en chiquito. */
@@ -1760,9 +1775,26 @@ function lvStepTandas(ch){
   </section>
   <div class="lv-nextstep"><button class="btn btn-primary" data-lv-step="pantalla">Siguiente: en pantalla →</button></div>`;
 }
+function lvBugSel(cur, attr, extra, mixed){
+  const v = mixed ? '__mix' : lvBugVal(cur);
+  return `<select class="input lv-bsel" ${attr} ${extra || ''}>${mixed ? '<option value="__mix" selected disabled>Distintos</option>' : ''}<option value="" ${v === '' ? 'selected' : ''}>El del canal</option><option value="off" ${v === 'off' ? 'selected' : ''}>Sin screen bug (logo común)</option>${lvBugLib().map(x => `<option value="${esc(x.id)}" ${v === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`;
+}
+function lvBugsSection(ch){
+  const lib = lvBugLib(); const cur = ch.bug && ch.bug.u ? ch.bug.u : '';
+  const items = ch.items || []; const groups = []; items.forEach((it, i) => { let g = groups.find(x => x.t === it.titleId); if (!g){ g = { t: it.titleId, name: (byId(it.titleId)?.title) || lvName(it), idx: [] }; groups.push(g); } g.idx.push(i); });
+  return `<section class="lv-sec"><h2>Screen bug</h2><p class="lv-help">Imágenes de pantalla completa con el logo ya ubicado, como en la tele de verdad. Se usan <b>tal cual son</b>, sin recortar ni cambiar el tamaño (un 16:9 cubre toda la imagen y un 4:3, el cuadro 4:3). Si elegís uno, reemplaza al logo común y los <b>subtítulos se suben solos</b> para quedar arriba cuando el logo está abajo. Se va en las tandas y entre programas, igual que el logo.</p>
+    <div class="lv-bugs">
+      <button class="lv-bgtile ${cur ? '' : 'on'}" data-lv-bug="" aria-pressed="${!cur}"><span class="lv-bugp"><i>Logo común</i></span><b>Sin screen bug</b><small>Usa el logo del canal</small></button>
+      ${lib.map(x => `<button class="lv-bgtile ${cur === x.u ? 'on' : ''}" data-lv-bug="${esc(x.id)}" aria-pressed="${cur === x.u}"><span class="lv-bugp ${x.ar > 1.5 ? '' : 'r43'}"><img src="${esc(x.u)}" alt=""></span><b>${esc(x.name)}</b><small>${x.ar > 1.5 ? '16:9' : '4:3'}${x.lift ? ' · sube los subtítulos' : ''}</small>${x.custom ? `<u class="lv-bugdel" data-lv-bugdel="${esc(x.id)}" title="Quitar de mi lista">✕</u>` : ''}</button>`).join('')}
+      <button class="lv-bgtile lv-bugadd" data-lv-bugup><span class="lv-bugp"><i>＋</i></span><b>Subir otro PNG</b><small>Con fondo transparente</small></button>
+    </div></section>
+  ${groups.length ? `<section class="lv-sec"><h2>Screen bug por serie o capítulo</h2><p class="lv-help">Elegí cuál usa cada serie o película. Si querés uno distinto en un capítulo, abrí la lista y elegilo ahí. “El del canal” usa el de arriba.</p>
+    <div class="lv-bgrp">${groups.map(g => { const vals = [...new Set(g.idx.map(i => lvBugVal(items[i].bug)))]; return `<div class="lv-bg"><div class="lv-bg-h"><b>${esc(g.name)}</b><small>${g.idx.length} ${g.idx.length > 1 ? 'capítulos' : 'programa'}</small>${lvBugSel(items[g.idx[0]].bug, 'data-lv-tbug="' + esc(g.t) + '"', '', vals.length > 1)}</div>
+      ${g.idx.length > 1 ? `<details><summary>Elegir por capítulo</summary>${g.idx.map(i => `<div class="lv-bg-ep"><span>${esc(lvSub(items[i]) || lvName(items[i]))}</span>${lvBugSel(items[i].bug, 'data-lv-ibug="' + i + '"', 'data-lv-tt="' + esc(g.t) + '"')}</div>`).join('')}</details>` : `<div hidden>${lvBugSel(items[g.idx[0]].bug, 'data-lv-ibug="' + g.idx[0] + '"', 'data-lv-tt="' + esc(g.t) + '"')}</div>`}</div>`; }).join('')}</div></section>` : ''}`;
+}
 function lvStepPantalla(ch){
   const op = Math.round((ch.logoOpacity ?? .35) * 100), sz = ch.logoSize || 56, pos = ch.logoPos || 'br';
-  return `<section class="lv-sec"><h2>Logo en pantalla</h2><p class="lv-help">Como los canales de antes: a baja opacidad, en una esquina. Se va solo durante las tandas.</p>
+  return lvBugsSection(ch) + `<section class="lv-sec"><h2>Logo en pantalla</h2><p class="lv-help">Como los canales de antes: a baja opacidad, en una esquina. Se va solo durante las tandas. Solo se usa donde no hay screen bug.</p>
     <div class="lv-posgrid">
       <div class="lv-pos43">${['tl','tr','bl','br'].map(p => `<button class="${p} ${pos === p ? 'on' : ''}" data-lv-pos="${p}" aria-label="${{tl:'Arriba a la izquierda',tr:'Arriba a la derecha',bl:'Abajo a la izquierda',br:'Abajo a la derecha'}[p]}"></button>`).join('')}</div>
       <div class="lv-sliders">
@@ -1792,7 +1824,7 @@ async function lvSaveNow(){
   const ch = lvCh(E.id); if (ch && (!ch.name || ch.name === 'Nuevo canal')){ toast('Ponele un nombre al canal', true); E.step = 'canal'; rerenderPanel(); return; }
   // se guardan este canal y las publicidades; los demás canales quedan como estaban guardados
   const L = liveData(); const others = L.channels.filter(c => c.id !== E.id);
-  const next = { ...L, ads: lvClone(E.d.ads), channels: [...others, lvClone(ch)] };
+  const next = { ...L, ads: lvClone(E.d.ads), bugs: lvClone(E.d.bugs || []), channels: [...others, lvClone(ch)] };
   // grilla publicada: el panel arma la emisión de cada canal una sola vez y todas las teles y celulares
   // siguen exactamente esa (antes cada aparato la calculaba por su cuenta y podían no coincidir)
   next.channels = next.channels.map(c => ({ ...c, plan: lvPlan(c, next) }));
@@ -1820,7 +1852,7 @@ async function lvMeasureItems(items, onStep){
 function lvTwoTap(b, label, fn){ if (!b.dataset.sure){ b.dataset.sure = '1'; const t = b.textContent; b.textContent = label; setTimeout(() => { if (b.isConnected){ delete b.dataset.sure; b.textContent = t; } }, 3000); return; } fn(); }
 window.addEventListener('beforeunload', e => { if (S.lvEd?.dirty){ e.preventDefault(); e.returnValue = ''; } });
 document.addEventListener('click', async e => {
-  const b = e.target.closest('[data-lv-new],[data-lv-open],[data-lv-back],[data-lv-save],[data-lv-discard],[data-lv-del],[data-lv-step],[data-lv-pick],[data-lv-addt],[data-lv-imove],[data-lv-idel],[data-lv-shuffle],[data-lv-measure],[data-lv-restart],[data-lv-clear],[data-lv-adup],[data-lv-adurl],[data-lv-addel],[data-lv-admove],[data-lv-per],[data-lv-auto],[data-lv-nocuts],[data-lv-mk],[data-lv-bar],[data-lv-pos],[data-lv-cc]');
+  const b = e.target.closest('[data-lv-new],[data-lv-open],[data-lv-back],[data-lv-save],[data-lv-discard],[data-lv-del],[data-lv-step],[data-lv-pick],[data-lv-addt],[data-lv-imove],[data-lv-idel],[data-lv-shuffle],[data-lv-measure],[data-lv-restart],[data-lv-clear],[data-lv-adup],[data-lv-adurl],[data-lv-addel],[data-lv-admove],[data-lv-per],[data-lv-auto],[data-lv-nocuts],[data-lv-mk],[data-lv-bar],[data-lv-pos],[data-lv-cc],[data-lv-bug],[data-lv-bugup],[data-lv-bugdel]');
   if (!b || !S.owner) return; const d = b.dataset; const E = S.lvEd; const ch = E && lvCh(E.id);
   if ('lvNew' in d){ const L = liveData(); const n = Math.max(0, ...L.channels.map(c => +c.number || 0)) + 1;
     const c = { id: uid('ch'), name: 'Nuevo canal', number: n, logo: '', guideImage: '', logoPos: 'br', logoOpacity: .35, logoSize: 56, active: true, epoch: Date.now(), captions: true, ccStyle: 'cc608', adsPerBreak: 2, podBetween: false, items: [] };
@@ -1863,6 +1895,21 @@ document.addEventListener('click', async e => {
     const r = b.getBoundingClientRect(); const at = Math.round((e.clientX - r.left) / r.width * dur);
     if (at <= 20 || at >= dur - 20){ toast('Muy pegado al principio o al final', true); return; }
     it.breaks = [...new Set([...(it.breaks||[]), at])].sort((a,b) => a-b); lvDirty(); rerenderPanel(); return; }
+  if (d.lvBugdel != null){ e.stopPropagation(); const L = E.d.bugs || []; const x = L.find(q => q.id === d.lvBugdel); E.d.bugs = L.filter(q => q.id !== d.lvBugdel);
+    if (x && ch.bug?.u === x.u) delete ch.bug; ch.items.forEach(it => { if (it.bug?.u === x?.u) delete it.bug; }); lvDirty(); rerenderPanel(); return; }
+  if (d.lvBug != null){ const p = d.lvBug && lvBugLib().find(x => x.id === d.lvBug); if (p) ch.bug = lvBugRes(p); else delete ch.bug; lvDirty(); rerenderPanel(); return; }
+  if ('lvBugup' in d){ const f = await pickFile('image/png,image/webp,.png,.webp'); if (!f) return;
+    try { toast('Subiendo screen bug…');
+      const url0 = URL.createObjectURL(f); const im = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error('No se pudo leer la imagen')); i.src = url0; });
+      const k = Math.min(1, 640 / im.naturalWidth), cw = Math.max(1, Math.round(im.naturalWidth * k)), chh = Math.max(1, Math.round(im.naturalHeight * k));
+      const cv = document.createElement('canvas'); cv.width = cw; cv.height = chh; const cx = cv.getContext('2d'); cx.drawImage(im, 0, 0, cw, chh); const px = cx.getImageData(0, 0, cw, chh).data;
+      let x0 = cw, y0 = chh, x1 = 0, y1 = 0; for (let y = 0; y < chh; y++) for (let x = 0; x < cw; x++) if (px[(y * cw + x) * 4 + 3] > 10){ if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      URL.revokeObjectURL(url0); if (x1 <= x0){ toast('Esa imagen está vacía (todo transparente)', true); return; }
+      const ar = im.naturalWidth / im.naturalHeight; if (Math.abs(ar - 16/9) > .08 && Math.abs(ar - 4/3) > .08){ toast('Tiene que ser un cuadro entero 16:9 o 4:3 (con el logo ya ubicado)', true); return; }
+      const url = await r2Put(f, 'png', f.type || 'image/png', p => toast(`Subiendo screen bug… ${p}%`));
+      (E.d.bugs = E.d.bugs || []).push({ id: uid('bug'), name: f.name.replace(/\.[^.]+$/, '').slice(0, 40), u: url, ar: Math.round(ar * 10000) / 10000, b: [x0 / cw, y0 / chh, (x1 + 1) / cw, (y1 + 1) / chh].map(v => Math.round(v * 10000) / 10000), custom: 1 });
+      lvDirty(); rerenderPanel(); toast('Screen bug agregado. Elegilo y tocá Guardar canal.'); }
+    catch(err){ toast(err.message || 'No se pudo subir', true); } return; }
   if (d.lvPos){ ch.logoPos = d.lvPos; lvDirty(); rerenderPanel(); return; }
   if (d.lvCc){ ch.ccStyle = d.lvCc; lvDirty(); rerenderPanel(); return; }
 });
@@ -1883,6 +1930,12 @@ document.addEventListener('change', e => {
   const el = e.target; const E = S.lvEd; if (!S.owner || !E || !el.closest?.('.live-ed')) return;
   const ch = lvCh(E.id); if (!ch) return;
   if (el.dataset.lvF === 'active' || el.dataset.lvF === 'captions' || el.dataset.lvF === 'podBetween'){ ch[el.dataset.lvF] = el.checked; lvDirty(); rerenderPanel(); return; }
+  if (el.dataset.lvIbug != null || el.dataset.lvTbug != null){
+    const v = el.value; const p = v && v !== 'off' ? lvBugLib().find(x => x.id === v) : null;
+    const set = it => { if (v === 'off') it.bug = { off: 1 }; else if (p) it.bug = lvBugRes(p); else delete it.bug; };
+    if (el.dataset.lvIbug != null){ const it = ch.items[+el.dataset.lvIbug]; if (it) set(it); }
+    else { const t = el.dataset.lvTbug; ch.items.forEach(it => { if (it.titleId === t) set(it); }); app.querySelectorAll(`select[data-lv-tt="${CSS.escape(t)}"]`).forEach(s => { s.value = v; }); }
+    lvDirty(); lvRefreshSide(); return; }
   if (el.dataset.lvItem != null){ const it = ch.items[+el.dataset.lvItem]; if (!it) return;
     if (el.dataset.lvK === 'dur'){ const v = parseMmss(el.value); if (!(v > 0)){ toast('Escribí la duración como minutos:segundos (ej: 21:34)', true); return; } it.dur = v; }
     else { const vals = el.value.split(/[,;\s]+/).filter(Boolean).map(parseMmss); if (vals.some(x => isNaN(x))){ toast('Escribí los cortes como 7:00, 14:30', true); return; } it.breaks = [...new Set(vals)].sort((a,b) => a-b); }
@@ -2016,14 +2069,14 @@ function lvEngine(chId){
   let chans = lvWebChannels(); let ch = chans.find(c => c.id === chId) || chans[0];
   if (!ch){ liveRoot.innerHTML = '<div class="lvp-nosig on">SIN SEÑAL</div>'; return { stop(){} }; }
   liveRoot.innerHTML = `<video class="lvp-v" playsinline preload="auto"></video><video class="lvp-v" playsinline preload="auto"></video>
-    <div class="lvp-43"><img class="lvp-bug" alt="" hidden><b class="lvp-bugt" hidden></b><div class="lvp-cc"></div></div>
+    <div class="lvp-169"><img class="lvp-bugf" alt=""></div><div class="lvp-43"><img class="lvp-bug" alt="" hidden><b class="lvp-bugt" hidden></b><img class="lvp-bugf" alt=""><div class="lvp-cc"></div></div>
     <div class="lvp-black"></div><div class="lvp-nosig">SIN SEÑAL</div>
     <div class="lvp-ui"><div class="lvp-top"><button class="pl-btn" data-lvp-close aria-label="Volver">←</button><span class="lvp-hint">↑ ↓ cambian de canal</span><button class="pl-btn" data-lvp-full aria-label="Pantalla completa">⛶</button></div>
     <div class="lvp-info"></div></div>`;
   const [va, vb] = liveRoot.querySelectorAll('video');
-  const bug = liveRoot.querySelector('.lvp-bug'), bugT = liveRoot.querySelector('.lvp-bugt'), ccEl = liveRoot.querySelector('.lvp-cc');
+  const bug = liveRoot.querySelector('.lvp-bug'), bugW = liveRoot.querySelector('.lvp-169 .lvp-bugf'), bug43 = liveRoot.querySelector('.lvp-43 .lvp-bugf'), bugT = liveRoot.querySelector('.lvp-bugt'), ccEl = liveRoot.querySelector('.lvp-cc');
   const black = liveRoot.querySelector('.lvp-black'), nosig = liveRoot.querySelector('.lvp-nosig'), ui = liveRoot.querySelector('.lvp-ui'), info = liveRoot.querySelector('.lvp-info');
-  let sc, key = '', cur = va, nxt = vb, k = -1, nk = -1, cues = [], cuesFor = '', lastCc = '', roll = [], rollT = 0, lastCue = '', stuck = 0, lastPos = -1, alive = true, uiT = 0;
+  let curBug = undefined, sc, key = '', cur = va, nxt = vb, k = -1, nk = -1, cues = [], cuesFor = '', lastCc = '', roll = [], rollT = 0, lastCue = '', stuck = 0, lastPos = -1, alive = true, uiT = 0;
   const segUrl = s => lvWebUrl(s.url);
   function setCh(c){
     ch = c; sc = lvWebSched(ch); key = ch.id + ch.epoch + sc.segs.map(s => s.url + s.from + s.to).join('|');
@@ -2072,7 +2125,11 @@ function lvEngine(chId){
       const b = fo && left < 0.45 ? 1 - left / 0.45 : fi && inSeg < 0.35 ? 1 - Math.max(0, inSeg) / 0.35 : 0;
       black.style.opacity = Math.max(0, Math.min(1, b)); cur.volume = Math.max(0, Math.min(1, 1 - b));
       const logoOn = !s.ad && inSeg > 2.5 && left > 3 && !nosig.classList.contains('on');
-      (ch.logo ? bug : bugT).style.opacity = logoOn ? (ch.logoOpacity ?? .35) : 0;
+      // screen bug (PNG de cuadro entero) del programa que va al aire; si no hay, el logo común
+      const bg = lvBugOf(ch, (ch.items || [])[s.i]); const bgU = bg ? bg.u : '';
+      if (bgU !== curBug){ curBug = bgU; for (const e of [bugW, bug43]) e.removeAttribute('src'); if (bg) (bg.ar > 1.5 ? bugW : bug43).src = bg.u; }
+      bugW.style.opacity = bg && bg.ar > 1.5 && logoOn ? 1 : 0; bug43.style.opacity = bg && bg.ar <= 1.5 && logoOn ? 1 : 0;
+      (ch.logo ? bug : bugT).style.opacity = !bg && logoOn ? (ch.logoOpacity ?? .35) : 0;
       // subtítulos
       const st = ccStyleOf(ch.ccStyle);
       if (ch.captions !== false && !s.ad && s.subs){
@@ -2082,7 +2139,7 @@ function lvEngine(chId){
         if (st.left){ if (txt && txt !== lastCue){ roll = [...roll, ...ccLinesWeb(txt, 32, true).filter(l => !roll.slice(-3).includes(l))].slice(-3); rollT = Date.now(); } if (!txt && Date.now() - rollT > 6000) roll = []; lines = roll; }
         else if (txt) lines = ccLinesWeb(txt, st.max || (st.mono ? 32 : 42), !!st.upper);
         lastCue = txt;
-        const html = lines.length ? ccHtml(st, /^b/.test(ch.logoPos || 'br'), lines) : '';
+        const html = lines.length ? ccHtml(st, !bg && /^b/.test(ch.logoPos || 'br'), lines, 1, bg ? bg.lift || 0 : 0) : '';
         if (html !== lastCc){ lastCc = html; ccEl.innerHTML = html; }
       } else if (lastCc){ lastCc = ''; ccEl.innerHTML = ''; }
     }
