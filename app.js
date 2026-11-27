@@ -1543,7 +1543,45 @@ const mmss = s => { s = Math.max(0, Math.round(+s || 0)); const h = Math.floor(s
 const hm = s => { s = Math.round(+s||0); const h = Math.floor(s/3600), m = Math.round(s%3600/60); return h ? `${h} h ${m} min` : `${m} min`; };
 const parseMmss = v => { const p = String(v||'').trim().split(':').map(Number); if (!p.length || p.some(isNaN)) return NaN; return p.reduce((a,b) => a*60 + b, 0); };
 const clock = ms => new Date(ms).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
-function measureDur(url){
+/* Duración de un .ts (MPEG-TS): los navegadores no lo reproducen, así que se lee la marca de tiempo (PTS)
+   del principio y del final del archivo, bajando solo 1 MB de cada punta. */
+function tsPts(buf, want){
+  const out = { pid: want ?? -1, min: Infinity, max: -Infinity };
+  let o = 0; while (o + 376 < buf.length && !(buf[o] === 0x47 && buf[o + 188] === 0x47 && buf[o + 376] === 0x47)) o++;
+  for (; o + 188 <= buf.length; o += 188){
+    if (buf[o] !== 0x47) continue;
+    const pusi = buf[o + 1] & 0x40, pid = ((buf[o + 1] & 0x1f) << 8) | buf[o + 2], afc = (buf[o + 3] >> 4) & 3;
+    if (!pusi || !(afc & 1)) continue;
+    const p = o + 4 + ((afc & 2) ? 1 + buf[o + 4] : 0);
+    if (p + 14 > o + 188 || buf[p] !== 0 || buf[p + 1] !== 0 || buf[p + 2] !== 1) continue;
+    const sid = buf[p + 3]; if (sid < 0xC0 || sid > 0xEF || !(buf[p + 7] & 0x80)) continue;
+    if (out.pid < 0) out.pid = pid; if (pid !== out.pid) continue;
+    const pts = ((buf[p + 9] >> 1) & 7) * 2 ** 30 + buf[p + 10] * 2 ** 22 + (buf[p + 11] >> 1) * 2 ** 15 + buf[p + 12] * 2 ** 7 + (buf[p + 13] >> 1);
+    if (pts < out.min) out.min = pts; if (pts > out.max) out.max = pts;
+  }
+  return out;
+}
+async function tsDuration(url){
+  try {
+    // solo rangos "bytes=N-M" (no piden permiso extra al servidor); el tamaño sale de Content-Range o de un HEAD
+    let size = 0;
+    const get = async range => { const r = await fetch(url, { headers: { Range: range } }); if (r.status !== 206){ try { r.body?.cancel(); } catch(_){} return null; }
+      const m = (r.headers.get('content-range') || '').match(/\/(\d+)/); if (m) size = +m[1]; return new Uint8Array(await r.arrayBuffer()); };
+    const a = await get('bytes=0-1048575'); if (!a) return 0;
+    if (!size){ try { const h = await fetch(url, { method: 'HEAD' }); size = +(h.headers.get('content-length') || 0); } catch(_){} }
+    if (!size) return 0;
+    const b = size <= a.length ? a : await get(`bytes=${Math.max(0, size - 1048576)}-${size - 1}`); if (!b) return 0;
+    const f = tsPts(a); if (f.pid < 0) return 0;
+    const l = tsPts(b, f.pid); if (!isFinite(l.max)) return 0;
+    let d = l.max - f.min; if (d < 0) d += 2 ** 33;
+    return Math.round(d / 90000 * 10) / 10;
+  } catch(_){ return 0; }
+}
+async function measureDur(url){
+  if (/\.(ts|m2ts|mts)([?#]|$)/i.test(url || '')){ const d = await tsDuration(url); if (d > 0) return d; }
+  return measureDurVideo(url);
+}
+function measureDurVideo(url){
   return new Promise(res => {
     const v = document.createElement('video'); v.preload = 'metadata'; v.muted = true;
     const done = d => { clearTimeout(tm); v.removeAttribute('src'); try { v.load(); } catch(_){} res(d); };
