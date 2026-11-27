@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -145,6 +146,10 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     var posMs by remember { mutableLongStateOf(0L) }
     var durMs by remember { mutableLongStateOf(0L) }
     var controlsVisible by remember { mutableStateOf(true) }
+    // 0 = nada, 1 = botones (arriba), 2 = menú de subtítulos, 3 = info (abajo), como el reproductor de Apple TV
+    var panel by remember { mutableIntStateOf(0) }
+    var textTracks by remember { mutableStateOf(listOf<TrackOpt>()) }
+    var userTrack by remember { mutableStateOf(false) }
     var subsOn by remember(m.subsUrl) { mutableStateOf(m.subsUrl.isNotBlank()) }
     var lastTouch by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
@@ -181,7 +186,12 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
             // Si el MKV trae subtítulos propios (en inglés, por ejemplo), el reproductor puede elegir
             // uno de esos. Cuando hay un .vtt cargado en el panel, ese es el que manda: lo forzamos.
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
-                if (m.subsUrl.isBlank()) return
+                textTracks = tracks.groups.filter { it.type == M3C.TRACK_TYPE_TEXT && it.length > 0 }.mapIndexed { i, g ->
+                    val f = g.getTrackFormat(0)
+                    val lang = f.language?.takeIf { it.isNotBlank() && it != "und" }?.let { l -> java.util.Locale.forLanguageTag(l).getDisplayLanguage(java.util.Locale("es")).replaceFirstChar { c -> c.uppercase() } }
+                    TrackOpt(g, f.label?.takeIf { it.isNotBlank() } ?: lang ?: "Subtítulos ${i + 1}", g.isSelected)
+                }
+                if (m.subsUrl.isBlank() || userTrack) return
                 val g = tracks.groups.firstOrNull { it.type == M3C.TRACK_TYPE_TEXT && (0 until it.length).any { i -> it.getTrackFormat(i).id?.endsWith("rv-es") == true } } ?: return
                 if (g.isSelected && tracks.groups.count { it.type == M3C.TRACK_TYPE_TEXT && it.isSelected } == 1) return
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
@@ -219,8 +229,8 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         while (true) { posMs = player.currentPosition.coerceAtLeast(0); durMs = player.duration.coerceAtLeast(0); delay(400) }
     }
     // oculta los controles solos si está reproduciendo de verdad (no mientras bufferea o adelanta)
-    LaunchedEffect(lastTouch, userPaused, controlsVisible) {
-        if (controlsVisible && !userPaused && !failed) { delay(4000); if (System.currentTimeMillis() - lastTouch >= 3900) controlsVisible = false }
+    LaunchedEffect(lastTouch, userPaused, controlsVisible, panel) {
+        if (controlsVisible && panel == 0 && !userPaused && !failed) { delay(4000); if (System.currentTimeMillis() - lastTouch >= 3900) controlsVisible = false }
     }
     fun bump() { lastTouch = System.currentTimeMillis(); controlsVisible = true }
     // Siguiente episodio, como las plataformas de streaming: en los últimos 20 s aparece una tarjeta
@@ -256,15 +266,23 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         player.seekTo(target); posMs = target; if (!player.playWhenReady) player.play()
     }
 
-    val playReq = remember { FocusRequester() }
-    val contReq = remember { FocusRequester() }
-    // Cada vez que aparecen los controles (al abrir el video, o al despertarlos de nuevo), el foco
-    // vuelve siempre a Reproducir/Pausar — nunca se queda en Subtítulos ni en otro botón por defecto.
-    // El bloque "if (controlsVisible)" se desmonta por completo cuando se ocultan, así que el foco
-    // hay que volver a pedirlo cada vez que se vuelven a mostrar, no solo una vez al entrar.
-    LaunchedEffect(controlsVisible, userPaused) {
-        if (controlsVisible && !showNext) AutoFocusOnce(if (!userPaused) playReq else contReq)
+    // Foco: siempre hay algo enfocado para que el control funcione (sin foco las teclas no llegan).
+    // Sin paneles abiertos lo tiene un punto invisible; con un panel, su primer botón.
+    val holdReq = remember { FocusRequester() }
+    val ccReq = remember { FocusRequester() }
+    val menuReq = remember { FocusRequester() }
+    val infoReq = remember { FocusRequester() }
+    LaunchedEffect(panel, showNext, failed) {
+        if (failed || showNext) return@LaunchedEffect
+        when (panel) { 0 -> AutoFocusOnce(holdReq); 1 -> AutoFocusOnce(ccReq); 2 -> AutoFocusOnce(menuReq); else -> AutoFocusOnce(infoReq) }
     }
+    fun pickSub(o: TrackOpt?) {
+        if (o == null) { subsOn = false; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(M3C.TRACK_TYPE_TEXT, true).build() }
+        else { subsOn = true; userTrack = true
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(M3C.TRACK_TYPE_TEXT, false)
+                .setOverrideForType(androidx.media3.common.TrackSelectionOverride(o.group.mediaTrackGroup, 0)).build() }
+    }
+    val hasCc = textTracks.isNotEmpty() || m.subsUrl.isNotBlank()
 
     // -- avisos de "-10 / +10" cuando se adelanta/atrasa con el control, sin tocar los botones --
     var backPulse by remember { mutableIntStateOf(0) }
@@ -280,7 +298,8 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
 
     // "Atrás" del control: si los botones están en pantalla, lo primero es ocultarlos — recién
     // si ya estaban ocultos, "atrás" sale de verdad del reproductor (vuelve al detalle).
-    BackHandler(enabled = controlsVisible) { controlsVisible = false }
+    BackHandler(enabled = panel != 0) { panel = if (panel == 2) 1 else 0; lastTouch = System.currentTimeMillis() }
+    BackHandler(enabled = controlsVisible && panel == 0) { controlsVisible = false }
     BackHandler(enabled = showNext) { nextOff = true; controlsVisible = false }
 
     Box(
@@ -291,14 +310,28 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                 // y la tele no muestra su propia ventanita de reproducción encima.
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 if (failed) return@onPreviewKeyEvent false // con el aviso de error, las flechas mueven entre sus botones
+                if (showNext) return@onPreviewKeyEvent when (e.key) {
+                    Key.DirectionLeft, Key.MediaRewind -> { doSeekBack(); true }
+                    Key.DirectionRight, Key.MediaFastForward -> { doSeekForward(); true }
+                    else -> false
+                }
+                // con un panel abierto, las flechas mueven el foco entre sus botones
+                if (panel != 0) return@onPreviewKeyEvent when (e.key) {
+                    Key.MediaPlayPause -> { doToggle(); true }
+                    Key.DirectionDown -> if (panel == 1) { panel = 0; bump(); true } else false
+                    Key.DirectionUp -> if (panel == 1) true else false
+                    else -> false
+                }
                 when (e.key) {
                     Key.MediaPlayPause -> { doToggle(); true }
                     Key.MediaPlay -> { player.play(); bump(); true }
                     Key.MediaPause -> { player.pause(); bump(); true }
                     Key.DirectionLeft, Key.MediaRewind -> { doSeekBack(); true }
                     Key.DirectionRight, Key.MediaFastForward -> { doSeekForward(); true }
-                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> if (skip != null && !controlsVisible) { doSkip(skip); true } else false
-                    Key.DirectionDown -> if (skip != null && controlsVisible) { runCatching { skipReq.requestFocus() }; bump(); true } else false
+                    // OK: saltea la intro si hay una; si no, pausa / reanuda (como Apple TV)
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { if (skip != null) doSkip(skip) else doToggle(); true }
+                    Key.DirectionUp -> { if (hasCc) panel = 1; bump(); true }
+                    Key.DirectionDown -> { panel = 3; bump(); true }
                     else -> false
                 }
             }
@@ -318,11 +351,11 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
             }
         )
         // capa invisible: cualquier botón del control despierta la interfaz
-        if (!controlsVisible && !failed) WakeLayer(Modifier.fillMaxSize()) { bump() }
+        if (!failed) Box(Modifier.size(1.dp).focusRequester(holdReq).focusable().onKeyEvent { ev -> if (ev.type == KeyEventType.KeyDown && ev.key != Key.Back) { bump(); true } else false })
 
         // botón "Saltear intro / resumen"
         AnimatedVisibility(
-            skip != null, Modifier.align(Alignment.BottomEnd).padding(end = 64.dp, bottom = if (controlsVisible) 132.dp else 64.dp),
+            skip != null, Modifier.align(Alignment.BottomEnd).padding(end = 64.dp, bottom = if (controlsVisible) 150.dp else 64.dp),
             enter = fadeIn() + androidx.compose.animation.slideInHorizontally { it / 3 }, exit = fadeOut()
         ) {
             var last by remember { mutableStateOf(skip) }
@@ -330,7 +363,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
             val k = last ?: return@AnimatedVisibility
             Focusable({ doSkip(k); bump() }, Modifier.height(54.dp), shape = RoundedCornerShape(12.dp), scale = 1.06f, ring = false, lift = true, requester = skipReq, onFocus = { bump() }) { f ->
                 // sin controles en pantalla se ve resaltado: OK lo activa
-                val hot = f || !controlsVisible
+                val hot = true
                 Row(
                     Modifier.background(if (hot) Color.White else Color(0xD90A080B)).border(1.5.dp, Color.White.copy(alpha = if (hot) 1f else .6f), RoundedCornerShape(12.dp))
                         .padding(horizontal = 24.dp).height(54.dp),
@@ -351,7 +384,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         // subtítulos propios: estilo elegido en el panel (MTV por defecto) o el cuadro negro de siempre
         if (subsOn && cueText.isNotBlank() && Store.subStyle != "classic") {
             androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-                VodCaptions(cueText, Store.subStyle, Store.subScaleTv, Store.subLift, if (controlsVisible) 150.dp.value / maxHeight.value else 0f)
+                VodCaptions(cueText, Store.subStyle, Store.subScaleTv, Store.subLift, if (controlsVisible || panel != 0) 175.dp.value / maxHeight.value else 0f)
             }
         } else if (subsOn && cueText.isNotBlank()) {
             Box(
@@ -376,68 +409,67 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
             SeekFlash(back = false)
         }
 
-        if (controlsVisible) {
-            // en pausa se oscurece más el fondo, para que se note bien que está pausado — con un
-            // fundido suave, no de golpe apenas se aprieta pausa.
-            val pauseDim by animateFloatAsState(if (userPaused) .5f else 0f, tween(420), label = "pauseDim")
+        if ((controlsVisible || panel != 0) && panel != 3) {
+            // en pausa se oscurece un poco más, con un fundido suave
+            val pauseDim by animateFloatAsState(if (userPaused) .35f else 0f, tween(420), label = "pauseDim")
             if (pauseDim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = pauseDim)))
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .6f), .22f to Color.Transparent, .62f to Color.Transparent, 1f to Color.Black.copy(alpha = .85f))))
-
-            if (!userPaused) {
-                // ---- reproduciendo: info arriba, pausa al medio, barra abajo ----
-                Box(Modifier.align(Alignment.TopStart).padding(start = 64.dp, top = 44.dp).width(760.dp)) {
-                    TopInfo(t, episode, s.season)
-                }
-                if (m.subsUrl.isNotBlank()) Box(Modifier.align(Alignment.TopEnd).padding(end = 64.dp, top = 44.dp)) {
-                    CcButton(subsOn) {
-                        subsOn = !subsOn
-                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(M3C.TRACK_TYPE_TEXT, !subsOn).build()
-                        bump()
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, .55f to Color.Transparent, 1f to Color.Black.copy(alpha = .82f))))
+            val head = if (episode != null) "T${s.season} · E${episode.number}" + (if (episode.title.isNotBlank()) " · ${episode.title}" else "") else null
+            Column(Modifier.align(Alignment.BottomStart).padding(start = 64.dp, end = 64.dp, bottom = 44.dp).fillMaxWidth()) {
+                if (userPaused) Icon(Ic.pause, null, tint = Color.White, modifier = Modifier.padding(bottom = 14.dp).size(30.dp))
+                Row(Modifier.fillMaxWidth().padding(bottom = 18.dp), verticalAlignment = Alignment.Bottom) {
+                    Column(Modifier.weight(1f)) {
+                        if (t != null) TitleLogo(t, 280.dp, 56.dp, 28)
+                        if (head != null) Text(head, style = ts(16, FontWeight.Medium, Color.White.copy(alpha = .82f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
                     }
-                }
-                // retroceder / reproducir-pausar / adelantar, repartidos en línea y centrados — mismo tamaño entre sí
-                Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(30.dp), verticalAlignment = Alignment.CenterVertically) {
-                    SmallGlass(back = true) { doSeekBack() }
-                    Focusable({ doToggle() }, Modifier.size(84.dp), shape = CircleShape, scale = 1.08f, ring = false, requester = playReq, onFocus = { bump() }) {
-                        Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .96f), CircleShape), contentAlignment = Alignment.Center) {
-                            Icon(Ic.pause, null, tint = Color.Black, modifier = Modifier.size(32.dp))
+                    // aparece al apretar "arriba", como en Apple TV
+                    if (panel != 0 && hasCc) Focusable({ panel = 2 }, Modifier.size(60.dp), shape = CircleShape, scale = 1.1f, ring = false, requester = ccReq) { f ->
+                        Box(Modifier.fillMaxSize().background(if (f) Color.White else Color.White.copy(alpha = .22f), CircleShape), contentAlignment = Alignment.Center) {
+                            Text("CC", style = ts(18, FontWeight.Black, if (f) Color(0xFF111111) else Color.White))
                         }
                     }
-                    SmallGlass(back = false) { doSeekForward() }
                 }
-                Column(Modifier.align(Alignment.BottomStart).padding(start = 64.dp, end = 64.dp, bottom = 48.dp).fillMaxWidth()) {
-                    Scrub(posMs, durMs)
-                    Spacer(Modifier.height(10.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(fmtTime(posMs), style = ts(13, color = Color.White.copy(alpha = .78f)))
-                        Text(fmtTime(durMs), style = ts(13, color = Color.White.copy(alpha = .78f)))
+                Scrub(posMs, durMs, thick = userPaused)
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(fmtTime(posMs), style = ts(15, FontWeight.SemiBold, Color.White.copy(alpha = .85f)))
+                    Text("-" + fmtTime((durMs - posMs).coerceAtLeast(0)), style = ts(15, FontWeight.SemiBold, Color.White.copy(alpha = .85f)))
+                }
+            }
+            // menú de subtítulos (ventana chica, a la derecha, sobre el botón)
+            if (panel == 2) {
+                val shape = RoundedCornerShape(22.dp)
+                Column(
+                    Modifier.align(Alignment.BottomEnd).padding(end = 64.dp, bottom = 190.dp).width(340.dp)
+                        .background(Color(0xE61C1A24), shape).border(1.dp, Color.White.copy(alpha = .16f), shape).padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("Subtítulos", style = ts(14, FontWeight.SemiBold, Color.White.copy(alpha = .6f)), modifier = Modifier.padding(start = 14.dp, top = 6.dp, bottom = 4.dp))
+                    val selIdx = if (!subsOn) -1 else textTracks.indexOfFirst { it.selected }
+                    SubRow("Desactivados", selIdx < 0, if (selIdx < 0) menuReq else null) { pickSub(null); panel = 1 }
+                    textTracks.forEachIndexed { i, o ->
+                        SubRow(o.label, i == selIdx, if (i == selIdx) menuReq else null) { pickSub(o); panel = 1 }
                     }
                 }
-            } else {
-                // ---- en pausa: tarjeta con logo, capítulo y controles, tipo Netflix ----
-                if (m.subsUrl.isNotBlank()) Box(Modifier.align(Alignment.TopEnd).padding(end = 64.dp, top = 44.dp)) {
-                    CcButton(subsOn) {
-                        subsOn = !subsOn
-                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(M3C.TRACK_TYPE_TEXT, !subsOn).build()
-                        bump()
-                    }
-                }
-                Column(Modifier.align(Alignment.BottomStart).padding(start = 64.dp, bottom = 56.dp).width(760.dp)) {
-                    if (t != null) TitleLogo(t, 220.dp, 42.dp, 26)
-                    Spacer(Modifier.height(14.dp))
-                    val head = if (episode != null) "T${s.season}:E${episode.number} · ${episode.title.ifBlank { "Episodio ${episode.number}" }}" else null
-                    val desc = (episode?.description ?: t?.description).orEmpty()
-                    Column {
-                        if (head != null) Text(head, style = ts(18, FontWeight.Bold, Color.White))
-                        if (desc.isNotBlank()) Text(desc, style = ts(16, FontWeight.Light, Color.White.copy(alpha = .8f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                    Spacer(Modifier.height(22.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        PillButton("Continuar", { player.play(); bump() }, requester = contReq, onFocus = { bump() })
-                        GlassButton(Ic.back) { nav.back() }
-                        SmallGlass(back = true) { doSeekBack() }
-                        SmallGlass(back = false) { doSeekForward() }
-                    }
+            }
+        }
+        // pantalla de Info (hacia abajo)
+        if (panel == 3) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .82f))) {
+                Column(Modifier.align(Alignment.CenterStart).padding(start = 80.dp).width(760.dp)) {
+                    Text("Info", style = ts(22, FontWeight.SemiBold, Color.White), modifier = Modifier.padding(bottom = 26.dp))
+                    if (t != null) TitleLogo(t, 420.dp, 92.dp, 44)
+                    val head = if (episode != null) episode.title.ifBlank { "Episodio ${episode.number}" } else null
+                    if (head != null) Text(head, style = ts(32, FontWeight.Bold, Color.White), modifier = Modifier.padding(top = 18.dp))
+                    val meta = listOfNotNull(
+                        if (episode != null) "T${s.season} · E${episode.number}" else null,
+                        if (durMs > 0) "${(durMs / 60000).coerceAtLeast(1)} min" else null
+                    ).joinToString("  ·  ")
+                    if (meta.isNotBlank()) Text(meta, style = ts(17, color = Color.White.copy(alpha = .72f)), modifier = Modifier.padding(top = 8.dp))
+                    val desc = (episode?.description?.takeIf { it.isNotBlank() } ?: t?.description).orEmpty()
+                    if (desc.isNotBlank()) Text(desc, style = ts(19, FontWeight.Light, Color.White.copy(alpha = .88f)), maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 16.dp))
+                    Spacer(Modifier.height(30.dp))
+                    PillButton("Empezar desde el principio", { player.seekTo(0); if (!player.playWhenReady) player.play(); panel = 0; bump() }, icon = null, requester = infoReq)
                 }
             }
         }
@@ -525,10 +557,27 @@ private fun SeekIcon(back: Boolean, color: Color, size: androidx.compose.ui.unit
 }
 
 @Composable
-private fun Scrub(posMs: Long, durMs: Long) {
+private fun Scrub(posMs: Long, durMs: Long, thick: Boolean = false) {
     val frac = if (durMs > 0) (posMs.toFloat() / durMs).coerceIn(0f, 1f) else 0f
-    Box(Modifier.fillMaxWidth().height(5.dp).background(Color.White.copy(alpha = .3f), RoundedCornerShape(99.dp))) {
-        Box(Modifier.fillMaxWidth(frac).height(5.dp).background(C.accent, RoundedCornerShape(99.dp)))
+    val h by animateFloatAsState(if (thick) 10f else 6f, tween(250), label = "scrub-h")
+    Box(Modifier.fillMaxWidth().height(h.dp).background(Color.White.copy(alpha = .3f), RoundedCornerShape(99.dp))) {
+        Box(Modifier.fillMaxWidth(frac).height(h.dp).background(Color.White, RoundedCornerShape(99.dp)))
+    }
+}
+
+/** Un subtítulo elegible en el menú. */
+class TrackOpt(val group: androidx.media3.common.Tracks.Group, val label: String, val selected: Boolean)
+
+@Composable
+private fun SubRow(text: String, selected: Boolean, req: FocusRequester?, onClick: () -> Unit) {
+    Focusable(onClick, Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(14.dp), scale = 1.02f, ring = false, requester = req) { f ->
+        Row(
+            Modifier.fillMaxSize().background(if (f) Color.White else Color.Transparent).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text, style = ts(18, if (selected || f) FontWeight.Bold else FontWeight.Normal, if (f) Color(0xFF111111) else Color.White), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (selected) Icon(Ic.check, null, tint = if (f) Color(0xFF111111) else Color.White, modifier = Modifier.size(20.dp))
+        }
     }
 }
 
