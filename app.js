@@ -2182,6 +2182,39 @@ document.addEventListener('click', e => {
 });
 
 
+
+/* ---------- completar imágenes vacías desde TMDB (pósters, fondos, logos, reparto y miniaturas de episodios) ---------- */
+async function refillFromTmdb(btn){
+  if (!tmdbKey()){ toast('Falta la clave de TMDB', true); return; }
+  btn.disabled = true; let n = 0, k = 0;
+  const list = S.titles.filter(t => t.tmdbId);
+  for (const t0 of list){
+    k++; btn.textContent = `Buscando en TMDB… ${k}/${list.length}`;
+    const t = JSON.parse(JSON.stringify(t0)); const serie = t.type === 'serie'; const base = (serie ? '/tv/' : '/movie/') + t.tmdbId;
+    try {
+      const det = await tmdb(base, { append_to_response: serie ? 'aggregate_credits' : 'credits' });
+      const ims = await tmdb(base + '/images', { language: '', include_image_language: 'es,en,null' }).catch(() => ({}));
+      let ch = false; const set = (key, v) => { if (!t[key] && v){ t[key] = v; ch = true; } };
+      set('poster', tmdbImg((ims.posters || []).find(x => x.iso_639_1 === 'es')?.file_path || det.poster_path, 'w780'));
+      set('backdrop', tmdbImg(det.backdrop_path || (ims.backdrops || [])[0]?.file_path, 'original'));
+      const tl = (ims.backdrops || []).filter(x => x.iso_639_1 === 'es' || x.iso_639_1 === 'en').sort((a, b) => (a.iso_639_1 === 'es' ? -1 : 0) - (b.iso_639_1 === 'es' ? -1 : 0) || (b.vote_average || 0) - (a.vote_average || 0))[0];
+      set('thumbWide', tl ? tmdbImg(tl.file_path, 'w1280') : '');
+      set('logo', tmdbImg(pickLogo(ims.logos), 'w500'));
+      const cast = (det.aggregate_credits || det.credits || {}).cast || [];
+      (t.cast || []).forEach(c => { if (!c.photo){ const m = cast.find(x => x.profile_path && x.name.toLowerCase() === String(c.name || '').toLowerCase()); if (m){ c.photo = tmdbImg(m.profile_path, 'w185'); ch = true; } } });
+      if (serie) for (const s of t.seasons || []){
+        if (!(s.episodes || []).some(e => !e.thumb)) continue;
+        const sd = await tmdb(`/tv/${t.tmdbId}/season/${s.number}`).catch(() => ({}));
+        (s.episodes || []).forEach((e, i) => { const st = (sd.episodes || []).find(x => x.episode_number === +(e.number || i + 1))?.still_path; if (!e.thumb && st){ e.thumb = tmdbImg(st, 'w780'); ch = true; } });
+      }
+      if (ch){ await S.db.doc('titles/' + t.id).set({ ...t, updatedAt: Date.now() }); n++; }
+    } catch(_){}
+  }
+  btn.disabled = false; btn.textContent = 'Completar imágenes desde TMDB';
+  toast(n ? `Listo: ${n} títulos completados con imágenes de TMDB.` : 'No había imágenes para completar.');
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-tmdb-refill]'); if (b && S.owner) refillFromTmdb(b); });
+
 /* ---------- pasar a Cloudflare R2 todo lo que todavía está en Supabase Storage ---------- */
 const isSbFile = u => typeof u === 'string' && /\/storage\/v1\/object\/public\//.test(u);
 function sbFilesInUse(){
@@ -2219,7 +2252,8 @@ function renderSite(){
   return `<div class="panel-head"><h1>Sitio</h1></div>
     <div class="fs" style="border-color:${sbLeft ? '#e5a400' : 'var(--line-2)'}"><h3>Archivos <small>${sbLeft ? `${sbLeft} todavía en Supabase` : 'todo en Cloudflare R2'}</small></h3>
       <p class="hint" style="margin:0">Las imágenes y videos nuevos se suben siempre a Cloudflare R2. ${sbLeft ? 'Los que quedaron guardados en Supabase gastan su cupo de transferencia (si se pasa, Supabase bloquea la página): pasalos a Cloudflare con este botón.' : ''}</p>
-      ${sbLeft ? '<div class="toolbar"><button class="btn btn-primary" data-r2-migrate>Pasar todo a Cloudflare R2</button></div>' : ''}</div>
+      <div class="toolbar">${sbLeft ? '<button class="btn btn-primary" data-r2-migrate>Pasar todo a Cloudflare R2</button>' : ''}<button class="btn btn-line" data-tmdb-refill>Completar imágenes desde TMDB</button></div>
+      <span class="hint">“Completar imágenes desde TMDB” rellena los pósters, fondos, logos, fotos del reparto y miniaturas de episodios que estén vacíos (solo en títulos importados de TMDB).</span></div>
     <div class="fs" style="border-color:${shut ? '#e5484d' : 'var(--line-2)'}"><h3>Acceso <small>${shut ? 'CERRADO · solo entra tu cuenta admin' : 'ABIERTO · lo puede usar cualquiera'}</small></h3>
       <div class="toolbar"><button class="btn ${shut ? 'btn-primary' : 'btn-danger'}" data-site-closed="${shut ? '0' : '1'}">${shut ? 'Abrir la página y las apps' : 'Cerrar la página y las apps'}</button></div>
       <label class="field"><span>Mensaje que ven los demás mientras está cerrado (opcional)</span><input class="input" id="s-closedmsg" data-site="closedMsg" value="${esc(S.site.closedMsg || '')}" placeholder="Estamos haciendo cambios. Volvé a intentar más tarde."></label>
