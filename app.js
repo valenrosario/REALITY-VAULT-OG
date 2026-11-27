@@ -1611,6 +1611,9 @@ const CC_STYLES = [
   { id:'dvdyellow', name:'DVD / VHS amarillo', era:'DVD y VHS subtitulados', desc:'La versión amarilla con borde negro que usaban muchas ediciones subtituladas.', mono:0, upper:0, box:0, size:.056, bottom:.06, bottomLogo:.15, outline:1, color:'#f7e43a' }
 ];
 const ccStyleOf = id => CC_STYLES.find(x => x.id === id) || CC_STYLES[0];
+/** Subtítulos de series y películas (web, celular y tele): estilo MTV por defecto; se cambia en Panel → Sitio. */
+const subCfg = () => { const s = S.site || {}; const n = (v, d, a, b) => Math.min(b, Math.max(a, isFinite(+v) && v !== '' && v != null ? +v : d));
+  return { style: s.subStyle || 'mtv', scale: n(s.subScale, 1, .6, 1.8), scaleTv: n(s.subScaleTv, 1, .6, 1.8), lift: n(s.subLift, 0, 0, .15) }; };
 const CC_SAMPLE = ['Paris: ¿Qué es Wal-Mart?', '¿Venden cosas para la pared?'];
 /* ---------- screen bugs (PNG de pantalla completa, se usan tal cual, sin recortar) ----------
    Cada PNG es un cuadro entero (16:9 o 4:3) con el logo ya ubicado. Se pone encima del programa a su tamaño real:
@@ -2303,6 +2306,25 @@ async function migrateToR2(btn){
   rerenderPanel();
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-r2-migrate]'); if (b && S.owner) migrateToR2(b); });
+function subsAdminHtml(){
+  const c = subCfg(); const pc = v => Math.round(v * 100);
+  const tiles = [{ id:'classic', name:'Clásico del sitio', era:'El de siempre', desc:'Letra blanca sobre un cuadro negro semitransparente.' }, ...CC_STYLES];
+  return `<div class="fs"><h3>Subtítulos <small>series y películas · web, celular y tele</small></h3>
+    <p class="hint" style="margin:0 0 8px">Estilo con el que se ven los subtítulos al mirar un título (en el canal en vivo cada canal elige el suyo). El de MTV es el predeterminado.</p>
+    <div class="lv-ccs" id="subStyles">${tiles.map(st => `<button type="button" class="lv-cc ${c.style === st.id ? 'on' : ''}" data-sub-style="${esc(st.id)}">
+      <span class="lv-cc-demo">${st.id === 'classic' ? '<span class="sub-classic">Paris: ¿Qué es Wal-Mart?<br>¿Venden cosas para la pared?</span>' : ccHtml({ ...st, bottom: st.bottom + c.lift }, false, st.left ? ['Y AHORA, EL CLIMA', 'PARA ESTE FIN DE SEMANA'] : undefined, c.scale)}</span>
+      <b>${esc(st.name)}</b><small class="lv-cc-era">${esc(st.era)}</small><small>${esc(st.desc)}</small></button>`).join('')}</div>
+    <div class="sub-sliders">
+      <label class="field"><span>Tamaño en web y celular · <b data-sub-out="subScale">${pc(c.scale)}%</b></span><input type="range" min="60" max="180" step="5" data-subcfg="subScale" value="${pc(c.scale)}"></label>
+      <label class="field"><span>Tamaño en la tele · <b data-sub-out="subScaleTv">${pc(c.scaleTv)}%</b></span><input type="range" min="60" max="180" step="5" data-subcfg="subScaleTv" value="${pc(c.scaleTv)}"></label>
+      <label class="field"><span>Altura desde abajo · <b data-sub-out="subLift">+${pc(c.lift)}%</b></span><input type="range" min="0" max="15" step="1" data-subcfg="subLift" value="${pc(c.lift)}"></label>
+    </div>
+    <span class="hint">100% es el tamaño normal del estilo. La altura sube los subtítulos desde el borde de abajo. Las apps toman los cambios al abrir un video.</span></div>`;
+}
+async function saveSubCfg(patch){ try { S.site = { ...S.site, ...patch }; await S.db.doc('site/config').set({ ...S.site, updatedAt: Date.now() }); toast('Subtítulos guardados'); } catch(err){ toast('No se pudo guardar', true); } }
+document.addEventListener('click', e => { const b = e.target.closest('[data-sub-style]'); if (!b || !S.owner) return; saveSubCfg({ subStyle: b.dataset.subStyle }).then(rerenderPanel); });
+document.addEventListener('input', e => { const el = e.target; if (!S.owner || !el.dataset?.subcfg) return; const o = app.querySelector(`[data-sub-out="${el.dataset.subcfg}"]`); if (o) o.textContent = (el.dataset.subcfg === 'subLift' ? '+' : '') + el.value + '%'; });
+document.addEventListener('change', e => { const el = e.target; if (!S.owner || !el.dataset?.subcfg) return; const k = el.dataset.subcfg; saveSubCfg({ [k]: k === 'subLift' ? +el.value / 100 : +el.value / 100 }).then(rerenderPanel); });
 function renderSite(){
   const shut = !!S.site.closed;
   const sbLeft = sbFilesInUse().length;
@@ -2330,6 +2352,7 @@ function renderSite(){
       <label class="field"><span>TikTok</span><input class="input" id="s-tt" data-site="tiktok" value="${esc(S.site.tiktok ?? '')}" placeholder="https://tiktok.com/@tuusuario"></label>
       <span class="hint span2">Los íconos aparecen solo si cargás el enlace. Dejá un campo vacío para ocultarlo.</span>
     </div></div>
+    ${subsAdminHtml()}
     <div class="fs"><h3>Respaldo <small>todo el catálogo en un archivo</small></h3>
       <div class="toolbar"><button class="btn btn-line" data-backup-dl>Descargar respaldo</button><button class="btn btn-line" data-backup-up>Importar respaldo</button></div>
       <span class="hint">Importar agrega o reemplaza títulos, banners y la configuración del sitio con los del archivo. Las imágenes incluidas dentro del archivo se suben solas.</span>
@@ -4038,7 +4061,15 @@ function rvPlayer(video, o = {}){
   const saveCC=()=>{try{localStorage.setItem('rv.cc',ccOn?'1':'0')}catch(_){}};
   const renderCue=()=>{
     subs.textContent='';
+    const cfg=subCfg();subs.classList.toggle('cc',cfg.style!=='classic');
     if(!cur||!ccOn||!cur.activeCues)return;
+    if(cfg.style!=='classic'){
+      const st=ccStyleOf(cfg.style);
+      const txt=[...cur.activeCues].map(c=>{const b=document.createElement('div');b.appendChild(c.getCueAsHTML());return b.textContent}).join('\n').trim();
+      if(!txt)return;
+      subs.innerHTML=`<div class="lvp-43">${ccHtml({...st,bottom:st.bottom+cfg.lift},false,ccLinesWeb(txt,st.max||(st.mono?32:42),!!st.upper),cfg.scale)}</div>`;
+      return;
+    }
     [...cur.activeCues].forEach(c=>{
       const box=document.createElement('div');box.appendChild(c.getCueAsHTML());
       box.innerHTML.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).forEach(l=>{const s=document.createElement('div');s.className='ln';s.innerHTML=l;subs.appendChild(s)});

@@ -600,3 +600,25 @@ fun LiveSignal(ch: LiveChannel, sc: Sched, mono: FontFamily, sans: FontFamily, m
         }
     }
 }
+
+
+/**
+ * Subtítulos de series y películas con el estilo elegido en el panel (MTV por defecto), dentro del cuadro 4:3 de la imagen.
+ * `ctrlFrac` = cuánto hay que subirlos (proporción del alto) mientras se ven los controles; `scale` = tamaño elegido.
+ */
+@Composable
+fun VodCaptions(text: String, style: String, scale: Float, lift: Float, ctrlFrac: Float, modifier: Modifier = Modifier) {
+    if (text.isBlank()) return
+    val spec = ccSpec(style)
+    val mono = remember { FontFamily(Font(R.font.cc_mono, FontWeight.Bold)) }
+    val sans = remember { FontFamily(Font(R.font.cc_sans, FontWeight.Bold)) }
+    val up by animateFloatAsState(ctrlFrac, tween(250), label = "subs-lift")
+    BoxWithConstraints(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val fitW = maxHeight * (4f / 3f) <= maxWidth
+        val bw = if (fitW) maxHeight * (4f / 3f) else maxWidth
+        val bh = if (fitW) maxHeight else maxWidth * (3f / 4f)
+        Box(Modifier.size(bw, bh)) {
+            CcBlock(spec, ccLines(text, spec.max, spec.upper), bw, bh, false, 0, mono, sans, scale = scale, lift = maxOf(spec.bottom + lift, up))
+        }
+    }
+}

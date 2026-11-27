@@ -259,7 +259,15 @@ object Store {
     var isOwner by mutableStateOf(false)
     val locked get() = closed && !isOwner
 
-    private fun applyClosed(d: JSONObject) { closed = d.optBoolean("closed"); closedMsg = d.s("closedMsg") }
+    /** Subtítulos de series y películas (se eligen en el panel → Sitio). "classic" = cuadro negro de siempre. */
+    var subStyle = "mtv"; var subScale = 1f; var subScaleTv = 1f; var subLift = 0f
+    private fun applySubs(d: JSONObject) {
+        subStyle = d.s("subStyle").ifBlank { "mtv" }
+        subScale = d.optDouble("subScale", 1.0).toFloat().coerceIn(.6f, 1.8f)
+        subScaleTv = d.optDouble("subScaleTv", 1.0).toFloat().coerceIn(.6f, 1.8f)
+        subLift = d.optDouble("subLift", 0.0).toFloat().coerceIn(0f, .15f)
+    }
+    private fun applyClosed(d: JSONObject) { closed = d.optBoolean("closed"); closedMsg = d.s("closedMsg"); applySubs(d) }
 
     /** Consulta liviana (solo la configuración del sitio) para enterarse rápido si se cerró o se abrió. */
     suspend fun refreshClosed() {

@@ -348,8 +348,12 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
             Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 118.dp)
         ) { playNext() }
 
-        // subtítulos propios: tipografía del sitio, cuadro negro, bien arriba del borde y de la barra de controles
-        if (subsOn && cueText.isNotBlank()) {
+        // subtítulos propios: estilo elegido en el panel (MTV por defecto) o el cuadro negro de siempre
+        if (subsOn && cueText.isNotBlank() && Store.subStyle != "classic") {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                VodCaptions(cueText, Store.subStyle, Store.subScaleTv, Store.subLift, if (controlsVisible) 150.dp.value / maxHeight.value else 0f)
+            }
+        } else if (subsOn && cueText.isNotBlank()) {
             Box(
                 Modifier.align(Alignment.BottomCenter)
                     .padding(bottom = if (controlsVisible) 150.dp else 64.dp)

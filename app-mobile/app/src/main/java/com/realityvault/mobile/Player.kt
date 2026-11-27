@@ -506,7 +506,12 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
             )
 
             // subtítulos
-            if (subsOn && cueText.isNotBlank()) {
+            if (subsOn && cueText.isNotBlank() && com.realityvault.tv.Store.subStyle != "classic") {
+                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+                    com.realityvault.tv.VodCaptions(cueText, com.realityvault.tv.Store.subStyle, com.realityvault.tv.Store.subScale, com.realityvault.tv.Store.subLift,
+                        if (controlsVisible && !locked) 100.dp.value / maxHeight.value else 0f)
+                }
+            } else if (subsOn && cueText.isNotBlank()) {
                 // tamaño según la pantalla (como en las plataformas de streaming): ~6 % del lado corto
                 val cfg = androidx.compose.ui.platform.LocalConfiguration.current
                 val subSize = (minOf(cfg.screenWidthDp, cfg.screenHeightDp) * .062f).coerceIn(19f, 34f)
