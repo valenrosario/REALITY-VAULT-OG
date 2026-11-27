@@ -108,4 +108,4 @@ def on_black(w, h, lw):
     im.paste(l, ((w - l.width)//2, (h - l.height)//2), l); return im
 on_black(540, 405, 420).save(f'{OUT}/icon_fhd.png'); on_black(290, 218, 230).save(f'{OUT}/icon_hd.png')
 on_black(1920, 1080, 700).save(f'{OUT}/splash_fhd.png'); on_black(1280, 720, 470).save(f'{OUT}/splash_hd.png')
-EXTRA, len(os.listdir(OUT)))
+print("imágenes:", len(os.listdir(OUT)))
