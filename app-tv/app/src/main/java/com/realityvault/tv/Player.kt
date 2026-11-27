@@ -382,11 +382,11 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
         ) { playNext() }
 
         // subtítulos propios: estilo elegido en el panel (MTV por defecto) o el cuadro negro de siempre
-        if (subsOn && cueText.isNotBlank() && Store.subStyle != "classic") {
+        if (subsOn && cueText.isNotBlank() && panel < 2 && Store.subStyle != "classic") {
             androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
                 VodCaptions(cueText, Store.subStyle, Store.subScaleTv, Store.subLift, if (controlsVisible || panel != 0) 175.dp.value / maxHeight.value else 0f)
             }
-        } else if (subsOn && cueText.isNotBlank()) {
+        } else if (subsOn && cueText.isNotBlank() && panel < 2 && Store.subStyle == "classic") {
             Box(
                 Modifier.align(Alignment.BottomCenter)
                     .padding(bottom = if (controlsVisible) 150.dp else 64.dp)
