@@ -69,7 +69,9 @@ data class LiveItem(
     /** Screen bug propio de este programa (null = el del canal). */
     val bug: LiveBug? = null,
     /** true = sin screen bug: se ve el logo común. */
-    val bugOff: Boolean = false
+    val bugOff: Boolean = false,
+    /** Videos sueltos (sin título en el catálogo): evento y miniatura. */
+    val sub: String = "", val thumb: String = ""
 )
 data class LiveChannel(
     val id: String, val name: String, val number: Int, val logo: String, val logoPos: String,
@@ -122,7 +124,7 @@ fun parseLive(d: JSONObject): LiveData {
             val ba = o.optJSONArray("breaks") ?: JSONArray()
             LiveItem(o.str("id"), o.str("titleId"), o.num("season").toInt(), o.num("episode").toInt(), o.str("label"),
                 o.str("url"), o.str("subs"), o.num("dur"), (0 until ba.length()).map { ba.optDouble(it, 0.0) },
-                parseBug(o.optJSONObject("bug")), o.optJSONObject("bug")?.optInt("off", 0) == 1)
+                parseBug(o.optJSONObject("bug")), o.optJSONObject("bug")?.optInt("off", 0) == 1, o.str("sub"), o.str("thumb"))
         }
         LiveChannel(c.str("id"), c.str("name"), c.num("number", (i + 1).toDouble()).toInt(), c.str("logo"),
             c.str("logoPos").ifBlank { "br" }, c.num("logoOpacity", .35).toFloat().coerceIn(.05f, 1f),
@@ -220,11 +222,13 @@ fun liveChannels(): List<LiveChannel> {
 
 fun itemTitle(it: LiveItem): String = Store.byId(it.titleId)?.title ?: it.label.ifBlank { "Programa" }
 fun itemSub(it: LiveItem): String {
+    if (it.titleId.isBlank()) return it.sub.ifBlank { "Performance" }
     if (it.season <= 0) return it.label.takeIf { l -> l.isNotBlank() && l != itemTitle(it) } ?: "Película"
     val ep = Store.byId(it.titleId)?.seasons?.firstOrNull { s -> s.number == it.season }?.episodes?.firstOrNull { e -> e.number == it.episode }
     return "T${it.season} · E${it.episode}" + (ep?.title?.takeIf { x -> x.isNotBlank() }?.let { x -> " · $x" } ?: "")
 }
 fun itemThumb(it: LiveItem): String {
+    if (it.thumb.isNotBlank()) return it.thumb
     val t = Store.byId(it.titleId) ?: return ""
     val ep = if (it.season > 0) t.seasons.firstOrNull { s -> s.number == it.season }?.episodes?.firstOrNull { e -> e.number == it.episode } else null
     return ep?.thumb?.ifBlank { null } ?: t.wide

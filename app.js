@@ -1595,9 +1595,9 @@ function liveNow(ch, data){
   return { sc, t, seg, b, left: b ? b.end - t : 0, next };
 }
 const lvName = it => byId(it.titleId)?.title || it.label || 'Programa';
-const lvSub = it => { if (+it.season > 0){ const ep = lvEp(it); return `T${it.season} · E${it.episode}${ep?.title ? ' · ' + ep.title : ''}`; } return 'Película'; };
+const lvSub = it => { if (!it.titleId) return it.sub || 'Performance'; if (+it.season > 0){ const ep = lvEp(it); return `T${it.season} · E${it.episode}${ep?.title ? ' · ' + ep.title : ''}`; } return 'Película'; };
 const lvLabel = it => `${lvName(it)} · ${lvSub(it)}`;
-const lvThumb = it => { const t = byId(it.titleId); return lvEp(it)?.thumb || t?.thumbWide || t?.backdrop || t?.bannerImage || ''; };
+const lvThumb = it => { if (it.thumb) return it.thumb; const t = byId(it.titleId); return lvEp(it)?.thumb || t?.thumbWide || t?.backdrop || t?.bannerImage || ''; };
 const autoBreaks = dur => dur > 600 ? [Math.round(dur/3), Math.round(dur*2/3)] : [];
 
 /* estilos de subtítulos de la época: mismas medidas que ccSpec() en Live.kt (proporción del alto del cuadro 4:3) */
@@ -1736,6 +1736,9 @@ function lvStepPrograma(ch){
       ? `<button class="btn btn-primary btn-sm" data-lv-addt="${esc(pick.id)}" data-season="">+ Todas las temporadas</button>${(pick.seasons||[]).map(s => `<button class="btn btn-line btn-sm" data-lv-addt="${esc(pick.id)}" data-season="${esc(s.number)}">Temporada ${esc(s.number)}</button>`).join('')}`
       : `<button class="btn btn-primary btn-sm" data-lv-addt="${esc(pick.id)}" data-season="">+ Agregar película</button>`}</div>` : ''}
   </section>
+  <section class="lv-sec"><h2>Videos sueltos</h2><p class="lv-help">Performances, presentaciones de premios, videoclips… Se suben directo al canal, sin crear una película en el catálogo. Podés elegir varios a la vez (MP4). Después les ponés el nombre y el evento en la lista de abajo.</p>
+    <div class="lv-tools"><button class="btn btn-primary btn-sm" data-lv-clipup>Subir videos</button><button class="btn btn-line btn-sm" data-lv-clipurl>Pegar enlace</button></div>
+  </section>
   <section class="lv-sec"><div class="lv-sec-h"><h2>Programación</h2><span class="lv-chips"><i>${(ch.items||[]).length} programas</i>${nw ? `<i>ciclo de ${hm(nw.sc.cycle)}</i>` : ''}</span></div>
     ${(ch.items||[]).length ? `<div class="lv-tools">
       <button class="btn btn-line btn-sm" data-lv-shuffle>Mezclar el orden</button>
@@ -1745,7 +1748,8 @@ function lvStepPrograma(ch){
     <div class="lv-prog">${(ch.items||[]).map((it, ii) => `<div class="lv-pi ${(+it.dur||0) < 5 ? 'bad' : ''} ${nw?.b?.i === ii ? 'now' : ''}">
       <span class="lv-pi-n">${ii+1}</span>
       <span class="lv-pi-th" ${lvThumb(it) ? `style="background-image:url('${esc(lvThumb(it))}')"` : ''}></span>
-      <span class="lv-pi-t"><b>${esc(lvName(it))}</b><small>${esc(lvSub(it))}${nw?.b?.i === ii ? ' · <em>al aire</em>' : ''}</small></span>
+      ${it.titleId ? `<span class="lv-pi-t"><b>${esc(lvName(it))}</b><small>${esc(lvSub(it))}${nw?.b?.i === ii ? ' · <em>al aire</em>' : ''}</small></span>`
+        : `<span class="lv-pi-t lv-clip"><input class="input" data-lv-item="${ii}" data-lv-k="label" value="${esc(it.label || '')}" placeholder="Nombre (ej: Britney Spears – I'm a Slave 4 U)" aria-label="Nombre"><input class="input" data-lv-item="${ii}" data-lv-k="sub" value="${esc(it.sub || '')}" placeholder="Evento (ej: VMAs 2001)" aria-label="Evento">${nw?.b?.i === ii ? '<small><em>al aire</em></small>' : ''}</span>`}
       <label class="lv-pi-d">${(+it.dur||0) < 5 ? '<small>Sin duración</small>' : ''}<input class="input" data-lv-item="${ii}" data-lv-k="dur" value="${it.dur ? mmss(it.dur) : ''}" placeholder="mm:ss" aria-label="Duración"></label>
       <span class="lv-act"><button class="iconbtn" data-lv-imove="${ii}" data-d="-1" ${ii===0?'disabled':''} aria-label="Subir">↑</button><button class="iconbtn" data-lv-imove="${ii}" data-d="1" ${ii===(ch.items.length-1)?'disabled':''} aria-label="Bajar">↓</button><button class="iconbtn" data-lv-idel="${ii}" aria-label="Quitar">✕</button></span>
     </div>`).join('') || '<p class="lv-help">Todavía no hay programas. Elegí algo del catálogo de arriba.</p>'}</div>
@@ -1855,7 +1859,7 @@ async function lvMeasureItems(items, onStep){
 function lvTwoTap(b, label, fn){ if (!b.dataset.sure){ b.dataset.sure = '1'; const t = b.textContent; b.textContent = label; setTimeout(() => { if (b.isConnected){ delete b.dataset.sure; b.textContent = t; } }, 3000); return; } fn(); }
 window.addEventListener('beforeunload', e => { if (S.lvEd?.dirty){ e.preventDefault(); e.returnValue = ''; } });
 document.addEventListener('click', async e => {
-  const b = e.target.closest('[data-lv-new],[data-lv-open],[data-lv-back],[data-lv-save],[data-lv-discard],[data-lv-del],[data-lv-step],[data-lv-pick],[data-lv-addt],[data-lv-imove],[data-lv-idel],[data-lv-shuffle],[data-lv-measure],[data-lv-restart],[data-lv-clear],[data-lv-adup],[data-lv-adurl],[data-lv-addel],[data-lv-admove],[data-lv-per],[data-lv-auto],[data-lv-nocuts],[data-lv-mk],[data-lv-bar],[data-lv-pos],[data-lv-cc],[data-lv-bug],[data-lv-bugup],[data-lv-bugdel]');
+  const b = e.target.closest('[data-lv-new],[data-lv-open],[data-lv-back],[data-lv-save],[data-lv-discard],[data-lv-del],[data-lv-step],[data-lv-pick],[data-lv-addt],[data-lv-imove],[data-lv-idel],[data-lv-shuffle],[data-lv-measure],[data-lv-restart],[data-lv-clear],[data-lv-adup],[data-lv-adurl],[data-lv-addel],[data-lv-admove],[data-lv-per],[data-lv-auto],[data-lv-nocuts],[data-lv-mk],[data-lv-bar],[data-lv-pos],[data-lv-cc],[data-lv-bug],[data-lv-bugup],[data-lv-bugdel],[data-lv-clipup],[data-lv-clipurl]');
   if (!b || !S.owner) return; const d = b.dataset; const E = S.lvEd; const ch = E && lvCh(E.id);
   if ('lvNew' in d){ const L = liveData(); const n = Math.max(0, ...L.channels.map(c => +c.number || 0)) + 1;
     const c = { id: uid('ch'), name: 'Nuevo canal', number: n, logo: '', guideImage: '', logoPos: 'br', logoOpacity: .35, logoSize: 56, active: true, epoch: Date.now(), captions: true, ccStyle: 'cc608', adsPerBreak: 2, podBetween: false, items: [] };
@@ -1898,6 +1902,26 @@ document.addEventListener('click', async e => {
     const r = b.getBoundingClientRect(); const at = Math.round((e.clientX - r.left) / r.width * dur);
     if (at <= 20 || at >= dur - 20){ toast('Muy pegado al principio o al final', true); return; }
     it.breaks = [...new Set([...(it.breaks||[]), at])].sort((a,b) => a-b); lvDirty(); rerenderPanel(); return; }
+  if ('lvClipup' in d){
+    const files = await new Promise(res => { const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true; inp.accept = 'video/mp4,video/webm,video/quicktime,.mp4,.m4v,.mov,.webm'; inp.onchange = () => res([...inp.files]); inp.click(); });
+    if (!files.length) return;
+    let ok = 0;
+    for (let n = 0; n < files.length; n++){ const f = files[n];
+      if (!/\.(mp4|m4v|mov|webm)$/i.test(f.name) && !/^video\/(mp4|webm|quicktime)$/.test(f.type)){ toast(`${f.name}: tiene que ser MP4`, true); continue; }
+      try {
+        const ext = (f.name.match(/\.(mp4|m4v|mov|webm)$/i)?.[1] || 'mp4').toLowerCase();
+        const url = await r2Put(f, ext, f.type || 'video/mp4', p => toast(`Subiendo ${n + 1}/${files.length}: ${f.name} · ${p}%`));
+        const dur = await measureDur(url);
+        const label = f.name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+        ch.items = [...(ch.items || []), { id: uid('li'), titleId: '', season: 0, episode: 0, label, sub: '', url, subs: '', dur, breaks: [] }];
+        ok++; lvDirty(); if (S.lvEd === E) rerenderPanel();
+      } catch(err){ toast(`${f.name}: ${err.message || 'no se pudo subir'}`, true); }
+    }
+    if (ok) toast(`${ok} video${ok > 1 ? 's' : ''} agregado${ok > 1 ? 's' : ''}. Ponéles nombre y tocá Guardar canal.`);
+    return; }
+  if ('lvClipurl' in d){ const url = (prompt('Enlace directo al video (.mp4):') || '').trim(); if (!url) return; if (!isFileUrl(url)){ toast('Tiene que ser un enlace directo a un archivo de video', true); return; }
+    const dur = await measureDur(url); ch.items = [...(ch.items || []), { id: uid('li'), titleId: '', season: 0, episode: 0, label: '', sub: '', url, subs: '', dur, breaks: [] }];
+    lvDirty(); rerenderPanel(); toast(dur ? 'Video agregado: ponele nombre y tocá Guardar canal' : 'No pude medir la duración: escribila a mano', !dur); return; }
   if (d.lvBugdel != null){ e.stopPropagation(); const L = E.d.bugs || []; const x = L.find(q => q.id === d.lvBugdel); E.d.bugs = L.filter(q => q.id !== d.lvBugdel);
     if (x && ch.bug?.u === x.u) delete ch.bug; ch.items.forEach(it => { if (it.bug?.u === x?.u) delete it.bug; }); lvDirty(); rerenderPanel(); return; }
   if (d.lvBug != null){ const p = d.lvBug && lvBugLib().find(x => x.id === d.lvBug); if (p) ch.bug = lvBugRes(p); else delete ch.bug; lvDirty(); rerenderPanel(); return; }
@@ -1940,6 +1964,7 @@ document.addEventListener('change', e => {
     else { const t = el.dataset.lvTbug; ch.items.forEach(it => { if (it.titleId === t) set(it); }); app.querySelectorAll(`select[data-lv-tt="${CSS.escape(t)}"]`).forEach(s => { s.value = v; }); }
     lvDirty(); lvRefreshSide(); return; }
   if (el.dataset.lvItem != null){ const it = ch.items[+el.dataset.lvItem]; if (!it) return;
+    if (el.dataset.lvK === 'label' || el.dataset.lvK === 'sub'){ it[el.dataset.lvK] = el.value.trim(); lvDirty(); lvRefreshSide(); return; }
     if (el.dataset.lvK === 'dur'){ const v = parseMmss(el.value); if (!(v > 0)){ toast('Escribí la duración como minutos:segundos (ej: 21:34)', true); return; } it.dur = v; }
     else { const vals = el.value.split(/[,;\s]+/).filter(Boolean).map(parseMmss); if (vals.some(x => isNaN(x))){ toast('Escribí los cortes como 7:00, 14:30', true); return; } it.breaks = [...new Set(vals)].sort((a,b) => a-b); }
     lvDirty(); rerenderPanel(); return; }
