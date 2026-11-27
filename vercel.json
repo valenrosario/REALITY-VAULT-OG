@@ -22,6 +22,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/en-vivo",
+      "destination": "/index.html"
+    },
+    {
       "source": "/series",
       "destination": "/index.html"
     },

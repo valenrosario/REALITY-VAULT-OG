@@ -206,20 +206,19 @@ object AdminData {
         @Suppress("DEPRECATION")
         val fmt = if (Build.VERSION.SDK_INT >= 30) (if (alpha) Bitmap.CompressFormat.WEBP_LOSSLESS else Bitmap.CompressFormat.WEBP_LOSSY) else Bitmap.CompressFormat.WEBP
         out.compress(fmt, if (alpha && Build.VERSION.SDK_INT >= 30) 80 else 88, bos)
-        val path = "$kind/${uid("m")}.webp"
+        // se sube a Cloudflare R2 (enlace firmado de la función "r2-upload"), no a Supabase Storage
         val tk = Store.token() ?: throw Exception("Tu sesión venció. Volvé a entrar.")
-        val c = URL("${BuildConfig.SUPABASE_URL}/storage/v1/object/media/$path").openConnection() as HttpURLConnection
+        val sign = JSONObject(Api.call("POST", "/functions/v1/r2-upload", JSONObject().put("ext", "webp").put("type", "image/webp").toString(), tk))
+        val put = sign.optString("uploadUrl"); val pub = sign.optString("publicUrl")
+        if (put.isBlank() || pub.isBlank()) throw Exception("No se pudo conectar con Cloudflare R2.")
+        val c = URL(put).openConnection() as HttpURLConnection
         try {
-            c.requestMethod = "POST"; c.doOutput = true
+            c.requestMethod = "PUT"; c.doOutput = true
             c.connectTimeout = 15000; c.readTimeout = 60000
-            c.setRequestProperty("apikey", BuildConfig.SUPABASE_KEY)
-            c.setRequestProperty("Authorization", "Bearer $tk")
             c.setRequestProperty("Content-Type", "image/webp")
-            c.setRequestProperty("cache-control", "max-age=31536000")
-            c.setRequestProperty("x-upsert", "false")
             c.outputStream.use { it.write(bos.toByteArray()) }
             if (c.responseCode !in 200..299) throw Exception("No se pudo subir la imagen (${c.responseCode}).")
         } finally { c.disconnect() }
-        "${BuildConfig.SUPABASE_URL}/storage/v1/object/public/media/$path"
+        pub
     }
 }

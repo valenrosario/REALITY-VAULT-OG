@@ -74,10 +74,23 @@ async function uploadImage(file, kind){
   const [w,h,alpha] = IMG_SPECS[kind] || IMG_SPECS.backdrop;
   const blob = await processImage(file, w, h, alpha);
   const ext = ({'image/webp':'webp','image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/svg+xml':'svg'})[blob.type] || 'img';
-  const path = `${kind}/${uid('m')}.${ext}`;
-  const { error } = await S.sb.storage.from(BUCKET).upload(path, blob, { contentType: blob.type, cacheControl: '31536000', upsert:false });
-  if (error) throw new Error('No se pudo subir la imagen: ' + error.message);
-  return S.sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+  // todo va a Cloudflare R2 (Supabase Storage tiene un cupo de transferencia chico y se bloqueaba el proyecto)
+  return r2Put(blob, ext, blob.type || 'application/octet-stream');
+}
+/** Sube un archivo a Cloudflare R2 con un enlace firmado que da la función "r2-upload" (solo el admin). */
+async function r2Put(blob, ext, type, onProgress){
+  let r2 = null;
+  try { const r = await S.sb.functions.invoke('r2-upload', { body: { ext, type } }); if (!r.error && r.data?.uploadUrl) r2 = r.data; } catch(_){}
+  if (!r2) throw new Error('No se pudo conectar con Cloudflare R2. Probá de nuevo en un rato.');
+  await new Promise((ok, ko) => {
+    const x = new XMLHttpRequest();
+    x.open('PUT', r2.uploadUrl); x.setRequestHeader('Content-Type', type);
+    x.upload.onprogress = ev => { if (ev.lengthComputable && onProgress) onProgress(Math.round(ev.loaded / ev.total * 100)); };
+    x.onload = () => x.status >= 200 && x.status < 300 ? ok() : ko(new Error('No se pudo subir a Cloudflare (' + x.status + ').'));
+    x.onerror = () => ko(new Error('No se pudo subir a Cloudflare: revisá el CORS del bucket R2.'));
+    x.send(blob);
+  });
+  return r2.publicUrl;
 }
 async function dataUrlToStorage(dataUrl, kind){
   const blob = await (await fetch(dataUrl)).blob();
@@ -1052,26 +1065,8 @@ async function uploadVideo(file, onProgress){
   if (file.size > VIDEO_MAX_MB * 1024 * 1024) throw new Error(`El video pesa ${(file.size/1048576).toFixed(0)} MB. El máximo es ${VIDEO_MAX_MB} MB: achicalo o recortalo antes de subirlo.`);
   const ext = (file.name.match(/\.(mp4|webm|mov|m4v)$/i)?.[1] || (file.type.split('/')[1]) || 'mp4').toLowerCase().replace('quicktime','mov');
   const ctype = file.type || 'video/mp4';
-  // 1) Cloudflare R2 (sin límite de 50 MB): enlace firmado que da la función "r2-upload"
-  let r2 = null;
-  try { const r = await S.sb.functions.invoke('r2-upload', { body: { ext, type: ctype } }); if (!r.error && r.data?.uploadUrl) r2 = r.data; } catch(_){}
-  if (r2){
-    await new Promise((ok, ko) => {
-      const x = new XMLHttpRequest();
-      x.open('PUT', r2.uploadUrl); x.setRequestHeader('Content-Type', ctype);
-      x.upload.onprogress = ev => { if (ev.lengthComputable && onProgress) onProgress(Math.round(ev.loaded / ev.total * 100)); };
-      x.onload = () => x.status >= 200 && x.status < 300 ? ok() : ko(new Error('No se pudo subir el video a Cloudflare (' + x.status + ').'));
-      x.onerror = () => ko(new Error('No se pudo subir a Cloudflare: revisá el CORS del bucket R2.'));
-      x.send(file);
-    });
-    return r2.publicUrl;
-  }
-  // 2) Si R2 todavía no está configurado, se usa Supabase (tope de 50 MB del plan)
-  if (file.size > 50 * 1048576) throw new Error('Cloudflare R2 todavía no está configurado y Supabase no acepta más de 50 MB.');
-  const path = `video/${uid('v')}.${ext}`;
-  const { error } = await S.sb.storage.from(BUCKET).upload(path, file, { contentType: ctype, cacheControl: '31536000', upsert:false });
-  if (error) throw new Error('No se pudo subir el video: ' + error.message);
-  return S.sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+  // siempre a Cloudflare R2 (sin límite de tamaño y sin gastar el cupo de Supabase)
+  return r2Put(file, ext, ctype, onProgress);
 }
 app.addEventListener('click', async e => {
   const up = e.target.closest('[data-vidup]'), clr = e.target.closest('[data-vidclear]');
@@ -1577,8 +1572,8 @@ function liveSchedule(ch, data){
     const pod = () => { if (per <= 0) return; for (let j = 0; j < per; j++){ const a = ads[(k*per + j) % ads.length]; add({ ad:true, url:a.url, from:0, to:+a.dur, i, name:a.name }); } k++; };
     const cuts = [...new Set((it.breaks||[]).map(Number).filter(b => b > 20 && b < dur - 20))].sort((a,b) => a-b);
     let prev = 0;
-    for (const c of cuts){ add({ ad:false, url:it.url, from:prev, to:c, i }); pod(); prev = c; }
-    add({ ad:false, url:it.url, from:prev, to:dur, i }); pod();   // entre un programa y el siguiente siempre va una tanda
+    for (const c of cuts){ add({ ad:false, url:it.url, subs:it.subs || '', from:prev, to:c, i }); pod(); prev = c; }
+    add({ ad:false, url:it.url, subs:it.subs || '', from:prev, to:dur, i }); pod();   // entre un programa y el siguiente siempre va una tanda
     blocks.push({ it: raw, i, start, end: t });
   });
   return { segs, blocks, cycle: t };
@@ -1897,6 +1892,247 @@ document.addEventListener('change', e => {
     else { const v = parseMmss(el.value); if (!(v > 0)){ toast('Escribí la duración como minutos:segundos', true); return; } a.dur = v; }
     lvDirty(); return; }
 });
+/* ===================== TV en vivo en la web =====================
+   Misma emisión que la tele y el celular: sigue la grilla publicada por el panel (plan) y la hora del servidor. */
+let lvClockOff = 0;
+async function lvSyncClock(){
+  try { const t0 = Date.now(); const r = await fetch('/favicon.svg?c=' + t0, { method: 'HEAD', cache: 'no-store' }); const t1 = Date.now();
+    const d = Date.parse(r.headers.get('date') || ''); if (d) lvClockOff = d + 500 - (t0 + t1) / 2; } catch(_){}
+}
+const lvNowMs = () => Date.now() + lvClockOff;
+function lvWebSched(ch){
+  const plan = ch.plan && ch.plan.segs;
+  if (!plan || !plan.length) return liveSchedule(ch, liveData());
+  const segs = [], blocks = []; let t = 0, bStart = 0, bIt = null, bI = 0;
+  for (const p of plan){
+    const raw = (ch.items || [])[p.i]; if (!raw) continue;
+    if (!p.a && p.f < 0.01){ if (bIt) blocks.push({ it: bIt, i: bI, start: bStart, end: t }); bStart = t; bIt = raw; bI = p.i; }
+    if (p.a) segs.push({ ad: true, url: p.u, from: 0, to: +p.t, i: p.i, start: t });
+    else { const r = lvResolve(raw); segs.push({ ad: false, url: r.url || raw.url, subs: r.subs || raw.subs || '', from: +p.f, to: +p.t, i: p.i, start: t }); }
+    t += (+p.t) - (+p.f);
+  }
+  if (bIt) blocks.push({ it: bIt, i: bI, start: bStart, end: t });
+  return { segs, blocks, cycle: t };
+}
+function lvAt(sc, ch, now = lvNowMs()){
+  const t = ((((now - (+ch.epoch || 0)) / 1000) % sc.cycle) + sc.cycle) % sc.cycle;
+  let lo = 0, hi = sc.segs.length - 1;
+  while (lo < hi){ const m = (lo + hi + 1) >> 1; if (sc.segs[m].start <= t) lo = m; else hi = m - 1; }
+  return { i: lo, off: t - sc.segs[lo].start, t };
+}
+/** Programas entre dos horas reales, repitiendo el ciclo. */
+function lvBlocksBetween(sc, ch, from, to){
+  if (!sc.cycle || !sc.blocks.length) return [];
+  const now = lvNowMs(); const { t } = lvAt(sc, ch, now); const cyc = sc.cycle * 1000;
+  let base = now - t * 1000; while (base > from) base -= cyc;
+  const out = []; let guard = 0;
+  while (base < to && guard++ < 400){ for (const b of sc.blocks){ const s = base + b.start*1000, e = base + b.end*1000; if (e > from && s < to) out.push({ b, s, e }); } base += cyc; }
+  return out;
+}
+const lvWebChannels = () => (liveData().channels || []).filter(c => c.active !== false && (c.items || []).length).sort((a,b) => (a.number||0) - (b.number||0));
+const lvWebUrl = u => /\.(mkv|ts|m2ts|mts)([?#]|$)/i.test(u || '') ? webAlt(u) : u;
+
+/* ---------- la guía ---------- */
+const LVW_PX = 7;           // píxeles por minuto
+const LVW_HOURS = 8;
+function renderLiveGuideWeb(){
+  const chans = lvWebChannels(); const now = lvNowMs();
+  const t0 = now - (now % (30 * 60000)), t1 = t0 + LVW_HOURS * 3600000;
+  const x = ms => (ms - t0) / 60000 * LVW_PX;
+  const W = LVW_HOURS * 60 * LVW_PX;
+  const ticks = []; for (let m = t0; m <= t1; m += 30 * 60000) ticks.push(`<span style="left:${x(m)}px">${clock(m)}</span>`);
+  return `<section class="lvw">
+    <div class="lvw-head"><div><h1>En vivo</h1><p>Como la tele: no se pausa ni se adelanta. Todos ven lo mismo al mismo tiempo.</p></div><span class="lvw-clock" data-lvw-clock>${clock(now)}</span></div>
+    ${chans.length ? `<div class="lvw-scroll" data-lvw-scroll><div class="lvw-in" style="--tl:${W}px">
+      <div class="lvw-times"><span class="lvw-hoy">HOY</span><div class="lvw-tl">${ticks.join('')}</div></div>
+      ${chans.map(ch => { const sc = lvWebSched(ch); const bl = lvBlocksBetween(sc, ch, t0, t1); const cur = bl.find(z => now >= z.s && now < z.e);
+        const th = ch.guideImage || (cur ? lvThumb(cur.b.it) : '');
+        return `<div class="lvw-row">
+          <button class="lvw-ch" data-lvw-watch="${esc(ch.id)}" aria-label="Ver ${esc(ch.name)}">${ch.logo ? `<img src="${esc(ch.logo)}" alt="">` : `<b>${esc((ch.name||'').toUpperCase())}</b>`}<i>${esc(ch.number || '')}</i></button>
+          <button class="lvw-th" data-lvw-watch="${esc(ch.id)}" ${th ? `style="background-image:url('${esc(th)}')"` : ''} aria-label="Ver ${esc(ch.name)}"><span>▶</span></button>
+          <div class="lvw-tl">${bl.map(z => { const live = now >= z.s && now < z.e; const l = Math.max(0, x(z.s)), w = x(z.e) - l - 6; if (w < 8) return '';
+            return `<button class="lvw-b ${live ? 'now' : ''}" style="left:${l}px;width:${w}px" ${live ? `data-lvw-watch="${esc(ch.id)}"` : `data-lvw-fut="${z.s}"`}>
+              <small>${live ? `QUEDAN ${Math.max(1, Math.ceil((z.e - now) / 60000))} MIN` : `${clock(z.s)} – ${clock(z.e)}`}</small><b>${esc(lvName(z.b.it))}</b><span>${esc(lvSub(z.b.it))}</span></button>`; }).join('')}</div>
+        </div>`; }).join('')}
+      <i class="lvw-now" style="left:calc(var(--lc) + ${x(now)}px)"><em>⚡</em></i>
+    </div></div>` : `<p class="lvw-empty">Todavía no hay canales al aire.</p>`}
+  </section>`;
+}
+// la guía se actualiza sola (la línea de "ahora" avanza y cambian los programas)
+setInterval(() => {
+  if (S.route !== 'en-vivo' || liveRoot) return;
+  const sec = app.querySelector('.lvw'); if (!sec) return;
+  const sl = sec.querySelector('[data-lvw-scroll]')?.scrollLeft || 0;
+  const tmp = document.createElement('div'); tmp.innerHTML = renderLiveGuideWeb(); sec.replaceWith(tmp.firstElementChild);
+  const ns = app.querySelector('[data-lvw-scroll]'); if (ns) ns.scrollLeft = sl;
+}, 30000);
+
+/* ---------- mirando un canal ---------- */
+let liveRoot = null, liveEng = null;
+function ccLinesWeb(text, max, upper){
+  const out = [];
+  (upper ? text.toUpperCase() : text).split('\n').forEach(p => {
+    let line = '';
+    p.trim().split(/\s+/).filter(Boolean).forEach(w => {
+      if (!line) line = w; else if (line.length + 1 + w.length <= max) line += ' ' + w; else { out.push(line); line = w; }
+      while (line.length > max){ out.push(line.slice(0, max)); line = line.slice(max); }
+    });
+    if (line) out.push(line);
+  });
+  return out.slice(-4);
+}
+const lvSubsCache = new Map();
+function lvLoadSubs(url){
+  if (!url) return Promise.resolve([]);
+  if (lvSubsCache.has(url)) return lvSubsCache.get(url);
+  const pr = fetch(url).then(r => r.text()).then(txt => {
+    txt = txt.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+    const ts = s => { const m = s.trim().replace(',', '.').split(':').map(Number); return m.length === 3 ? m[0]*3600 + m[1]*60 + m[2] : m[0]*60 + m[1]; };
+    const cues = [];
+    txt.split(/\n\n+/).forEach(b => { const ls = b.split('\n'); const k = ls.findIndex(l => l.includes('-->')); if (k < 0) return;
+      const [a, z] = ls[k].split('-->'); const text = ls.slice(k + 1).join('\n').replace(/<[^>]+>/g, '').replace(/\{\\[^}]*\}/g, '').trim();
+      if (text) cues.push({ s: ts(a), e: ts(z.trim().split(/\s+/)[0]), text }); });
+    return cues;
+  }).catch(() => []);
+  lvSubsCache.set(url, pr); return pr;
+}
+function openLiveWeb(id){
+  if (!S.session && S.sb){ openAuth({ reason: 'watch', href: '/en-vivo' }); return; }
+  closeLiveWeb(true);
+  liveRoot = document.createElement('div'); liveRoot.className = 'lvp'; document.body.appendChild(liveRoot);
+  document.body.style.overflow = 'hidden';
+  history.pushState({ live: true }, '', '/en-vivo');
+  lvSyncClock();
+  liveEng = lvEngine(id);
+}
+function closeLiveWeb(silent){
+  if (!liveRoot) return;
+  liveEng?.stop(); liveEng = null;
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  liveRoot.remove(); liveRoot = null; document.body.style.overflow = '';
+  if (!silent && history.state?.live) history.back();
+}
+function lvEngine(chId){
+  let chans = lvWebChannels(); let ch = chans.find(c => c.id === chId) || chans[0];
+  if (!ch){ liveRoot.innerHTML = '<div class="lvp-nosig on">SIN SEÑAL</div>'; return { stop(){} }; }
+  liveRoot.innerHTML = `<video class="lvp-v" playsinline preload="auto"></video><video class="lvp-v" playsinline preload="auto"></video>
+    <div class="lvp-43"><img class="lvp-bug" alt="" hidden><b class="lvp-bugt" hidden></b><div class="lvp-cc"></div></div>
+    <div class="lvp-black"></div><div class="lvp-nosig">SIN SEÑAL</div>
+    <div class="lvp-ui"><div class="lvp-top"><button class="pl-btn" data-lvp-close aria-label="Volver">←</button><span class="lvp-hint">↑ ↓ cambian de canal</span><button class="pl-btn" data-lvp-full aria-label="Pantalla completa">⛶</button></div>
+    <div class="lvp-info"></div></div>`;
+  const [va, vb] = liveRoot.querySelectorAll('video');
+  const bug = liveRoot.querySelector('.lvp-bug'), bugT = liveRoot.querySelector('.lvp-bugt'), ccEl = liveRoot.querySelector('.lvp-cc');
+  const black = liveRoot.querySelector('.lvp-black'), nosig = liveRoot.querySelector('.lvp-nosig'), ui = liveRoot.querySelector('.lvp-ui'), info = liveRoot.querySelector('.lvp-info');
+  let sc, key = '', cur = va, nxt = vb, k = -1, nk = -1, cues = [], cuesFor = '', lastCc = '', roll = [], rollT = 0, lastCue = '', stuck = 0, lastPos = -1, alive = true, uiT = 0;
+  const segUrl = s => lvWebUrl(s.url);
+  function setCh(c){
+    ch = c; sc = lvWebSched(ch); key = ch.id + ch.epoch + sc.segs.map(s => s.url + s.from + s.to).join('|');
+    const pos = { tl:'top:7%;left:7%', tr:'top:7%;right:7%', bl:'bottom:7%;left:7%', br:'bottom:7%;right:7%' }[ch.logoPos || 'br'];
+    if (ch.logo){ bug.src = ch.logo; bug.hidden = false; bugT.hidden = true; bug.style.cssText = `${pos};height:${(ch.logoSize||56)/10.8}%`; }
+    else { bugT.textContent = (ch.name || '').toUpperCase(); bugT.hidden = false; bug.hidden = true; bugT.style.cssText = pos; }
+  }
+  function load(v, s, at){
+    const u = segUrl(s);
+    const go = () => { try { v.currentTime = at; } catch(_){} };
+    if (v.dataset.u !== u){ v.dataset.u = u; v.src = u; v.addEventListener('loadedmetadata', go, { once: true }); v.load(); }
+    else go();
+  }
+  function prep(){ nk = (k + 1) % sc.segs.length; const s = sc.segs[nk]; nxt.muted = true; nxt.pause(); load(nxt, s, s.from); }
+  function tune(){
+    if (!sc.segs.length){ nosig.classList.add('on'); return; }
+    const { i, off } = lvAt(sc, ch); k = i; const s = sc.segs[k];
+    nosig.classList.remove('on'); cur.classList.add('on'); nxt.classList.remove('on');
+    load(cur, s, s.from + off); cur.muted = false; cur.play().catch(() => { cur.muted = true; cur.play().catch(() => {}); });
+    prep(); showInfo();
+  }
+  function advance(){
+    const old = cur; cur = nxt; nxt = old; k = nk;
+    cur.muted = false; cur.classList.add('on'); old.classList.remove('on'); old.pause();
+    cur.play().catch(() => {});
+    lastCc = ''; ccEl.innerHTML = '';
+    prep();
+  }
+  function showInfo(){
+    const now = lvNowMs(); const z = lvBlocksBetween(sc, ch, now - 1, now + 1).find(q => now >= q.s && now < q.e);
+    info.innerHTML = `<div class="lvp-num"><b>${esc(ch.number || '')}</b><small>${esc((ch.name || '').toUpperCase())}</small></div>
+      <div class="lvp-prog"><span><i>EN VIVO</i>${z ? ` ${clock(z.s)} – ${clock(z.e)}` : ''}</span>${z ? `<b>${esc(lvName(z.b.it))}</b><small>${esc(lvSub(z.b.it))}</small>
+      <em><u style="width:${Math.min(100, (now - z.s) / (z.e - z.s) * 100)}%"></u></em>` : ''}</div>`;
+    liveRoot.classList.add('ui'); clearTimeout(uiT); uiT = setTimeout(() => liveRoot && liveRoot.classList.remove('ui'), 4500);
+  }
+  function zap(d){ chans = lvWebChannels(); if (chans.length < 2){ showInfo(); return; } const j = chans.findIndex(c => c.id === ch.id); setCh(chans[(j + d + chans.length) % chans.length]); cur.dataset.u = ''; nxt.dataset.u = ''; tune(); }
+  // cuadro a cuadro: cortes, fundidos, logo y subtítulos
+  function frame(){
+    if (!alive) return;
+    const s = sc.segs[k];
+    if (s){
+      const pos = cur.currentTime, inSeg = pos - s.from, left = s.to - pos;
+      if (left <= 0.04 || cur.ended) advance();
+      const n = sc.segs.length, nx = sc.segs[(k + 1) % n], pv = sc.segs[(k - 1 + n) % n];
+      const fo = !s.ad || !nx.ad, fi = !s.ad || !pv.ad;
+      const b = fo && left < 0.45 ? 1 - left / 0.45 : fi && inSeg < 0.35 ? 1 - Math.max(0, inSeg) / 0.35 : 0;
+      black.style.opacity = Math.max(0, Math.min(1, b)); cur.volume = Math.max(0, Math.min(1, 1 - b));
+      const logoOn = !s.ad && inSeg > 2.5 && left > 3 && !nosig.classList.contains('on');
+      (ch.logo ? bug : bugT).style.opacity = logoOn ? (ch.logoOpacity ?? .35) : 0;
+      // subtítulos
+      const st = ccStyleOf(ch.ccStyle);
+      if (ch.captions !== false && !s.ad && s.subs){
+        if (cuesFor !== s.subs){ cuesFor = s.subs; cues = []; lvLoadSubs(s.subs).then(c => { if (cuesFor === s.subs) cues = c; }); }
+        const c = cues.find(q => pos >= q.s && pos < q.e); const txt = c ? c.text : '';
+        let lines = [];
+        if (st.left){ if (txt && txt !== lastCue){ roll = [...roll, ...ccLinesWeb(txt, 32, true).filter(l => !roll.slice(-3).includes(l))].slice(-3); rollT = Date.now(); } if (!txt && Date.now() - rollT > 6000) roll = []; lines = roll; }
+        else if (txt) lines = ccLinesWeb(txt, st.max || (st.mono ? 32 : 42), !!st.upper);
+        lastCue = txt;
+        const html = lines.length ? ccHtml(st, /^b/.test(ch.logoPos || 'br'), lines) : '';
+        if (html !== lastCc){ lastCc = html; ccEl.innerHTML = html; }
+      } else if (lastCc){ lastCc = ''; ccEl.innerHTML = ''; }
+    }
+    requestAnimationFrame(frame);
+  }
+  // sincronía con el horario (misma regla que la tele: nunca vuelve para atrás en medio de un programa)
+  const syncT = setInterval(() => {
+    const L = lvWebChannels(); const fresh = L.find(c => c.id === ch.id);
+    if (fresh){ const nk2 = fresh.id + fresh.epoch + lvWebSched(fresh).segs.map(s => s.url + s.from + s.to).join('|'); if (nk2 !== key){ setCh(fresh); tune(); return; } }
+    const s = sc.segs[k]; if (!s) return;
+    const pos = cur.currentTime;
+    stuck = (cur.readyState < 3 || pos === lastPos) && !cur.paused ? stuck + 1 : 0; lastPos = pos;
+    if (cur.paused && !cur.ended) cur.play().catch(() => {});     // en vivo no se pausa
+    if (stuck >= 4){ stuck = 0; tune(); return; }
+    const exp = lvAt(sc, ch).t; let diff = exp - (s.start + pos - s.from);
+    if (diff > sc.cycle / 2) diff -= sc.cycle; if (diff < -sc.cycle / 2) diff += sc.cycle;
+    const inSeg = pos - s.from;
+    if (s.ad ? Math.abs(diff) > 3 : inSeg < 5 ? diff > 3 : (diff > 30 || diff < -150)) tune();
+  }, 4000);
+  const onErr = e => { if (e.target !== cur) return; const u = cur.dataset.u || '';
+    // la copia web de un MKV todavía no existe: se prueba el original
+    const s = sc.segs[k]; if (s && u !== s.url && /\.web\.mp4/.test(u)){ cur.dataset.u = s.url; cur.src = s.url; cur.addEventListener('loadedmetadata', () => { cur.currentTime = s.from + Math.max(0, lvAt(sc, ch).off); cur.play().catch(() => {}); }, { once: true }); return; }
+    nosig.classList.add('on'); setTimeout(() => alive && tune(), 3000); };
+  va.addEventListener('error', onErr); vb.addEventListener('error', onErr);
+  const onVis = () => { if (document.visibilityState === 'visible') tune(); else { cur.pause(); } };
+  document.addEventListener('visibilitychange', onVis);
+  const onKey = e => {
+    if (e.key === 'Escape'){ closeLiveWeb(); return; }
+    if (e.key === 'ArrowUp' || e.key === 'PageUp'){ e.preventDefault(); zap(1); return; }
+    if (e.key === 'ArrowDown' || e.key === 'PageDown'){ e.preventDefault(); zap(-1); return; }
+    if ([' ', 'ArrowLeft', 'ArrowRight', 'k', 'j', 'l', 'MediaPlayPause'].includes(e.key)){ e.preventDefault(); showInfo(); }
+  };
+  document.addEventListener('keydown', onKey);
+  const onMove = () => showInfo();
+  liveRoot.addEventListener('mousemove', onMove); liveRoot.addEventListener('click', e => { if (!e.target.closest('button')) showInfo(); });
+  liveRoot.addEventListener('click', e => {
+    if (e.target.closest('[data-lvp-close]')) closeLiveWeb();
+    else if (e.target.closest('[data-lvp-full]')){ if (document.fullscreenElement) document.exitFullscreen(); else liveRoot.requestFullscreen?.().catch(() => {}); }
+  });
+  // la tele en vivo no tiene controles: se bloquea el menú y los atajos del video
+  [va, vb].forEach(v => { v.disablePictureInPicture = true; v.addEventListener('contextmenu', e => e.preventDefault()); });
+  setCh(ch); lvSyncClock().then(() => alive && tune()); requestAnimationFrame(frame);
+  return { stop(){ alive = false; clearInterval(syncT); clearTimeout(uiT); document.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onVis); [va, vb].forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); } };
+}
+document.addEventListener('click', e => {
+  const w = e.target.closest('[data-lvw-watch]'); if (w){ e.preventDefault(); openLiveWeb(w.dataset.lvwWatch); return; }
+  const f = e.target.closest('[data-lvw-fut]'); if (f){ toast(`Se emite a las ${clock(+f.dataset.lvwFut)} · en vivo no se puede adelantar`); }
+});
+window.addEventListener('popstate', () => { if (liveRoot) closeLiveWeb(true); });
+
 function renderFrowsAdmin(){
   const opts = sel => `<option value="">Elegí un título…</option>` + S.titles.slice().sort((a,b)=>(a.title||'').localeCompare(b.title||'')).map(t => `<option value="${esc(t.id)}" ${sel===t.id?'selected':''}>${esc(t.title||'Sin título')}</option>`).join('');
   const rows = S.frows || [];
@@ -1945,9 +2181,45 @@ document.addEventListener('click', e => {
   if (d.frowIdel){ const r = find(d.frowIdel); r.items.splice(+d.i, 1); saveFrows(true); rerenderPanel(); return; }
 });
 
+
+/* ---------- pasar a Cloudflare R2 todo lo que todavía está en Supabase Storage ---------- */
+const isSbFile = u => typeof u === 'string' && /\/storage\/v1\/object\/public\//.test(u);
+function sbFilesInUse(){
+  const found = new Set();
+  const walk = o => { if (!o) return; if (typeof o === 'string'){ if (isSbFile(o)) found.add(o); return; } if (typeof o === 'object') Object.values(o).forEach(walk); };
+  walk(S.titles); walk(S.banners); walk(S.site); walk(S.frows); walk(S.colls); walk(S.live);
+  return [...found];
+}
+async function migrateToR2(btn){
+  const urls = sbFilesInUse(); if (!urls.length){ toast('Ya está todo en Cloudflare'); return; }
+  btn.disabled = true; const map = {}; let done = 0, fail = 0, next = 0;
+  const work = async () => { while (next < urls.length){ const u = urls[next++];
+    try { const r = await fetch(u); if (!r.ok) throw 0; const blob = await r.blob();
+      const ext = (u.split('?')[0].match(/\.([a-z0-9]{2,5})$/i)?.[1] || 'bin').toLowerCase();
+      map[u] = await r2Put(blob, ext, blob.type || 'application/octet-stream'); } catch(_){ fail++; }
+    done++; btn.textContent = `Pasando a Cloudflare… ${done}/${urls.length}`; } };
+  await Promise.all([1,2,3,4].map(work));
+  const swap = o => { let j = JSON.stringify(o); for (const [a, b] of Object.entries(map)) j = j.split(JSON.stringify(a).slice(1, -1)).join(JSON.stringify(b).slice(1, -1)); return JSON.parse(j); };
+  const writes = [];
+  for (const t of S.titles){ const n = swap(t); if (JSON.stringify(n) !== JSON.stringify(t)) writes.push(S.db.doc('titles/' + t.id).set(n)); }
+  for (const bn of S.banners){ const n = swap(bn); if (JSON.stringify(n) !== JSON.stringify(bn)){ const { id, ...rest } = n; writes.push(S.db.doc('banners/' + bn.id).set(rest)); } }
+  const site = swap(S.site); if (JSON.stringify(site) !== JSON.stringify(S.site)) writes.push(S.db.doc('site/config').set(site));
+  const rows = swap(S.frows || []); if (JSON.stringify(rows) !== JSON.stringify(S.frows || [])) writes.push(S.db.doc('site/rows').set({ rows, updatedAt: Date.now() }));
+  const colls = swap(S.colls || []); if (JSON.stringify(colls) !== JSON.stringify(S.colls || [])) writes.push(S.db.doc('site/collections').set({ list: colls, updatedAt: Date.now() }));
+  if (S.live){ const lv = swap(S.live); if (JSON.stringify(lv) !== JSON.stringify(S.live)) writes.push(S.db.doc('site/live').set({ ...lv, updatedAt: Date.now() })); }
+  await Promise.allSettled(writes);
+  btn.disabled = false; btn.textContent = 'Pasar todo a Cloudflare R2';
+  toast(fail ? `Listo: ${urls.length - fail} archivos pasados. ${fail} no se pudieron bajar (probá de nuevo).` : `Listo: ${urls.length} archivos pasados a Cloudflare.`, !!fail);
+  rerenderPanel();
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-r2-migrate]'); if (b && S.owner) migrateToR2(b); });
 function renderSite(){
   const shut = !!S.site.closed;
+  const sbLeft = sbFilesInUse().length;
   return `<div class="panel-head"><h1>Sitio</h1></div>
+    <div class="fs" style="border-color:${sbLeft ? '#e5a400' : 'var(--line-2)'}"><h3>Archivos <small>${sbLeft ? `${sbLeft} todavía en Supabase` : 'todo en Cloudflare R2'}</small></h3>
+      <p class="hint" style="margin:0">Las imágenes y videos nuevos se suben siempre a Cloudflare R2. ${sbLeft ? 'Los que quedaron guardados en Supabase gastan su cupo de transferencia (si se pasa, Supabase bloquea la página): pasalos a Cloudflare con este botón.' : ''}</p>
+      ${sbLeft ? '<div class="toolbar"><button class="btn btn-primary" data-r2-migrate>Pasar todo a Cloudflare R2</button></div>' : ''}</div>
     <div class="fs" style="border-color:${shut ? '#e5484d' : 'var(--line-2)'}"><h3>Acceso <small>${shut ? 'CERRADO · solo entra tu cuenta admin' : 'ABIERTO · lo puede usar cualquiera'}</small></h3>
       <div class="toolbar"><button class="btn ${shut ? 'btn-primary' : 'btn-danger'}" data-site-closed="${shut ? '0' : '1'}">${shut ? 'Abrir la página y las apps' : 'Cerrar la página y las apps'}</button></div>
       <label class="field"><span>Mensaje que ven los demás mientras está cerrado (opcional)</span><input class="input" id="s-closedmsg" data-site="closedMsg" value="${esc(S.site.closedMsg || '')}" placeholder="Estamos haciendo cambios. Volvé a intentar más tarde."></label>
@@ -4146,7 +4418,7 @@ function routeFromPath(){
   if (parts.length === 2 && parts[0] === 'persona'){ S.personSlug = parts[1]; return 'persona'; }
   if (parts.length === 2 && parts[0] === 'coleccion'){ S.collSlug = parts[1]; return 'coleccion'; }
   if (parts.length === 2 && (parts[0] === 'serie' || parts[0] === 'pelicula')){ S.titleKind = parts[0]; S.titleSlug = parts[1]; return 'title'; }
-  if (parts.length === 1 && ['series','peliculas','admin','mi-lista','activar'].includes(parts[0])) return parts[0];
+  if (parts.length === 1 && ['series','peliculas','admin','mi-lista','activar','en-vivo'].includes(parts[0])) return parts[0];
   return 'home';
 }
 function currentTitleId(){
@@ -4236,6 +4508,7 @@ function render(){
   else if (S.q.trim()) html = renderSearch();
   else if (S.route==='title'){ const tid = currentTitleId(); html = renderTitlePage(tid); trackView(tid); }
   else if (S.route==='mi-lista') html = renderMyList();
+  else if (S.route==='en-vivo') html = renderLiveGuideWeb();
   else if (S.route==='activar') html = renderActivate();
   else if (S.route==='persona') html = renderPerson(S.personSlug);
   else if (S.route==='coleccion') html = renderCollection(S.collSlug);
