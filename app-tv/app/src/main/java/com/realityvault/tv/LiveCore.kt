@@ -321,6 +321,42 @@ fun ccLines(text: String, max: Int = 32, upper: Boolean = true): List<String> {
 
 private class LiveQ { var next = 0; var tag = 0L }
 
+/** Caché en disco solo para las publicidades (son cortas y se repiten): el resto de los videos va directo. */
+@OptIn(UnstableApi::class)
+private object AdCache {
+    @Volatile private var c: androidx.media3.datasource.cache.SimpleCache? = null
+    fun get(ctx: android.content.Context): androidx.media3.datasource.cache.SimpleCache = c ?: synchronized(this) {
+        c ?: androidx.media3.datasource.cache.SimpleCache(
+            java.io.File(ctx.cacheDir, "live-ads"),
+            androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor(300L * 1024 * 1024),
+            androidx.media3.database.StandaloneDatabaseProvider(ctx)
+        ).also { c = it }
+    }
+}
+
+@OptIn(UnstableApi::class)
+private class AdCachingFactory(ctx: android.content.Context, private val adUrls: Set<String>) : androidx.media3.datasource.DataSource.Factory {
+    private val plain = androidx.media3.datasource.DefaultDataSource.Factory(ctx)
+    private val cached = androidx.media3.datasource.cache.CacheDataSource.Factory()
+        .setCache(AdCache.get(ctx.applicationContext)).setUpstreamDataSourceFactory(plain)
+        .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+    override fun createDataSource(): androidx.media3.datasource.DataSource = object : androidx.media3.datasource.DataSource {
+        private var cur: androidx.media3.datasource.DataSource? = null
+        private val listeners = ArrayList<androidx.media3.datasource.TransferListener>()
+        override fun addTransferListener(transferListener: androidx.media3.datasource.TransferListener) { listeners += transferListener }
+        override fun open(dataSpec: androidx.media3.datasource.DataSpec): Long {
+            val ds = (if (dataSpec.uri.toString() in adUrls) cached else plain).createDataSource()
+            listeners.forEach { ds.addTransferListener(it) }
+            cur = ds
+            return ds.open(dataSpec)
+        }
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int = cur!!.read(buffer, offset, length)
+        override fun getUri(): android.net.Uri? = cur?.uri
+        override fun getResponseHeaders(): Map<String, List<String>> = cur?.responseHeaders ?: emptyMap()
+        override fun close() { try { cur?.close() } finally { cur = null } }
+    }
+}
+
 /**
  * La señal en vivo de un canal: reproductor, sintonía con el horario, tandas, fundidos, logo y subtítulos.
  * La usan la app de la tele y la del celular (cada una pone sus controles y su cartel de información).
@@ -339,7 +375,11 @@ fun LiveSignal(ch: LiveChannel, sc: Sched, mono: FontFamily, sans: FontFamily, m
             .setBufferDurationsMs(40_000, 120_000, 1_500, 3_000)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
-        ExoPlayer.Builder(ctx).setLoadControl(load).setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(ctx, rvExtractors())).build().apply {
+        // las publicidades se guardan en el aparato: se repiten todo el tiempo y antes se bajaban de nuevo
+        // en cada tanda (eso gastaba el cupo de transferencia de Supabase)
+        val adUrls = (Store.live?.ads ?: emptyList()).map { it.url }.toHashSet()
+        val dsf = AdCachingFactory(ctx, adUrls)
+        ExoPlayer.Builder(ctx).setLoadControl(load).setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dsf, rvExtractors())).build().apply {
             playWhenReady = true
             trackSelectionParameters = trackSelectionParameters.buildUpon().setPreferredTextLanguage("es").build()
         }
