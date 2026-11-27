@@ -358,9 +358,6 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
                     else -> false
                 }
             }
-                    else -> false
-                }
-            }
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -652,6 +649,68 @@ private val SubsIcon: ImageVector = ImageVector.Builder(defaultWidth = 24.dp, de
 private val AudioIcon: ImageVector = ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
     .addPath(addPathNodes("M4 10v4M8 7v10M12 4v16M16 8v8M20 10.5v3"), fill = null, stroke = SolidColor(Color.White), strokeLineWidth = 2f, strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round)
     .build()
+
+private fun fmtTime(ms: Long): String {
+    val total = (ms / 1000).coerceAtLeast(0)
+    val h = total / 3600; val m = (total % 3600) / 60; val sec = total % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
+}
+
+/** Pide foco una vez que el árbol se termine de componer (los botones pueden tardar un frame en existir). */
+@Composable
+private fun NextEpisodeCard(t: Title, next: Pair<Season, Episode>, remainMs: Long, ended: Boolean, req: FocusRequester, modifier: Modifier, onPlay: () -> Unit) {
+    val secs = if (ended) 0 else ((remainMs + 999) / 1000).toInt()
+    val ep = next.second
+    val img = ep.thumb.ifBlank { t.backdrop }.ifBlank { t.poster }
+    val frac = if (ended) 1f else ((20_000 - remainMs) / 20_000f).coerceIn(0f, 1f)
+    val shape = RoundedCornerShape(14.dp)
+    Box(modifier.width(400.dp).clip(shape).background(Color(0xEB0A0809)).border(1.dp, Color.White.copy(alpha = .16f), shape)) {
+        Row(Modifier.padding(start = 12.dp, top = 12.dp, end = 14.dp, bottom = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(118.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(C.surface)) {
+                if (img.isNotBlank()) Img(img, Modifier.fillMaxSize())
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Siguiente episodio · en $secs s", style = ts(11, color = Color.White.copy(alpha = .7f)))
+                Text(
+                    "T${next.first.number}:E${ep.number}" + (if (ep.title.isNotBlank()) " · ${ep.title}" else ""),
+                    style = ts(14, FontWeight.Bold, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)
+                )
+                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    PlayPill("Reproducir ahora", null, req) { onPlay() }
+                    Text("Atrás: cancelar", style = ts(10, color = Color.White.copy(alpha = .55f)), modifier = Modifier.padding(start = 10.dp))
+                }
+            }
+        }
+        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = .15f))) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(C.accent))
+        }
+    }
+}
+
+suspend fun AutoFocusOnce(req: FocusRequester) {
+    repeat(6) { if (runCatching { req.requestFocus() }.isSuccess) return; delay(60) }
+}
+
+/** Capa transparente para cuando los controles están ocultos: cualquier tecla del control los despierta. */
+@Composable
+private fun WakeLayer(modifier: Modifier = Modifier, onWake: () -> Unit) {
+    val req = remember { FocusRequester() }
+    LaunchedEffect(Unit) { AutoFocusOnce(req) }
+    Box(
+        modifier
+            .focusRequester(req)
+            .focusable()
+            .onKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
+                // "Atrás" NO se consume acá: tiene que seguir de largo para que pueda cerrar el
+                // reproductor de verdad. Si lo tragamos como cualquier otra tecla, la primera vez
+                // que aparecen los controles ocultos, "atrás" nunca llega a salir del reproductor.
+                if (e.key == Key.Back) return@onKeyEvent false
+                onWake(); true
+            }
+    )
+}
 
 /* ---------------- reproductor del servicio donde está el video (Drive, OK.ru, YouTube…) ---------------- */
 
