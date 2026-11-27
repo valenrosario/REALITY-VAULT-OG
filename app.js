@@ -1747,7 +1747,8 @@ function lvStepPrograma(ch){
       <span data-row="lvclear"><button class="btn btn-line btn-sm" data-lv-clear>Vaciar</button></span></div>` : ''}
     <div class="lv-prog">${(ch.items||[]).map((it, ii) => `<div class="lv-pi ${(+it.dur||0) < 5 ? 'bad' : ''} ${nw?.b?.i === ii ? 'now' : ''}">
       <span class="lv-pi-n">${ii+1}</span>
-      <span class="lv-pi-th" ${lvThumb(it) ? `style="background-image:url('${esc(lvThumb(it))}')"` : ''}></span>
+      ${it.titleId ? `<span class="lv-pi-th" ${lvThumb(it) ? `style="background-image:url('${esc(lvThumb(it))}')"` : ''}></span>`
+        : `<button class="lv-pi-th lv-thbtn" data-lv-clipthumb="${ii}" title="${it.thumb ? 'Cambiar miniatura' : 'Agregar miniatura (opcional)'}" ${it.thumb ? `style="background-image:url('${esc(it.thumb)}')"` : ''}>${it.thumb ? `<u data-lv-clipthumbdel="${ii}" title="Quitar miniatura">✕</u>` : '<i>+ Miniatura</i>'}</button>`}
       ${it.titleId ? `<span class="lv-pi-t"><b>${esc(lvName(it))}</b><small>${esc(lvSub(it))}${nw?.b?.i === ii ? ' · <em>al aire</em>' : ''}</small></span>`
         : `<span class="lv-pi-t lv-clip"><input class="input" data-lv-item="${ii}" data-lv-k="label" value="${esc(it.label || '')}" placeholder="Nombre (ej: Britney Spears – I'm a Slave 4 U)" aria-label="Nombre"><input class="input" data-lv-item="${ii}" data-lv-k="sub" value="${esc(it.sub || '')}" placeholder="Evento (ej: VMAs 2001)" aria-label="Evento">${nw?.b?.i === ii ? '<small><em>al aire</em></small>' : ''}</span>`}
       <label class="lv-pi-d">${(+it.dur||0) < 5 ? '<small>Sin duración</small>' : ''}<input class="input" data-lv-item="${ii}" data-lv-k="dur" value="${it.dur ? mmss(it.dur) : ''}" placeholder="mm:ss" aria-label="Duración"></label>
@@ -1859,7 +1860,7 @@ async function lvMeasureItems(items, onStep){
 function lvTwoTap(b, label, fn){ if (!b.dataset.sure){ b.dataset.sure = '1'; const t = b.textContent; b.textContent = label; setTimeout(() => { if (b.isConnected){ delete b.dataset.sure; b.textContent = t; } }, 3000); return; } fn(); }
 window.addEventListener('beforeunload', e => { if (S.lvEd?.dirty){ e.preventDefault(); e.returnValue = ''; } });
 document.addEventListener('click', async e => {
-  const b = e.target.closest('[data-lv-new],[data-lv-open],[data-lv-back],[data-lv-save],[data-lv-discard],[data-lv-del],[data-lv-step],[data-lv-pick],[data-lv-addt],[data-lv-imove],[data-lv-idel],[data-lv-shuffle],[data-lv-measure],[data-lv-restart],[data-lv-clear],[data-lv-adup],[data-lv-adurl],[data-lv-addel],[data-lv-admove],[data-lv-per],[data-lv-auto],[data-lv-nocuts],[data-lv-mk],[data-lv-bar],[data-lv-pos],[data-lv-cc],[data-lv-bug],[data-lv-bugup],[data-lv-bugdel],[data-lv-clipup],[data-lv-clipurl]');
+  const b = e.target.closest('[data-lv-new],[data-lv-open],[data-lv-back],[data-lv-save],[data-lv-discard],[data-lv-del],[data-lv-step],[data-lv-pick],[data-lv-addt],[data-lv-imove],[data-lv-idel],[data-lv-shuffle],[data-lv-measure],[data-lv-restart],[data-lv-clear],[data-lv-adup],[data-lv-adurl],[data-lv-addel],[data-lv-admove],[data-lv-per],[data-lv-auto],[data-lv-nocuts],[data-lv-mk],[data-lv-bar],[data-lv-pos],[data-lv-cc],[data-lv-bug],[data-lv-bugup],[data-lv-bugdel],[data-lv-clipup],[data-lv-clipurl],[data-lv-clipthumb],[data-lv-clipthumbdel]');
   if (!b || !S.owner) return; const d = b.dataset; const E = S.lvEd; const ch = E && lvCh(E.id);
   if ('lvNew' in d){ const L = liveData(); const n = Math.max(0, ...L.channels.map(c => +c.number || 0)) + 1;
     const c = { id: uid('ch'), name: 'Nuevo canal', number: n, logo: '', guideImage: '', logoPos: 'br', logoOpacity: .35, logoSize: 56, active: true, epoch: Date.now(), captions: true, ccStyle: 'cc608', adsPerBreak: 2, podBetween: false, items: [] };
@@ -1902,6 +1903,12 @@ document.addEventListener('click', async e => {
     const r = b.getBoundingClientRect(); const at = Math.round((e.clientX - r.left) / r.width * dur);
     if (at <= 20 || at >= dur - 20){ toast('Muy pegado al principio o al final', true); return; }
     it.breaks = [...new Set([...(it.breaks||[]), at])].sort((a,b) => a-b); lvDirty(); rerenderPanel(); return; }
+  if (d.lvClipthumbdel != null){ e.stopPropagation(); const it = ch.items[+d.lvClipthumbdel]; if (it){ delete it.thumb; lvDirty(); rerenderPanel(); } return; }
+  if (d.lvClipthumb != null){ const it = ch.items[+d.lvClipthumb]; if (!it) return;
+    const f = await pickFile('image/jpeg,image/png,image/webp'); if (!f) return;
+    try { toast('Subiendo miniatura…'); const ext = (f.name.match(/\.(jpe?g|png|webp)$/i)?.[1] || 'jpg').toLowerCase().replace('jpeg', 'jpg');
+      it.thumb = await r2Put(f, ext, f.type || 'image/jpeg'); lvDirty(); rerenderPanel(); toast('Miniatura lista. Tocá Guardar canal.'); }
+    catch(err){ toast(err.message || 'No se pudo subir', true); } return; }
   if ('lvClipup' in d){
     const files = await new Promise(res => { const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true; inp.accept = 'video/mp4,video/webm,video/quicktime,.mp4,.m4v,.mov,.webm'; inp.onchange = () => res([...inp.files]); inp.click(); });
     if (!files.length) return;
