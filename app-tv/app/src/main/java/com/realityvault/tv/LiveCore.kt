@@ -259,7 +259,7 @@ fun ccSpec(id: String): CcSpec = when (id) {
     // MTV (especiales y documentales): Kabel Medium blanca con borde negro fino, medida sobre capturas en 1080p:
     // letra de ~61 px, renglones cada 104 px, la última línea apoyada a 118 px del borde de abajo y corrida
     // un poco a la derecha del centro (igual que en las capturas)
-    "mtv" -> CcSpec(false, false, false, 42, .0569f, .0892f, .0892f, outline = true, kabel = true, lh = 1.72f, sy = 1.07f, stroke = .116f)
+    "mtv" -> CcSpec(false, false, false, 42, .05648f, .084f, .084f, outline = true, kabel = true, lh = 1.655f, sy = 1.045f, stroke = .116f)
     else -> CcSpec(true, true, true, 32, .0493f, .093f, .173f)
 }
 private val CcKabel = FontFamily(Font(R.font.cc_kabel, FontWeight.Normal))
@@ -276,7 +276,10 @@ fun CcBlock(spec: CcSpec, lines: List<String>, w: androidx.compose.ui.unit.Dp, h
         fontWeight = if (spec.kabel) FontWeight.Normal else FontWeight.Bold, fontSize = fs, color = color, lineHeight = fs * spec.lh,
         textAlign = if (spec.left) androidx.compose.ui.text.style.TextAlign.Start else androidx.compose.ui.text.style.TextAlign.Center,
         lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
-            androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both)
+            androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+            // MTV: el alto de línea se reparte arriba y abajo de cada renglón (igual que en el panel y en las capturas)
+            if (spec.kabel) androidx.compose.ui.text.style.LineHeightStyle.Trim.None else androidx.compose.ui.text.style.LineHeightStyle.Trim.Both),
+        platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
     )
     val bottomPad = h * (if (logoBottom) spec.bottomLogo else spec.bottom)
     Box(modifier.fillMaxSize()) {
@@ -284,7 +287,7 @@ fun CcBlock(spec: CcSpec, lines: List<String>, w: androidx.compose.ui.unit.Dp, h
             // texto con borde: un solo bloque centrado (el borde se dibuja debajo del relleno)
             val txt = lines.joinToString("\n")
             val sw = with(LocalDensity.current) { (h * spec.size * scale * spec.stroke).toPx() }
-            Box(Modifier.align(Alignment.BottomCenter).padding(start = if (spec.kabel) w * .032f else 0.dp, bottom = bottomPad)
+            Box(Modifier.align(Alignment.BottomCenter).padding(start = if (spec.kabel) w * .0347f else 0.dp, bottom = bottomPad)
                 .graphicsLayer { scaleY = spec.sy; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(.5f, 1f) }) {
                 Text(txt, style = base.copy(color = Color.Black, drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(width = sw, join = androidx.compose.ui.graphics.StrokeJoin.Round)))
                 Text(txt, style = base)
