@@ -1612,6 +1612,7 @@ const CC_STYLES = [
   { id:'rollup', name:'Closed caption en vivo (roll-up)', era:'Noticieros y deportes', desc:'Las líneas suben de a una desde abajo, como en los noticieros y transmisiones en vivo. Quedan las últimas 3.', mono:1, upper:1, box:1, size:.0493, bottom:.093, bottomLogo:.173, left:1 },
   { id:'teletext', name:'Teletexto (página 888)', era:'Europa · TV analógica', desc:'Subtítulos del teletexto: cajas negras y colores para distinguir quién habla (blanco, amarillo, celeste).', mono:1, upper:0, box:1, size:.046, bottom:.08, bottomLogo:.16, multi:1 },
   { id:'dvd', name:'DVD de la época', era:'DVD · 2000–2005', desc:'Letra blanca en negrita con borde negro, sin caja, como los subtítulos de los DVD.', mono:0, upper:0, box:0, size:.056, bottom:.06, bottomLogo:.15, outline:1, color:'#fff' },
+  { id:'mtv', name:'MTV', era:'Especiales y documentales de MTV', desc:'Kabel blanca con borde negro fino, mayúsculas y minúsculas, como los subtítulos de los especiales de MTV.', mono:0, upper:0, box:0, size:.0569, bottom:.079, bottomLogo:.079, outline:1, color:'#fff', kabel:1, lh:1.72, sy:1.07, stroke:.116 },
   { id:'dvdyellow', name:'DVD / VHS amarillo', era:'DVD y VHS subtitulados', desc:'La versión amarilla con borde negro que usaban muchas ediciones subtituladas.', mono:0, upper:0, box:0, size:.056, bottom:.06, bottomLogo:.15, outline:1, color:'#f7e43a' }
 ];
 const ccStyleOf = id => CC_STYLES.find(x => x.id === id) || CC_STYLES[0];
@@ -1620,6 +1621,7 @@ function ccHtml(st, logoBottom, lines, scale = 1){
   lines = lines || CC_SAMPLE;
   const lc = st.upper ? lines.map(l => l.toUpperCase()) : lines;
   const color = st.multi ? ['#fff','#ff0','#0ff'] : [st.color || '#fff'];
+  if (st.kabel) return `<div class="cc-wrap" style="bottom:${(logoBottom ? st.bottomLogo : st.bottom)*100}%;left:3.2%;transform:scaleY(${st.sy});transform-origin:50% 100%"><span class="cc-l kabel outline" style="font-size:${st.size*100*scale}cqh;line-height:${st.lh};-webkit-text-stroke:${st.stroke}em #000;color:${color[0]};text-align:center">${lc.map(esc).join('<br>')}</span></div>`;
   return `<div class="cc-wrap ${st.left ? 'left' : ''}" style="bottom:${(logoBottom ? st.bottomLogo : st.bottom)*100}%">${lc.map((l, i) =>
     `<span class="cc-l ${st.mono ? 'mono' : 'sans'} ${st.box ? 'box' : ''} ${st.outline ? 'outline' : ''}" style="font-size:${st.size*100*scale}cqh;color:${color[i % color.length]}">${esc(l)}</span>`).join('')}</div>`;
 }

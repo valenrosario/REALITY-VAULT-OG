@@ -44,6 +44,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.draw.clipToBounds
@@ -246,15 +247,22 @@ fun blocksBetween(sc: Sched, ch: LiveChannel, fromMs: Long, toMs: Long): List<Tr
  * Estilos de subtítulos de la época (los mismos que se eligen en el panel; ver CC_STYLES en app.js).
  * Medidas en proporción a la altura del cuadro de la imagen, así se ven igual en la vista previa del panel.
  */
-class CcSpec(val mono: Boolean, val upper: Boolean, val box: Boolean, val max: Int, val size: Float, val bottom: Float, val bottomLogo: Float, val left: Boolean = false, val outline: Boolean = false, val color: Color = Color.White, val multi: Boolean = false)
+class CcSpec(val mono: Boolean, val upper: Boolean, val box: Boolean, val max: Int, val size: Float, val bottom: Float, val bottomLogo: Float, val left: Boolean = false, val outline: Boolean = false, val color: Color = Color.White, val multi: Boolean = false,
+    /** Kabel (estilo MTV), alto de línea, estiramiento vertical y grosor del borde (proporción de la letra). */
+    val kabel: Boolean = false, val lh: Float = 1.18f, val sy: Float = 1f, val stroke: Float = .16f)
 fun ccSpec(id: String): CcSpec = when (id) {
     "cc608mixed" -> CcSpec(true, false, true, 32, .0493f, .093f, .173f)
     "rollup" -> CcSpec(true, true, true, 32, .0493f, .093f, .173f, left = true)
     "teletext" -> CcSpec(true, false, true, 36, .046f, .08f, .16f, multi = true)
     "dvd" -> CcSpec(false, false, false, 40, .056f, .06f, .15f, outline = true)
     "dvdyellow" -> CcSpec(false, false, false, 40, .056f, .06f, .15f, outline = true, color = Color(0xFFF7E43A))
+    // MTV (especiales y documentales): Kabel Medium blanca con borde negro fino, medida sobre capturas en 1080p:
+    // letra de ~61 px, renglones cada 104 px, la última línea apoyada a 118 px del borde de abajo y corrida
+    // un poco a la derecha del centro (igual que en las capturas)
+    "mtv" -> CcSpec(false, false, false, 42, .0569f, .0892f, .0892f, outline = true, kabel = true, lh = 1.72f, sy = 1.07f, stroke = .116f)
     else -> CcSpec(true, true, true, 32, .0493f, .093f, .173f)
 }
+private val CcKabel = FontFamily(Font(R.font.cc_kabel, FontWeight.Normal))
 private val TeletextColors = listOf(Color.White, Color(0xFFFFFF00), Color(0xFF00FFFF))
 
 /** Dibuja las líneas con el estilo elegido, dentro del cuadro de la imagen (h = alto del cuadro). */
@@ -263,19 +271,30 @@ fun CcBlock(spec: CcSpec, lines: List<String>, w: androidx.compose.ui.unit.Dp, h
     if (lines.isEmpty()) return
     val fs = with(LocalDensity.current) { (h * spec.size * scale).toSp() }
     val color = if (spec.multi) TeletextColors[colorIdx % TeletextColors.size] else spec.color
-    val base = TextStyle(fontFamily = if (spec.mono) mono else sans, fontWeight = FontWeight.Bold, fontSize = fs, color = color, lineHeight = fs * 1.18f)
+    val base = TextStyle(
+        fontFamily = when { spec.kabel -> CcKabel; spec.mono -> mono; else -> sans },
+        fontWeight = if (spec.kabel) FontWeight.Normal else FontWeight.Bold, fontSize = fs, color = color, lineHeight = fs * spec.lh,
+        textAlign = if (spec.left) androidx.compose.ui.text.style.TextAlign.Start else androidx.compose.ui.text.style.TextAlign.Center,
+        lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+            androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both)
+    )
+    val bottomPad = h * (if (logoBottom) spec.bottomLogo else spec.bottom)
     Box(modifier.fillMaxSize()) {
-        Column(
+        if (spec.outline) {
+            // texto con borde: un solo bloque centrado (el borde se dibuja debajo del relleno)
+            val txt = lines.joinToString("\n")
+            val sw = with(LocalDensity.current) { (h * spec.size * scale * spec.stroke).toPx() }
+            Box(Modifier.align(Alignment.BottomCenter).padding(start = if (spec.kabel) w * .032f else 0.dp, bottom = bottomPad)
+                .graphicsLayer { scaleY = spec.sy; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(.5f, 1f) }) {
+                Text(txt, style = base.copy(color = Color.Black, drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(width = sw, join = androidx.compose.ui.graphics.StrokeJoin.Round)))
+                Text(txt, style = base)
+            }
+        } else Column(
             Modifier.align(if (spec.left) Alignment.BottomStart else Alignment.BottomCenter)
-                .padding(start = if (spec.left) w * .1f else 0.dp, bottom = h * (if (logoBottom) spec.bottomLogo else spec.bottom)),
+                .padding(start = if (spec.left) w * .1f else 0.dp, bottom = bottomPad),
             horizontalAlignment = if (spec.left) Alignment.Start else Alignment.CenterHorizontally
         ) {
-            lines.forEach { ln ->
-                if (spec.outline) Box {
-                    Text(ln, style = base.copy(color = Color.Black, drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(width = with(LocalDensity.current) { (h * spec.size * scale * .16f).toPx() }, join = androidx.compose.ui.graphics.StrokeJoin.Round)))
-                    Text(ln, style = base)
-                } else Text(ln, style = base, modifier = if (spec.box) Modifier.background(Color.Black).padding(horizontal = h * .02f) else Modifier)
-            }
+            lines.forEach { ln -> Text(ln, style = base, modifier = if (spec.box) Modifier.background(Color.Black).padding(horizontal = h * .02f) else Modifier) }
         }
     }
 }
