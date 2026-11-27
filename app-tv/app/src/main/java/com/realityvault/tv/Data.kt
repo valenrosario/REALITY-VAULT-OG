@@ -186,6 +186,19 @@ fun isHttp(u: String) = u.startsWith("http://", true) || u.startsWith("https://"
 
 /* ---------------- conexión con Supabase ---------------- */
 
+/** Reloj común: la hora del servidor (se ajusta con cada respuesta de Supabase). */
+object Clock {
+    @Volatile private var offset = 0L
+    @Volatile private var synced = false
+    fun sync(serverMs: Long) {
+        val off = serverMs - System.currentTimeMillis()
+        // el encabezado tiene precisión de 1 s: se suaviza para que no salte de a un segundo
+        offset = if (!synced) off else (offset * 3 + off) / 4
+        synced = true
+    }
+    fun now(): Long = System.currentTimeMillis() + offset
+}
+
 object Api {
     private val base = BuildConfig.SUPABASE_URL.trimEnd('/')
     private val key = BuildConfig.SUPABASE_KEY
@@ -210,6 +223,9 @@ object Api {
                 c.outputStream.use { it.write(body.toByteArray()) }
             }
             val code = c.responseCode
+            // hora del servidor (encabezado Date): la TV en vivo usa esta hora y no la del aparato,
+            // así todas las teles y celulares están en el mismo segundo aunque su reloj esté mal
+            c.getHeaderFieldDate("Date", 0L).takeIf { it > 0 }?.let { srv -> Clock.sync(srv + 500) }
             val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
             if (code !in 200..299) {
                 val msg = runCatching { JSONObject(text).let { j -> j.optString("msg").ifBlank { j.optString("error_description").ifBlank { j.optString("message") } } } }.getOrNull()

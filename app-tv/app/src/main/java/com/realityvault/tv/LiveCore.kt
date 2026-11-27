@@ -75,12 +75,24 @@ data class LiveChannel(
     /** Tamaño de los subtítulos en la tele (1 = normal). */
     val ccScale: Float = 1f,
     /** Tanda entre un programa y el siguiente (si no, solo en los cortes marcados). */
-    val podBetween: Boolean = false
+    val podBetween: Boolean = false,
+    /** Grilla ya armada por el panel al guardar: la misma para todas las teles y celulares. */
+    val plan: List<PlanSeg> = emptyList()
 )
+/** Un tramo de la grilla publicada (a = publicidad, i = programa de la lista, f/t = segundos del archivo, u = enlace de la publicidad). */
+data class PlanSeg(val ad: Boolean, val url: String, val from: Double, val to: Double, val i: Int)
 data class LiveData(val ads: List<LiveAd>, val channels: List<LiveChannel>)
 
 private fun JSONObject.str(k: String) = when (val v = opt(k)) { null, JSONObject.NULL -> ""; else -> v.toString().trim() }
 private fun JSONObject.num(k: String, d: Double = 0.0) = str(k).toDoubleOrNull() ?: d
+
+private fun parsePlan(p: JSONObject?): List<PlanSeg> {
+    val a = p?.optJSONArray("segs") ?: return emptyList()
+    return (0 until a.length()).mapNotNull { x ->
+        val o = a.optJSONObject(x) ?: return@mapNotNull null
+        PlanSeg(o.optInt("a", 0) == 1, o.str("u"), o.optDouble("f", 0.0), o.optDouble("t", 0.0), o.optInt("i", 0))
+    }
+}
 
 fun parseLive(d: JSONObject): LiveData {
     val aa = d.optJSONArray("ads") ?: JSONArray()
@@ -102,7 +114,7 @@ fun parseLive(d: JSONObject): LiveData {
             c.str("logoPos").ifBlank { "br" }, c.num("logoOpacity", .35).toFloat().coerceIn(.05f, 1f),
             c.num("logoSize", 56.0).toInt().coerceIn(20, 160), c.opt("active") != false,
             c.optLong("epoch", 0L), c.opt("captions") != false, c.num("adsPerBreak", 2.0).toInt().coerceIn(0, 8), items,
-            c.str("guideImage"), c.str("ccStyle").ifBlank { "cc608" }, c.num("ccScaleTv", 1.0).toFloat().coerceIn(.6f, 1.8f), c.optBoolean("podBetween", false))
+            c.str("guideImage"), c.str("ccStyle").ifBlank { "cc608" }, c.num("ccScaleTv", 1.0).toFloat().coerceIn(.6f, 1.8f), c.optBoolean("podBetween", false), parsePlan(c.optJSONObject("plan")))
     }
     return LiveData(ads, chans)
 }
@@ -127,7 +139,31 @@ fun resolveItem(it: LiveItem): LiveItem {
 private val notFile = Regex("youtube|youtu\\.be|vimeo|drive\\.google|<iframe", RegexOption.IGNORE_CASE)
 fun isFileUrl(u: String) = u.trim().let { x -> (x.startsWith("http://") || x.startsWith("https://")) && !notFile.containsMatchIn(x) }
 
+/** Arma la emisión desde la grilla publicada por el panel (una sola programación para todos). */
+private fun schedFromPlan(ch: LiveChannel): Sched {
+    val segs = ArrayList<Seg>(); val blocks = ArrayList<Block>()
+    var t = 0.0; var bStart = -1.0; var bItem: LiveItem? = null
+    for (p in ch.plan) {
+        val raw = ch.items.getOrNull(p.i) ?: continue
+        if (!p.ad && p.from < 0.01) {           // empieza un programa nuevo: cierra el bloque anterior
+            bItem?.let { blocks += Block(it, bStart, t) }
+            bStart = t; bItem = raw
+        }
+        if (p.ad) segs += Seg(true, p.url, "", p.from, p.to, p.i, true)
+        else {
+            val it = resolveItem(raw)
+            segs += Seg(false, it.url.ifBlank { raw.url }, it.subs, p.from, p.to, p.i, p.to >= it.dur - 0.5)
+        }
+        t += p.to - p.from
+    }
+    bItem?.let { blocks += Block(it, bStart, t) }
+    val starts = DoubleArray(segs.size); var acc = 0.0
+    segs.forEachIndexed { i, s -> starts[i] = acc; acc += s.len }
+    return Sched(segs, starts, acc, blocks)
+}
+
 fun buildSched(ch: LiveChannel, ads: List<LiveAd>): Sched {
+    if (ch.plan.isNotEmpty()) return schedFromPlan(ch)
     val okAds = ads.filter { it.dur > 1 && it.url.startsWith("http") }
     val per = minOf(ch.adsPerBreak, okAds.size)
     val segs = ArrayList<Seg>(); val blocks = ArrayList<Block>()
@@ -154,7 +190,7 @@ fun buildSched(ch: LiveChannel, ads: List<LiveAd>): Sched {
 }
 
 /** Qué va ahora: (índice del tramo, segundos ya emitidos de ese tramo, segundo del ciclo). */
-fun liveAt(sc: Sched, ch: LiveChannel, nowMs: Long = System.currentTimeMillis()): Triple<Int, Double, Double> {
+fun liveAt(sc: Sched, ch: LiveChannel, nowMs: Long = Clock.now()): Triple<Int, Double, Double> {
     val c = sc.cycle
     val raw = (nowMs - ch.epoch) / 1000.0
     val t = ((raw % c) + c) % c
@@ -184,7 +220,7 @@ fun hhmm(ms: Long): String { val c = Calendar.getInstance().apply { timeInMillis
 /** Programas de un canal entre dos horas (en milisegundos reales), repitiendo el ciclo. */
 fun blocksBetween(sc: Sched, ch: LiveChannel, fromMs: Long, toMs: Long): List<Triple<Block, Long, Long>> {
     if (sc.cycle <= 0 || sc.blocks.isEmpty()) return emptyList()
-    val now = System.currentTimeMillis()
+    val now = Clock.now()
     val (_, _, t) = liveAt(sc, ch, now)
     val cycleMs = (sc.cycle * 1000).toLong()
     var base = now - (t * 1000).toLong()          // dónde empezó el ciclo actual
@@ -287,6 +323,8 @@ fun LiveSignal(ch: LiveChannel, sc: Sched, mono: FontFamily, sans: FontFamily, m
         }
     }
     DisposableEffect(player) { onDispose { player.release() } }
+    // trae la grilla y la hora del servidor al sintonizar y cada 2 minutos (si cambió, se resintoniza sola)
+    LaunchedEffect(Unit) { while (true) { Store.refreshLive(); delay(120_000) } }
     val q = remember { LiveQ() }
     var segIdx by remember { mutableIntStateOf(-1) }
     var cue by remember { mutableStateOf("") }

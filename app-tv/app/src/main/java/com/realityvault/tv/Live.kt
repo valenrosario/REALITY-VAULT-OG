@@ -60,8 +60,8 @@ private const val VIEW_MIN = 120          // minutos visibles a la vez
 @Composable
 fun LiveGuide(nav: Nav, firstReq: FocusRequester) {
     val chans = liveChannels()
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) { while (true) { delay(15_000); now = System.currentTimeMillis() } }
+    var now by remember { mutableLongStateOf(Clock.now()) }
+    LaunchedEffect(Unit) { while (true) { delay(15_000); now = Clock.now() } }
     // canales nuevos o cambios de programación: se consultan al abrir la guía y cada minuto mientras está abierta
     LaunchedEffect(Unit) { while (true) { Store.refreshLive(); delay(60_000) } }
     val bg = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF2A1430), Color(0xFF141120), Color(0xFF0B0A12)),
@@ -240,7 +240,7 @@ fun LiveWatch(s: Screen.LiveTv, nav: Nav) {
         androidx.compose.runtime.key(ch.id) { LiveSignal(ch, sc, CcFont, CcSans, Modifier.fillMaxSize(), onTune = { banner++ }) }
         // cartel de información (al sintonizar, al cambiar de canal o con OK)
         AnimatedVisibility(showBanner, Modifier.align(Alignment.BottomCenter), enter = fadeIn(tween(200)), exit = fadeOut(tween(400))) {
-            val now = System.currentTimeMillis()
+            val now = Clock.now()
             val cur = remember(sc, banner) { blocksBetween(sc, ch, now - 1, now + 1).firstOrNull { now in it.second until it.third } }
             Row(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .9f))))
                 .padding(start = 64.dp, end = 64.dp, top = 60.dp, bottom = 44.dp), verticalAlignment = Alignment.CenterVertically) {

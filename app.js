@@ -1583,6 +1583,10 @@ function liveSchedule(ch, data){
   });
   return { segs, blocks, cycle: t };
 }
+function lvPlan(ch, data){
+  const sc = liveSchedule({ ...ch, plan: null }, data);
+  return { cycle: Math.round(sc.cycle * 1000) / 1000, segs: sc.segs.map(x => x.ad ? { a: 1, u: x.url, f: 0, t: +x.to, i: x.i } : { f: +x.from, t: +x.to, i: x.i }) };
+}
 function liveNow(ch, data){
   const sc = liveSchedule(ch, data); if (!sc.cycle) return null;
   const now = Date.now();
@@ -1792,6 +1796,9 @@ async function lvSaveNow(){
   // se guardan este canal y las publicidades; los demás canales quedan como estaban guardados
   const L = liveData(); const others = L.channels.filter(c => c.id !== E.id);
   const next = { ...L, ads: lvClone(E.d.ads), channels: [...others, lvClone(ch)] };
+  // grilla publicada: el panel arma la emisión de cada canal una sola vez y todas las teles y celulares
+  // siguen exactamente esa (antes cada aparato la calculaba por su cuenta y podían no coincidir)
+  next.channels = next.channels.map(c => ({ ...c, plan: lvPlan(c, next) }));
   const prev = S.live; S.live = next;
   if (await saveLive()){ E.dirty = false; E.isNew = false; E.d = lvClone(next); toast('Canal guardado ✓ — la tele lo toma en menos de un minuto'); rerenderPanel(); }
   else S.live = prev;

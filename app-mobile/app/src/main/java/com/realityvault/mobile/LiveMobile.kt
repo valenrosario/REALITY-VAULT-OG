@@ -61,8 +61,8 @@ private val CcSans = FontFamily(Font(R.font.cc_sans, FontWeight.Bold))
 @Composable
 fun LiveGuideScreen(nav: Nav) {
     val chans = liveChannels()
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) { while (true) { delay(15_000); now = System.currentTimeMillis() } }
+    var now by remember { mutableLongStateOf(com.realityvault.tv.Clock.now()) }
+    LaunchedEffect(Unit) { while (true) { delay(15_000); now = com.realityvault.tv.Clock.now() } }
     // canales nuevos o cambios de programación: al abrir y cada minuto
     LaunchedEffect(Unit) { while (true) { Store.refreshLive(); delay(60_000) } }
     var note by remember { mutableStateOf("") }
@@ -201,7 +201,7 @@ fun LiveWatchScreen(s: Screen.LiveTv, nav: Nav) {
         key(ch.id) { LiveSignal(ch, sc, CcMono, CcSans, Modifier.fillMaxSize(), onTune = { info++ }) }
         // información: canal, programa y progreso (sin pausa ni barra para adelantar: es en vivo)
         AnimatedVisibility(showInfo, Modifier.fillMaxSize(), enter = fadeIn(tween(180)), exit = fadeOut(tween(350))) {
-            val now = System.currentTimeMillis()
+            val now = com.realityvault.tv.Clock.now()
             val cur = remember(sc, info) { blocksBetween(sc, ch, now - 1, now + 1).firstOrNull { now in it.second until it.third } }
             Box(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxWidth().height(110.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .7f), Color.Transparent))))
