@@ -350,7 +350,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
 
         // subtítulos propios: estilo elegido en el panel (MTV por defecto) o el cuadro negro de siempre
         if (subsOn && cueText.isNotBlank() && Store.subStyle != "classic") {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
                 VodCaptions(cueText, Store.subStyle, Store.subScaleTv, Store.subLift, if (controlsVisible) 150.dp.value / maxHeight.value else 0f)
             }
         } else if (subsOn && cueText.isNotBlank()) {
