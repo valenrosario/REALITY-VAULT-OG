@@ -2621,7 +2621,7 @@ async function tmdbImport(id){
 /* --- backup --- */
 function downloadBackup(){
   const strip = o => { const c = { ...o }; delete c._new; return c; };
-  const data = { app:'reality-vault', version:2, exportedAt:new Date().toISOString(), titles:S.titles.map(strip), banners:S.banners.map(strip), site:S.site };
+  const data = { app:'reality-vault', version:3, exportedAt:new Date().toISOString(), titles:S.titles.map(strip), banners:S.banners.map(strip), site:S.site, rows:S.frows || [], collections:S.colls || [], live:S.live || null };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = `reality-vault-respaldo-${new Date().toISOString().slice(0,10)}.json`;
@@ -2637,6 +2637,8 @@ async function importBackup(){
       if (!Array.isArray(data.titles)) throw new Error('El archivo no es un respaldo de REALITY VAULT.');
       const cache = new Map();
       async function walk(v, kind){
+        // enlaces a archivos de un Supabase que ya no se usa: se dejan vacíos para volver a subirlos (a Cloudflare)
+        if (typeof v === 'string' && isSbFile(v) && !v.startsWith(((window.RV_CONFIG || {}).supabaseUrl || '').replace(/\/+$/, '') + '/')) return '';
         if (typeof v === 'string' && v.startsWith('data:image/')){
           if (!cache.has(v)) cache.set(v, dataUrlToStorage(v, kind));
           return cache.get(v);
@@ -2654,6 +2656,9 @@ async function importBackup(){
       for (const t of titles) await S.db.doc('titles/'+t.id).set(t);
       for (const b of banners) await S.db.doc('banners/'+b.id).set(b);
       if (Object.keys(site).length) await S.db.doc('site/config').set(site);
+      if (Array.isArray(data.rows) && data.rows.length) await S.db.doc('site/rows').set({ rows: await walk(data.rows), updatedAt: Date.now() });
+      if (Array.isArray(data.collections) && data.collections.length) await S.db.doc('site/collections').set({ list: await walk(data.collections), updatedAt: Date.now() });
+      if (data.live && (data.live.channels || []).length) await S.db.doc('site/live').set({ ...(await walk(data.live)), updatedAt: Date.now() });
       status(`Listo: ${titles.length} títulos y ${banners.length} banners importados.`);
       toast('Respaldo importado');
     } catch(err){ status(''); toast(err.message || 'No se pudo importar', true); }
