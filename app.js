@@ -1577,8 +1577,25 @@ async function tsDuration(url){
     return Math.round(d / 90000 * 10) / 10;
   } catch(_){ return 0; }
 }
+/* Duración de un .mkv leyendo su encabezado (Segment Info: TimecodeScale + Duration): los MKV de DVD
+   (MPEG-2 + AC-3) el navegador no los puede abrir, pero la tele sí. */
+function mkvDur(b){
+  const vint = i => { const f = b[i]; let n = 1, m = 0x80; while (n <= 8 && !(f & m)){ n++; m >>= 1; } let v = f & (m - 1); for (let k = 1; k < n; k++) v = v * 256 + b[i + k]; return { n, v }; };
+  let scale = 1e6, dur = 0;
+  for (let i = 0; i + 12 < b.length; i++){
+    if (b[i] === 0x2A && b[i + 1] === 0xD7 && b[i + 2] === 0xB1){ const s = vint(i + 3); if (s.v >= 1 && s.v <= 8){ let v = 0; for (let k = 0; k < s.v; k++) v = v * 256 + b[i + 3 + s.n + k]; if (v > 0) scale = v; } }
+    if (b[i] === 0x44 && b[i + 1] === 0x89){ const s = vint(i + 2); if (s.v === 4 || s.v === 8){ const dv = new DataView(b.buffer, b.byteOffset + i + 2 + s.n, s.v); const d = s.v === 4 ? dv.getFloat32(0) : dv.getFloat64(0); if (d > 0 && isFinite(d)){ dur = d; break; } } }
+  }
+  return dur ? Math.round(dur * scale / 1e9 * 10) / 10 : 0;
+}
+async function mkvDuration(url){
+  try { const r = await fetch(url, { headers: { Range: 'bytes=0-262143' } }); if (r.status !== 206 && r.status !== 200) return 0;
+    if (r.status === 200){ const rd = r.body.getReader(); const parts = []; let got = 0; while (got < 262144){ const x = await rd.read(); if (x.done) break; parts.push(x.value); got += x.value.length; } try { rd.cancel(); } catch(_){} const b = new Uint8Array(got); let o = 0; parts.forEach(p => { b.set(p, o); o += p.length; }); return mkvDur(b); }
+    return mkvDur(new Uint8Array(await r.arrayBuffer())); } catch(_){ return 0; }
+}
 async function measureDur(url){
   if (/\.(ts|m2ts|mts)([?#]|$)/i.test(url || '')){ const d = await tsDuration(url); if (d > 0) return d; }
+  if (/\.(mkv|mk3d|webm)([?#]|$)/i.test(url || '')){ const d = await mkvDuration(url); if (d > 0) return d; }
   return measureDurVideo(url);
 }
 function measureDurVideo(url){
@@ -1684,7 +1701,7 @@ function lvTvHtml(ch, opts = {}){
   const op = ch.logoOpacity ?? .35;
   const st = ccStyleOf(ch.ccStyle); const bg = lvBugOf(ch, it);
   return `<div class="lv-tv ${opts.small ? 'sm' : ''}"><div class="lv-43" ${img ? `style="background-image:url('${esc(img)}')"` : ''}>
-    ${bg ? `<img class="lv-bugf ${bg.ar > 1.5 ? 'w' : ''}" src="${esc(bg.u)}" alt="">` : ch.logo ? `<img class="lv-bug" src="${esc(ch.logo)}" alt="" style="${pos};opacity:${op};height:${(ch.logoSize||56)/10.8}%">` : `<b class="lv-bug lv-bugt" style="${pos};opacity:${op}">${esc((ch.name||'').toUpperCase())}</b>`}
+    ${bg ? `<img class="lv-bugf ${bg.ar > 1.5 ? 'w' : ''}" src="${esc(bg.u)}" alt="">` : ch.showLogo === false ? '' : ch.logo ? `<img class="lv-bug" src="${esc(ch.logo)}" alt="" style="${pos};opacity:${op};height:${(ch.logoSize||56)/10.8}%">` : `<b class="lv-bug lv-bugt" style="${pos};opacity:${op}">${esc((ch.name||'').toUpperCase())}</b>`}
     ${ch.captions !== false ? ccHtml(st, !bg && /^b/.test(ch.logoPos || 'br'), undefined, ch.ccScaleTv || 1, bg?.lift || 0) : ''}
   </div></div>`;
 }
@@ -1783,7 +1800,22 @@ function lvStepPrograma(ch){
       <button class="btn btn-line btn-sm" data-lv-measure>Medir duraciones</button>
       <button class="btn btn-line btn-sm" data-lv-restart>Arrancar desde el primero</button>
       <span data-row="lvclear"><button class="btn btn-line btn-sm" data-lv-clear>Vaciar</button></span></div>` : ''}
-    <div class="lv-prog">${(ch.items||[]).map((it, ii) => `<div class="lv-pi ${(+it.dur||0) < 5 ? 'bad' : ''} ${nw?.b?.i === ii ? 'now' : ''}">
+    ${lvSeasonChips(ch)}
+    <div class="lv-prog">${lvGroups(ch).map(g => g.items.length === 1 ? lvItemRow(ch, g.from, nw) : lvGroupHtml(ch, g, nw)).join('') || '<p class="lv-help">Todavía no hay programas. Elegí algo del catálogo de arriba.</p>'}</div>
+  </section>
+  ${(ch.items||[]).length ? `<div class="lv-nextstep"><button class="btn btn-primary" data-lv-step="tandas">Siguiente: tandas →</button></div>` : ''}`;
+}
+/* ---------- programación ordenada: bloques por serie y temporada ---------- */
+// clave de cada programa: los capítulos de la misma temporada que van seguidos forman un bloque
+const lvKey = it => it.titleId ? it.titleId + ':' + (+it.season || 0) : 'clip:' + it.id;
+const lvKeyName = it => it.titleId ? `${lvName(it)}${+it.season > 0 ? ' · Temporada ' + it.season : ''}` : (it.label || 'Video suelto');
+function lvGroups(ch){
+  const out = []; (ch.items || []).forEach((it, i) => { const k = lvKey(it); const g = out[out.length - 1];
+    if (g && g.key === k && it.titleId && +it.season > 0) { g.items.push(it); g.to = i; } else out.push({ key: k, from: i, to: i, items: [it] }); });
+  return out;
+}
+function lvItemRow(ch, ii, nw){ const it = ch.items[ii];
+  return `<div class="lv-pi ${(+it.dur||0) < 5 ? 'bad' : ''} ${nw?.b?.i === ii ? 'now' : ''}">
       <span class="lv-pi-n">${ii+1}</span>
       ${it.titleId ? `<span class="lv-pi-th" ${lvThumb(it) ? `style="background-image:url('${esc(lvThumb(it))}')"` : ''}></span>`
         : `<button class="lv-pi-th lv-thbtn" data-lv-clipthumb="${ii}" title="${it.thumb ? 'Cambiar miniatura' : 'Agregar miniatura (opcional)'}" ${it.thumb ? `style="background-image:url('${esc(it.thumb)}')"` : ''}>${it.thumb ? `<u data-lv-clipthumbdel="${ii}" title="Quitar miniatura">✕</u>` : '<i>+ Miniatura</i>'}</button>`}
@@ -1791,9 +1823,30 @@ function lvStepPrograma(ch){
         : `<span class="lv-pi-t lv-clip"><input class="input" data-lv-item="${ii}" data-lv-k="label" value="${esc(it.label || '')}" placeholder="Nombre (ej: Britney Spears – I'm a Slave 4 U)" aria-label="Nombre"><input class="input" data-lv-item="${ii}" data-lv-k="sub" value="${esc(it.sub || '')}" placeholder="Evento (ej: VMAs 2001)" aria-label="Evento">${nw?.b?.i === ii ? '<small><em>al aire</em></small>' : ''}</span>`}
       <label class="lv-pi-d">${(+it.dur||0) < 5 ? '<small>Sin duración</small>' : ''}<input class="input" data-lv-item="${ii}" data-lv-k="dur" value="${it.dur ? mmss(it.dur) : ''}" placeholder="mm:ss" aria-label="Duración"></label>
       <span class="lv-act"><button class="iconbtn" data-lv-imove="${ii}" data-d="-1" ${ii===0?'disabled':''} aria-label="Subir">↑</button><button class="iconbtn" data-lv-imove="${ii}" data-d="1" ${ii===(ch.items.length-1)?'disabled':''} aria-label="Bajar">↓</button><button class="iconbtn" data-lv-idel="${ii}" aria-label="Quitar">✕</button></span>
-    </div>`).join('') || '<p class="lv-help">Todavía no hay programas. Elegí algo del catálogo de arriba.</p>'}</div>
-  </section>
-  ${(ch.items||[]).length ? `<div class="lv-nextstep"><button class="btn btn-primary" data-lv-step="tandas">Siguiente: tandas →</button></div>` : ''}`;
+    </div>`;
+}
+function lvGroupHtml(ch, g, nw){
+  const E = S.lvEd; E.open = E.open || {};
+  const it = g.items[0], open = !!E.open[it.id];
+  const dur = g.items.reduce((a, x) => a + (+x.dur || 0), 0), bad = g.items.filter(x => (+x.dur || 0) < 5).length;
+  const air = nw?.b && nw.b.i >= g.from && nw.b.i <= g.to;
+  const groups = lvGroups(ch); const gi = groups.findIndex(x => x.from === g.from);
+  return `<div class="lv-grp ${air ? 'now' : ''} ${bad ? 'bad' : ''}">
+    <div class="lv-grp-h">
+      <button class="lv-grp-tg" data-lv-gopen="${esc(it.id)}" aria-expanded="${open}"><span class="lv-grp-ar">${open ? '▾' : '▸'}</span>
+        <span class="lv-pi-th" ${lvThumb(it) ? `style="background-image:url('${esc(lvThumb(it))}')"` : ''}></span>
+        <span class="lv-pi-t"><b>${esc(lvKeyName(it))}</b><small>Capítulos ${esc(it.episode)}–${esc(g.items[g.items.length - 1].episode)} · ${g.items.length} capítulos · ${hm(dur)}${bad ? ` · <em class="lv-bad">${bad} sin duración</em>` : ''}${air ? ' · <em>al aire</em>' : ''}</small></span></button>
+      <span class="lv-act"><button class="iconbtn" data-lv-gmove="${g.from}" data-d="-1" ${gi === 0 ? 'disabled' : ''} aria-label="Subir bloque">↑</button><button class="iconbtn" data-lv-gmove="${g.from}" data-d="1" ${gi === groups.length - 1 ? 'disabled' : ''} aria-label="Bajar bloque">↓</button><button class="btn btn-line btn-sm" data-lv-gdel="${g.from}">Quitar temporada</button></span>
+    </div>
+    ${open ? `<div class="lv-grp-b">${g.items.map((_, k) => lvItemRow(ch, g.from + k, nw)).join('')}</div>` : ''}
+  </div>`;
+}
+/** Resumen de lo que hay en el canal (serie · temporada) con botón para sacar todo lo de esa temporada, esté donde esté. */
+function lvSeasonChips(ch){
+  const m = new Map(); (ch.items || []).forEach(it => { if (!it.titleId) return; const k = lvKey(it); const c = m.get(k) || { it, n: 0 }; c.n++; m.set(k, c); });
+  const clips = (ch.items || []).filter(it => !it.titleId).length;
+  if (m.size + (clips ? 1 : 0) < 2) return '';
+  return `<div class="lv-sum"><small>En el canal:</small>${[...m.entries()].map(([k, c]) => `<span class="lv-sumc">${esc(lvKeyName(c.it))} <i>${c.n}</i><button data-lv-kdel="${esc(k)}" title="Quitar todo">✕</button></span>`).join('')}${clips ? `<span class="lv-sumc">Videos sueltos <i>${clips}</i><button data-lv-kdel="clip:" title="Quitar todos los videos sueltos">✕</button></span>` : ''}</div>`;
 }
 function lvStepTandas(ch){
   const A = S.lvEd.d.ads; const per = +(ch.adsPerBreak ?? 2);
@@ -1840,7 +1893,9 @@ function lvBugsSection(ch){
 }
 function lvStepPantalla(ch){
   const op = Math.round((ch.logoOpacity ?? .35) * 100), sz = ch.logoSize || 56, pos = ch.logoPos || 'br';
-  return lvBugsSection(ch) + `<section class="lv-sec"><h2>Logo en pantalla</h2><p class="lv-help">Como los canales de antes: a baja opacidad, en una esquina. Se va solo durante las tandas. Solo se usa donde no hay screen bug.</p>
+  return lvBugsSection(ch) + `<section class="lv-sec"><div class="lv-sec-h"><h2>Logo en pantalla</h2>
+    <label class="lv-switch sm"><input type="checkbox" data-lv-f="showLogo" ${ch.showLogo !== false ? 'checked' : ''}><i></i><span><b>Mostrar logo</b></span></label></div>
+    ${ch.showLogo === false ? '<p class="lv-help"><b>Sin logo:</b> el canal se emite limpio, sin logo ni nombre en pantalla (si elegiste un screen bug, ese sí se ve).</p>' : ''}<p class="lv-help">Como los canales de antes: a baja opacidad, en una esquina. Se va solo durante las tandas. Solo se usa donde no hay screen bug.</p>
     <div class="lv-posgrid">
       <div class="lv-pos43">${['tl','tr','bl','br'].map(p => `<button class="${p} ${pos === p ? 'on' : ''}" data-lv-pos="${p}" aria-label="${{tl:'Arriba a la izquierda',tr:'Arriba a la derecha',bl:'Abajo a la izquierda',br:'Abajo a la derecha'}[p]}"></button>`).join('')}</div>
       <div class="lv-sliders">
@@ -1898,7 +1953,7 @@ async function lvMeasureItems(items, onStep){
 function lvTwoTap(b, label, fn){ if (!b.dataset.sure){ b.dataset.sure = '1'; const t = b.textContent; b.textContent = label; setTimeout(() => { if (b.isConnected){ delete b.dataset.sure; b.textContent = t; } }, 3000); return; } fn(); }
 window.addEventListener('beforeunload', e => { if (S.lvEd?.dirty){ e.preventDefault(); e.returnValue = ''; } });
 document.addEventListener('click', async e => {
-  const b = e.target.closest('[data-lv-new],[data-lv-open],[data-lv-back],[data-lv-save],[data-lv-discard],[data-lv-del],[data-lv-step],[data-lv-pick],[data-lv-addt],[data-lv-imove],[data-lv-idel],[data-lv-shuffle],[data-lv-measure],[data-lv-restart],[data-lv-clear],[data-lv-adup],[data-lv-adurl],[data-lv-addel],[data-lv-admove],[data-lv-per],[data-lv-auto],[data-lv-nocuts],[data-lv-mk],[data-lv-bar],[data-lv-pos],[data-lv-cc],[data-lv-bug],[data-lv-bugup],[data-lv-bugdel],[data-lv-clipup],[data-lv-clipurl],[data-lv-clipthumb],[data-lv-clipthumbdel]');
+  const b = e.target.closest('[data-lv-new],[data-lv-open],[data-lv-back],[data-lv-save],[data-lv-discard],[data-lv-del],[data-lv-step],[data-lv-pick],[data-lv-addt],[data-lv-imove],[data-lv-idel],[data-lv-shuffle],[data-lv-measure],[data-lv-restart],[data-lv-clear],[data-lv-adup],[data-lv-adurl],[data-lv-addel],[data-lv-admove],[data-lv-per],[data-lv-auto],[data-lv-nocuts],[data-lv-mk],[data-lv-bar],[data-lv-pos],[data-lv-cc],[data-lv-bug],[data-lv-bugup],[data-lv-bugdel],[data-lv-clipup],[data-lv-clipurl],[data-lv-clipthumb],[data-lv-clipthumbdel],[data-lv-gopen],[data-lv-gmove],[data-lv-gdel],[data-lv-kdel]');
   if (!b || !S.owner) return; const d = b.dataset; const E = S.lvEd; const ch = E && lvCh(E.id);
   if ('lvNew' in d){ const L = liveData(); const n = Math.max(0, ...L.channels.map(c => +c.number || 0)) + 1;
     const c = { id: uid('ch'), name: 'Nuevo canal', number: n, logo: '', guideImage: '', logoPos: 'br', logoOpacity: .35, logoSize: 56, active: true, epoch: Date.now(), captions: true, ccStyle: 'cc608', adsPerBreak: 2, podBetween: false, items: [] };
@@ -1941,6 +1996,13 @@ document.addEventListener('click', async e => {
     const r = b.getBoundingClientRect(); const at = Math.round((e.clientX - r.left) / r.width * dur);
     if (at <= 20 || at >= dur - 20){ toast('Muy pegado al principio o al final', true); return; }
     it.breaks = [...new Set([...(it.breaks||[]), at])].sort((a,b) => a-b); lvDirty(); rerenderPanel(); return; }
+  if (d.lvGopen){ E.open = E.open || {}; E.open[d.lvGopen] = !E.open[d.lvGopen]; rerenderPanel(); return; }
+  if (d.lvGmove != null){ const gs = lvGroups(ch); const gi = gs.findIndex(x => x.from === +d.lvGmove); const gj = gi + (+d.d); if (gi < 0 || !gs[gj]) return;
+    const order = gs.map(x => x.items); [order[gi], order[gj]] = [order[gj], order[gi]]; ch.items = order.flat(); lvDirty(); rerenderPanel(); return; }
+  if (d.lvGdel != null){ const g = lvGroups(ch).find(x => x.from === +d.lvGdel); if (!g) return;
+    return lvTwoTap(b, '¿Seguro? Tocá de nuevo', () => { const ids = new Set(g.items.map(x => x.id)); ch.items = ch.items.filter(x => !ids.has(x.id)); lvDirty(); rerenderPanel(); toast(`Quitados ${ids.size} capítulos. Tocá Guardar canal.`); }); }
+  if (d.lvKdel != null){ const k = d.lvKdel; const match = x => k === 'clip:' ? !x.titleId : lvKey(x) === k; const n = ch.items.filter(match).length;
+    return lvTwoTap(b, '¿Quitar?', () => { ch.items = ch.items.filter(x => !match(x)); lvDirty(); rerenderPanel(); toast(`Quitados ${n} programas. Tocá Guardar canal.`); }); }
   if (d.lvClipthumbdel != null){ e.stopPropagation(); const it = ch.items[+d.lvClipthumbdel]; if (it){ delete it.thumb; lvDirty(); rerenderPanel(); } return; }
   if (d.lvClipthumb != null){ const it = ch.items[+d.lvClipthumb]; if (!it) return;
     const f = await pickFile('image/jpeg,image/png,image/webp'); if (!f) return;
@@ -2001,7 +2063,7 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const el = e.target; const E = S.lvEd; if (!S.owner || !E || !el.closest?.('.live-ed')) return;
   const ch = lvCh(E.id); if (!ch) return;
-  if (el.dataset.lvF === 'active' || el.dataset.lvF === 'captions' || el.dataset.lvF === 'podBetween'){ ch[el.dataset.lvF] = el.checked; lvDirty(); rerenderPanel(); return; }
+  if (el.dataset.lvF === 'active' || el.dataset.lvF === 'captions' || el.dataset.lvF === 'podBetween' || el.dataset.lvF === 'showLogo'){ ch[el.dataset.lvF] = el.checked; lvDirty(); rerenderPanel(); return; }
   if (el.dataset.lvIbug != null || el.dataset.lvTbug != null){
     const v = el.value; const p = v && v !== 'off' ? lvBugLib().find(x => x.id === v) : null;
     const set = it => { if (v === 'off') it.bug = { off: 1 }; else if (p) it.bug = lvBugRes(p); else delete it.bug; };
@@ -2202,7 +2264,7 @@ function lvEngine(chId){
       const bg = lvBugOf(ch, (ch.items || [])[s.i]); const bgU = bg ? bg.u : '';
       if (bgU !== curBug){ curBug = bgU; for (const e of [bugW, bug43]) e.removeAttribute('src'); if (bg) (bg.ar > 1.5 ? bugW : bug43).src = bg.u; }
       bugW.style.opacity = bg && bg.ar > 1.5 && logoOn ? 1 : 0; bug43.style.opacity = bg && bg.ar <= 1.5 && logoOn ? 1 : 0;
-      (ch.logo ? bug : bugT).style.opacity = !bg && logoOn ? (ch.logoOpacity ?? .35) : 0;
+      (ch.logo ? bug : bugT).style.opacity = !bg && logoOn && ch.showLogo !== false ? (ch.logoOpacity ?? .35) : 0;
       // subtítulos
       const st = ccStyleOf(ch.ccStyle);
       if (ch.captions !== false && !s.ad && s.subs){

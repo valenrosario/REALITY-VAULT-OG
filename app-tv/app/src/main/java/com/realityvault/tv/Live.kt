@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -167,8 +168,8 @@ private fun GuideRow(
             if (th.isNotBlank()) Img(th, Modifier.fillMaxSize())
         }
         Box(Modifier.width(lineW).fillMaxHeight().clipToBounds()) {
-            if (blocks.isEmpty()) Focusable({ onPick(now, true) }, Modifier.fillMaxSize(), shape = RoundedCornerShape(6.dp), scale = 1f, requester = req) { f ->
-                Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = if (f) .14f else .05f)), contentAlignment = Alignment.CenterStart) {
+            if (blocks.isEmpty()) Focusable({ onPick(now, true) }, Modifier.fillMaxSize(), shape = RoundedCornerShape(6.dp), scale = 1f, ring = false, requester = req) { f ->
+                Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = if (f) .16f else .05f)).then(if (f) Modifier.border(2.dp, Color.White, RoundedCornerShape(6.dp)) else Modifier), contentAlignment = Alignment.CenterStart) {
                     Text("Sintonizar", style = ts(18, FontWeight.Bold, Color.White), modifier = Modifier.padding(start = 20.dp))
                 }
             }
@@ -177,10 +178,11 @@ private fun GuideRow(
                 val w = (x1 - x0 - 6.dp).coerceAtLeast(0.dp)
                 if (w < 10.dp) return@forEach
                 val isNow = now in s until e
-                Focusable({ onPick(s, isNow) }, Modifier.offset(x = x0).width(w).fillMaxHeight(), shape = RoundedCornerShape(6.dp), scale = 1f,
+                Focusable({ onPick(s, isNow) }, Modifier.offset(x = x0).width(w).fillMaxHeight(), shape = RoundedCornerShape(6.dp), scale = 1f, ring = false,
                     requester = if (isNow) req else null, onFocus = { onFocusBlock(maxOf(s, t0), e) }) { f ->
                     Column(Modifier.fillMaxSize().background(
-                        when { f -> Color.White.copy(alpha = .15f); isNow -> Color.White.copy(alpha = .085f); else -> Color.White.copy(alpha = .045f) })
+                        when { f -> Color.White.copy(alpha = .16f); isNow -> Color.White.copy(alpha = .085f); else -> Color.White.copy(alpha = .045f) })
+                        .then(if (f) Modifier.border(2.dp, Color.White, RoundedCornerShape(6.dp)) else Modifier)
                         .padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         val mins = ((e - now) / 60_000L).coerceAtLeast(1)
                         Text(if (isNow) "QUEDAN $mins MIN" else "${hhmm(s)} – ${hhmm(e)}", style = ts(11.5f, FontWeight.Bold, Color.White.copy(alpha = .55f)).copy(letterSpacing = 1.sp), maxLines = 1)

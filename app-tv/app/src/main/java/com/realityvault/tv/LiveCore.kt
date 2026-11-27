@@ -88,7 +88,9 @@ data class LiveChannel(
     /** Grilla ya armada por el panel al guardar: la misma para todas las teles y celulares. */
     val plan: List<PlanSeg> = emptyList(),
     /** Screen bug del canal. */
-    val bug: LiveBug? = null
+    val bug: LiveBug? = null,
+    /** false = el canal se emite sin logo (ni nombre) en pantalla. */
+    val showLogo: Boolean = true
 )
 /** Un tramo de la grilla publicada (a = publicidad, i = programa de la lista, f/t = segundos del archivo, u = enlace de la publicidad). */
 data class PlanSeg(val ad: Boolean, val url: String, val from: Double, val to: Double, val i: Int)
@@ -130,7 +132,7 @@ fun parseLive(d: JSONObject): LiveData {
             c.str("logoPos").ifBlank { "br" }, c.num("logoOpacity", .35).toFloat().coerceIn(.05f, 1f),
             c.num("logoSize", 56.0).toInt().coerceIn(20, 160), c.opt("active") != false,
             c.optLong("epoch", 0L), c.opt("captions") != false, c.num("adsPerBreak", 2.0).toInt().coerceIn(0, 8), items,
-            c.str("guideImage"), c.str("ccStyle").ifBlank { "cc608" }, c.num("ccScaleTv", 1.0).toFloat().coerceIn(.6f, 1.8f), c.optBoolean("podBetween", false), parsePlan(c.optJSONObject("plan")), parseBug(c.optJSONObject("bug")))
+            c.str("guideImage"), c.str("ccStyle").ifBlank { "cc608" }, c.num("ccScaleTv", 1.0).toFloat().coerceIn(.6f, 1.8f), c.optBoolean("podBetween", false), parsePlan(c.optJSONObject("plan")), parseBug(c.optJSONObject("bug")), c.opt("showLogo") != false)
     }
     return LiveData(ads, chans)
 }
@@ -549,7 +551,7 @@ fun LiveSignal(ch: LiveChannel, sc: Sched, mono: FontFamily, sans: FontFamily, m
     // screen bug del programa que va al aire (el suyo, el del canal o ninguno)
     val curItem = if (seg != null) ch.items.getOrNull(seg.itemIdx) else null
     val bug: LiveBug? = if (curItem?.bugOff == true) null else curItem?.bug ?: ch.bug
-    val logoA by animateFloatAsState(if (logoOn && bug == null) ch.logoOpacity else 0f, tween(900), label = "bug")
+    val logoA by animateFloatAsState(if (logoOn && bug == null && ch.showLogo) ch.logoOpacity else 0f, tween(900), label = "bug")
     val bugA by animateFloatAsState(if (logoOn && bug != null) 1f else 0f, tween(900), label = "screenbug")
     var lastBug by remember { mutableStateOf<LiveBug?>(null) }
     if (bug != null) lastBug = bug
