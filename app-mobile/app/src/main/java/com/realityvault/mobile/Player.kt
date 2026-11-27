@@ -254,7 +254,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
 
     val player = remember(url, m.subsUrl, attempt) {
         val http = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(15_000).setReadTimeoutMs(20_000)
-        ExoPlayer.Builder(ctx)
+        ExoPlayer.Builder(ctx, com.realityvault.tv.rvRenderers(ctx))
             .setMediaSourceFactory(DefaultMediaSourceFactory(androidx.media3.datasource.DefaultDataSource.Factory(ctx, http), rvExtractors()))
             .setSeekBackIncrementMs(10_000).setSeekForwardIncrementMs(10_000)
             .setHandleAudioBecomingNoisy(true)

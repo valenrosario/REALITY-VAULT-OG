@@ -20,7 +20,7 @@ val relKeystorePath = System.getenv("RV_KEYSTORE_PATH")?.takeIf { file(it).exist
 
 android {
     namespace = "com.realityvault.tv"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.realityvault.tv"
@@ -81,9 +81,11 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("com.google.zxing:core:3.5.3")
-    implementation("androidx.media3:media3-exoplayer:1.4.1")
-    implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
-    implementation("androidx.media3:media3-ui:1.4.1")
-    implementation("androidx.media3:media3-datasource:1.4.1")
-    implementation("androidx.media3:media3-database:1.4.1")
+    implementation("androidx.media3:media3-exoplayer:1.5.0")
+    // decodifica en el aparato el audio que la tele no sabe (AC-3, E-AC-3, MP2, DTS… comunes en los .ts grabados de la TV)
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.5.0")
+    implementation("androidx.media3:media3-ui:1.5.0")
+    implementation("androidx.media3:media3-datasource:1.5.0")
+    implementation("androidx.media3:media3-database:1.5.0")
 }

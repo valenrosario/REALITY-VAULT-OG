@@ -396,7 +396,7 @@ fun LiveSignal(ch: LiveChannel, sc: Sched, mono: FontFamily, sans: FontFamily, m
         // en cada tanda (eso gastaba el cupo de transferencia de Supabase)
         val adUrls = (Store.live?.ads ?: emptyList()).map { it.url }.toHashSet()
         val dsf = AdCachingFactory(ctx, adUrls)
-        ExoPlayer.Builder(ctx).setLoadControl(load).setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dsf, rvExtractors())).build().apply {
+        ExoPlayer.Builder(ctx, com.realityvault.tv.rvRenderers(ctx)).setLoadControl(load).setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dsf, rvExtractors())).build().apply {
             playWhenReady = true
             trackSelectionParameters = trackSelectionParameters.buildUpon().setPreferredTextLanguage("es").build()
         }

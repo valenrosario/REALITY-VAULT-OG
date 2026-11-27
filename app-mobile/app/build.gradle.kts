@@ -25,7 +25,7 @@ val copyShared = tasks.register<Copy>("copyShared") {
 
 android {
     namespace = "com.realityvault.tv"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.realityvault.app"
@@ -91,11 +91,13 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
-    implementation("androidx.media3:media3-exoplayer:1.4.1")
-    implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
-    implementation("androidx.media3:media3-ui:1.4.1")
-    implementation("androidx.media3:media3-datasource:1.4.1")
-    implementation("androidx.media3:media3-database:1.4.1")
+    implementation("androidx.media3:media3-exoplayer:1.5.0")
+    // decodifica en el aparato el audio que la tele no sabe (AC-3, E-AC-3, MP2, DTS… comunes en los .ts grabados de la TV)
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.5.0")
+    implementation("androidx.media3:media3-ui:1.5.0")
+    implementation("androidx.media3:media3-datasource:1.5.0")
+    implementation("androidx.media3:media3-database:1.5.0")
     // Chromecast
     implementation("com.google.android.gms:play-services-cast-framework:21.5.0")
     implementation("androidx.mediarouter:mediarouter:1.7.0")

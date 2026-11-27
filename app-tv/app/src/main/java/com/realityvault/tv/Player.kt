@@ -158,7 +158,7 @@ fun NativePlayer(m: Media.Native, t: Title?, episode: Episode?, s: Screen.Player
     var lastTouch by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     val player = remember(m.url, m.subsUrl) {
-        ExoPlayer.Builder(ctx).setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(ctx, rvExtractors())).setSeekBackIncrementMs(10_000).setSeekForwardIncrementMs(10_000).build().apply {
+        ExoPlayer.Builder(ctx, com.realityvault.tv.rvRenderers(ctx)).setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(ctx, rvExtractors())).setSeekBackIncrementMs(10_000).setSeekForwardIncrementMs(10_000).build().apply {
             val subs = if (m.subsUrl.isNotBlank()) listOf(
                 MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(m.subsUrl))
                     .setId("rv-es").setMimeType(MimeTypes.TEXT_VTT).setLanguage("es")

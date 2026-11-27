@@ -66,5 +66,11 @@ fun subsAsVtt(url: String): String = runCatching {
 
 /** Lee también los .ts de TV grabada que casi no traen cuadros IDR: sin esto, adelantar o saltear los deja trabados. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+/** Reproductor con decodificador de audio por software (FFmpeg) para los formatos que el aparato no trae:
+ *  sin esto, los .ts con audio AC-3 o MP2 se ven pero no se escuchan. */
+fun rvRenderers(ctx: android.content.Context) = androidx.media3.exoplayer.DefaultRenderersFactory(ctx)
+    .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+    .setEnableDecoderFallback(true)
+
 fun rvExtractors() = androidx.media3.extractor.DefaultExtractorsFactory()
     .setTsExtractorFlags(androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES)
