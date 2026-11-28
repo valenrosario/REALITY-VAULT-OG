@@ -320,7 +320,8 @@ object Store {
 
     /** Recomendados: géneros de lo que eligió al crear el perfil, de Mi lista y de lo que vio. */
     fun recommendedTitles(): List<Title> {
-        val pub = published()
+        // sin póster no se recomienda (quedaba un cuadro vacío)
+        val pub = published().filter { it.poster.isNotBlank() }
         val likes = profile?.likes ?: emptyList()
         val liked = (likes + myList + progress.map { it.titleId }).distinct().mapNotNull { byId(it) }
         val seen = (myList + progress.map { it.titleId }).toSet()

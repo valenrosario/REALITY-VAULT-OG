@@ -22,6 +22,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -118,7 +121,8 @@ fun ProfileGate(startMode: String, logo: String, onAccount: (() -> Unit)? = null
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF2E1430), Color(0xFF0B0A12)), radius = 1600f, center = androidx.compose.ui.geometry.Offset(800f, 0f)))) {
+    Box(Modifier.fillMaxSize().background(Color(0xFF0B0A12))) {
+        PfBackdrop()
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth > maxHeight
             val d = draft
@@ -173,6 +177,30 @@ fun ProfileGate(startMode: String, logo: String, onAccount: (() -> Unit)? = null
     }
 }
 
+/** Fondo: una pared de pósters del catálogo, inclinada, oscurecida y moviéndose muy despacio, con un brillo rosa arriba. */
+@Composable
+private fun PfBackdrop() {
+    val posters = remember { Store.published().map { it.poster }.filter { it.isNotBlank() }.shuffled().take(30) }
+    val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "pfbg")
+    val shift by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(70_000, easing = androidx.compose.animation.core.LinearEasing), androidx.compose.animation.core.RepeatMode.Reverse), label = "pfs")
+    Box(Modifier.fillMaxSize().clipToBounds()) {
+        if (posters.isNotEmpty()) Column(
+            Modifier.requiredSize(1400.dp, 1500.dp).align(Alignment.Center).graphicsLayer { rotationZ = -12f; translationY = -260f * shift; translationX = 120f * shift; alpha = .5f },
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            repeat(7) { r ->
+                Row(Modifier.offset(x = if (r % 2 == 0) 0.dp else (-64).dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    repeat(11) { c ->
+                        coil.compose.AsyncImage(posters[(r * 11 + c) % posters.size], null, Modifier.width(118.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Crop)
+                    }
+                }
+            }
+        }
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xB30B0A12), Color(0xE00B0A12), Color(0xFA0B0A12)))))
+        Box(Modifier.align(Alignment.TopCenter).offset(y = (-260).dp).requiredSize(760.dp).background(Brush.radialGradient(listOf(Color(0x66FF3D8B), Color(0x22B5179E), Color.Transparent)), CircleShape))
+    }
+}
+
 @Composable
 private fun PfLogo(logo: String, h: Dp) {
     if (logo.isNotBlank()) coil.compose.AsyncImage(logo, null, Modifier.height(h).widthIn(max = 220.dp), contentScale = ContentScale.Fit)
@@ -196,7 +224,8 @@ private fun PickProfiles(manage: Boolean, wide: Boolean, logo: String, onUse: (P
                     PfTap({ if (p == null) onAdd() else if (manage) onEdit(p) else onUse(p) }, Modifier.width(av + 16.dp), req = if (ri == 0 && ci == 0) first else null) { f ->
                         val s by animateFloatAsState(if (f) 1.1f else 1f, tween(160), label = "pf")
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(Modifier.scale(s).border(if (f) 3.dp else 0.dp, Color.White, RoundedCornerShape(av * .24f)), contentAlignment = Alignment.Center) {
+                            Box(Modifier.scale(s).then(if (f) Modifier.shadow(24.dp, RoundedCornerShape(av * .24f), ambientColor = PfPink, spotColor = PfPink) else Modifier)
+                                .border(if (f) 3.dp else 0.dp, Color.White, RoundedCornerShape(av * .24f)), contentAlignment = Alignment.Center) {
                                 if (p == null) Box(Modifier.size(av).background(Color.White.copy(alpha = .07f), RoundedCornerShape(av * .24f))
                                     .border(2.dp, Color.White.copy(alpha = .3f), RoundedCornerShape(av * .24f)), contentAlignment = Alignment.Center) { Text("+", style = pfText(44, false, Color.White.copy(alpha = .75f))) }
                                 else ProfileAvatar(p, av)

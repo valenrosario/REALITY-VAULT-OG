@@ -88,7 +88,8 @@ fun App(nav: Nav, onExit: () -> Unit) {
                 is Screen.Person -> PersonScreen(s.name, nav)
                 is Screen.Collection -> CollectionScreen(s.id, nav)
                 Screen.Account -> AccountScreen(nav)
-                Screen.Home -> HomeScreen(nav)
+                // al cambiar de perfil el inicio se arma de cero (si no, las filas quedaban corridas como en el otro perfil)
+                Screen.Home -> androidx.compose.runtime.key(Store.profile?.id) { HomeScreen(nav) }
                 Screen.Series -> GridScreen(nav, "series")
                 Screen.Movies -> GridScreen(nav, "peliculas")
                 is Screen.Genre -> GridScreen(nav, "g:" + s.name)
@@ -173,7 +174,9 @@ internal fun BottomBar(nav: Nav, haze: dev.chrisbanes.haze.HazeState, glass: Gla
                         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
                     ) {
                         when (sc) {
-                            Screen.Mine -> {
+                            Screen.Mine -> if (Store.profile != null) {
+                                com.realityvault.tv.ProfileAvatar(Store.profile, 25.dp, Modifier.border(if (on) 1.5.dp else 0.dp, Color.White, RoundedCornerShape(7.dp)))
+                            } else {
                             val ph = avatarRes(Store.session?.avatar)
                             Box(Modifier.size(25.dp).clip(RoundedCornerShape(7.dp)).background(Brush.radialGradient(listOf(Color(0xFFFFD1E6), C.accent, Color(0xFFB04C86)))).border(if (on) 1.5.dp else 0.dp, Color.White, RoundedCornerShape(7.dp)), contentAlignment = Alignment.Center) {
                                 if (ph != null) androidx.compose.foundation.Image(painterResource(ph), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)

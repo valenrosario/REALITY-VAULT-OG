@@ -153,7 +153,7 @@ fun App(nav: Nav, onExit: () -> Unit) {
                 // abajo, directo al banner — ver "downTarget" de TopNavBar.
                 val heroReq = remember { FocusRequester() }
                 when (s) {
-                    Screen.Home -> HomeScreen(nav, heroReq)
+                    Screen.Home -> androidx.compose.runtime.key(Store.profile?.id) { HomeScreen(nav, heroReq) }
                     Screen.Series -> GridScreen(nav, "series")
                     Screen.Movies -> GridScreen(nav, "peliculas")
                     Screen.MyList -> GridScreen(nav, "milista")

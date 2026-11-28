@@ -2,6 +2,7 @@ package com.realityvault.mobile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,16 +61,28 @@ fun MineScreen(nav: Nav) {
     val pub = Store.published()
     val list = Store.myList.mapNotNull { id -> pub.firstOrNull { it.id == id } }
     val cont = Store.progress.mapNotNull { p -> pub.firstOrNull { it.id == p.titleId } }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottom + 110.dp)) {
         item(key = "head") {
             Column(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.size(92.dp).clip(RoundedCornerShape(22.dp)).background(Brush.radialGradient(listOf(Color(0xFFFFD1E6), C.accent, Color(0xFFB04C86)))), contentAlignment = Alignment.Center) {
-                    val ph = avatarRes(s.avatar)
-                    if (ph != null) androidx.compose.foundation.Image(painterResource(ph), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                    else Text("★", style = ts(36, color = Color.White))
-                }
-                Text(s.email.substringBefore("@"), style = ts(22, FontWeight.Bold, Color.White), modifier = Modifier.padding(top = 12.dp))
+                // el perfil que está mirando (no la cuenta): su foto y su nombre
+                com.realityvault.tv.ProfileAvatar(Store.profile, 92.dp, Modifier.tap({ com.realityvault.tv.PfUi.open = "pick" }, .95f))
+                Text(Store.profile?.name ?: s.email.substringBefore("@"), style = ts(22, FontWeight.Bold, Color.White), modifier = Modifier.padding(top = 12.dp))
                 Text(s.email, style = ts(13, color = C.muted), modifier = Modifier.padding(top = 2.dp))
+                // los otros perfiles, para cambiar de un toque
+                val others = Store.profiles.filter { it.id != Store.profile?.id }
+                Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    others.forEach { p ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(62.dp).tap({ scope.launch { Store.useProfile(p) } }, .92f)) {
+                            com.realityvault.tv.ProfileAvatar(p, 46.dp)
+                            Text(p.name, style = ts(11.5f, color = C.muted), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
+                        }
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(62.dp).tap({ com.realityvault.tv.PfUi.open = "manage" }, .92f)) {
+                        Box(Modifier.size(46.dp).border(1.5.dp, Color.White.copy(alpha = .35f), RoundedCornerShape(11.dp)), contentAlignment = Alignment.Center) { Text("✎", style = ts(18, color = Color.White)) }
+                        Text("Perfiles", style = ts(11.5f, color = C.muted), modifier = Modifier.padding(top = 5.dp))
+                    }
+                }
             }
         }
         if (AdminData.isAdmin) item(key = "admin") {

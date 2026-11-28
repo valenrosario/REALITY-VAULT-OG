@@ -273,7 +273,7 @@ function byTaste(list, key, prof = tasteProfile()){
 function recommendedRow(){
   const prof = tasteProfile(); if (!prof.size) return '';
   const seen = new Set([...S.progress.keys(), ...recentOpened().slice(0, 3)]);
-  const list = byTaste(published().filter(t => !seen.has(t.id) && tasteScore(t, prof) > 0), 'rec', prof).slice(0, 20);
+  const list = byTaste(published().filter(t => t.poster && !seen.has(t.id) && tasteScore(t, prof) > 0), 'rec', prof).slice(0, 20);
   return list.length >= 3 ? row(S.profile && pfList().length > 1 ? `Recomendado para ${S.profile.name}` : 'Recomendado para vos', list) : '';
 }
 function heroSlides(){
@@ -3796,14 +3796,19 @@ function pfGateOpen(mode, id){
   pfG = { mode, step: 1, q: '', busy: false,
     draft: base ? { ...base, likes: [...(base.likes || [])] } : { id: Math.random().toString(36).slice(2, 8), name: '', avatar: pfAvatars()[L.length % pfAvatars().length], likes: [] } };
   let el = document.getElementById('pfGate');
-  if (!el){ el = document.createElement('div'); el.id = 'pfGate'; el.className = 'pf-gate'; document.body.appendChild(el); }
+  if (!el){ el = document.createElement('div'); el.id = 'pfGate'; el.className = 'pf-gate';
+    // fondo: pared de pósters del catálogo, inclinada y oscurecida
+    const ps = shuffled(published().filter(t => t.poster), 'pf-wall').slice(0, 40).map(t => t.poster);
+    const col = c => { const L = Array.from({ length: 8 }, (_, i) => ps.length ? ps[(c * 8 + i) % ps.length] : ''); const h = L.map(u => `<i style="background-image:url('${esc(u)}')"></i>`).join(''); return `<div class="pf-wcol${c % 2 ? ' up' : ''}">${h}${h}</div>`; };
+    el.innerHTML = `<div class="pf-wall" aria-hidden="true">${ps.length ? Array.from({ length: 9 }, (_, c) => col(c)).join('') : ''}</div><div class="pf-glow"></div><div class="pf-body"></div>`;
+    document.body.appendChild(el); }
   document.body.style.overflow = 'hidden'; pfGateDraw();
   requestAnimationFrame(() => el.classList.add('on'));
 }
 function pfGateClose(){ const el = document.getElementById('pfGate'); if (el) el.remove(); pfG = null; document.body.style.overflow = ''; }
 function pfGateDraw(){
-  const el = document.getElementById('pfGate'); if (!el || !pfG) return;
-  const L = pfList(), d = pfG.draft;
+  const gate = document.getElementById('pfGate'); if (!gate || !pfG) return;
+  const el = gate.querySelector('.pf-body'); const L = pfList(), d = pfG.draft;
   const logo = `<img class="pf-logo" src="${esc(S.site.logo || LANDING_LOGO)}" alt="REALITY VAULT">`;
   if (pfG.mode === 'pick' || pfG.mode === 'manage'){
     const man = pfG.mode === 'manage';
@@ -3857,10 +3862,10 @@ document.addEventListener('click', async e => {
   if (d.pfGate){ if (d.pfGate === 'close'){ pfGateClose(); try { sessionStorage.setItem('rv.pf.ok', '1'); } catch(_){} return; } pfGateOpen(d.pfGate); return; }
   if (!pfG) return;
   if (d.pfEdit){ pfGateOpen('edit', d.pfEdit); return; }
-  if ('pfPick' in d){ pfG.picking = true; pfGateDraw(); document.querySelector('.pf-gate')?.scrollTo(0, 0); return; }
+  if ('pfPick' in d){ pfG.picking = true; pfGateDraw(); document.querySelector('.pf-body')?.scrollTo(0, 0); return; }
   if ('pfPickx' in d){ pfG.picking = false; pfGateDraw(); return; }
   if (d.pfAv){ pfG.draft.avatar = d.pfAv; pfG.picking = false; pfGateDraw(); return; }
-  if ('pfNext' in d){ if (!pfG.draft.name.trim()){ toast('Ponele un nombre', true); document.querySelector('[data-pf-name]')?.focus(); return; } pfG.step = 2; pfGateDraw(); document.querySelector('.pf-gate')?.scrollTo(0, 0); return; }
+  if ('pfNext' in d){ if (!pfG.draft.name.trim()){ toast('Ponele un nombre', true); document.querySelector('[data-pf-name]')?.focus(); return; } pfG.step = 2; pfGateDraw(); document.querySelector('.pf-body')?.scrollTo(0, 0); return; }
   if ('pfBack' in d){ pfG.step = 1; pfGateDraw(); return; }
   if (d.pfLike){ const L = pfG.draft.likes; const i = L.indexOf(d.pfLike); i < 0 ? L.push(d.pfLike) : L.splice(i, 1); b.classList.toggle('on', i < 0); b.setAttribute('aria-pressed', i < 0);
     const c = document.querySelector('.pf-count'); if (c) c.textContent = L.length ? `${L.length} elegido${L.length > 1 ? 's' : ''}` : 'Ninguno elegido';
