@@ -767,6 +767,7 @@ function renderAdmin(){
     ['filas','Filas destacadas', (S.frows||[]).length],
     ['colecciones','Colecciones', (S.colls||[]).length],
     ['canales','Canales en vivo', (S.live?.channels||[]).length],
+    ['stats','Estadísticas', null],
     ['sitio','Sitio', null],
   ];
   return `<div class="admin admin-light">
@@ -776,7 +777,7 @@ function renderAdmin(){
       <nav class="adm-nav">${sections.map(([id,label,count])=>`<button data-tab="${id}" aria-pressed="${tab===id}">${esc(label)}${count!=null?`<span>${count}</span>`:''}</button>`).join('')}</nav>
       <div class="adm-top-actions"><a class="adm-ghost" href="/">← Volver al sitio</a><button class="adm-ghost" data-logout>Cerrar sesión</button></div>
     </div>
-    <section class="panel" id="panel">${tab==='catalogo' ? (S.editing && !S.quick ? renderEditor() : renderCatalog()) : tab==='banners' ? renderBanners() : tab==='sitio' ? renderSite() : tab==='filas' ? renderFrowsAdmin() : tab==='canales' ? renderLiveAdmin() : tab==='colecciones' ? renderCollsAdmin() : renderTaxonomy()}</section></div>`;
+    <section class="panel" id="panel">${tab==='catalogo' ? (S.editing && !S.quick ? renderEditor() : renderCatalog()) : tab==='banners' ? renderBanners() : tab==='sitio' ? renderSite() : tab==='filas' ? renderFrowsAdmin() : tab==='canales' ? renderLiveAdmin() : tab==='stats' ? renderStats() : tab==='colecciones' ? renderCollsAdmin() : renderTaxonomy()}</section></div>`;
 }
 function catalogList(){
   const f = S.adminFilter.toLowerCase();
@@ -2457,6 +2458,49 @@ async function saveSubCfg(patch){ try { S.site = { ...S.site, ...patch }; await 
 document.addEventListener('click', e => { const b = e.target.closest('[data-sub-style]'); if (!b || !S.owner) return; saveSubCfg({ subStyle: b.dataset.subStyle }).then(rerenderPanel); });
 document.addEventListener('input', e => { const el = e.target; if (!S.owner || !el.dataset?.subcfg) return; const o = app.querySelector(`[data-sub-out="${el.dataset.subcfg}"]`); if (o) o.textContent = (el.dataset.subcfg === 'subLift' ? '+' : '') + el.value + '%'; });
 document.addEventListener('change', e => { const el = e.target; if (!S.owner || !el.dataset?.subcfg) return; const k = el.dataset.subcfg; saveSubCfg({ [k]: k === 'subLift' ? +el.value / 100 : +el.value / 100 }).then(rerenderPanel); });
+/* ---------- Estadísticas simples (función admin_stats en Supabase) ---------- */
+async function loadStats(){
+  S.statsBusy = true;
+  try { const { data, error } = await S.sb.rpc('admin_stats'); if (error) throw error; S.stats = { data, at: Date.now() }; }
+  catch(err){ S.stats = { error: /admin_stats|function|schema cache|PGRST202/i.test(err.message || err.code || '') ? 'missing' : (err.message || 'error'), at: Date.now() }; }
+  S.statsBusy = false; if (S.adminTab === 'stats') rerenderPanel();
+}
+function renderStats(){
+  if (!S.stats && !S.statsBusy) loadStats();
+  const st = S.stats;
+  const head = `<div class="panel-head"><h1>Estadísticas</h1><button class="btn btn-line btn-sm" data-stats-reload ${S.statsBusy ? 'disabled' : ''}>${S.statsBusy ? 'Cargando…' : 'Actualizar'}</button></div>`;
+  if (!st) return head + '<p class="hint">Cargando…</p>';
+  if (st.error === 'missing') return head + `<div class="fs" style="border-color:#e5a400"><h3>Falta un paso <small>una sola vez</small></h3>
+    <p class="hint" style="margin:0 0 10px">Para ver las estadísticas, Supabase necesita una función nueva. Tocá <b>Copiar</b>, abrí el editor SQL, pegá y tocá <b>Run</b>. Después volvé y tocá Actualizar.</p>
+    <div class="toolbar"><button class="btn btn-primary" data-stats-copy>Copiar</button><a class="btn btn-line" href="https://supabase.com/dashboard/project/iyfcbxehgahfoncqlxbt/sql/new" target="_blank" rel="noopener">Abrir el editor SQL</a></div></div>`;
+  if (st.error) return head + `<p class="hint">No se pudieron cargar: ${esc(st.error)}</p>`;
+  const d = st.data || {}; const name = id => byId(id)?.title || id;
+  const tile = (n, l, s) => `<div class="st-tile"><b>${(+n || 0).toLocaleString('es-AR')}</b><span>${esc(l)}</span>${s ? `<small>${esc(s)}</small>` : ''}</div>`;
+  const days = []; for (let i = 13; i >= 0; i--){ const t = new Date(Date.now() - i * 864e5); days.push(t.toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })); }
+  const map = Object.fromEntries((d.daily || []).map(x => [x.d, +x.n])); const mx = Math.max(1, ...days.map(k => map[k] || 0));
+  const list = (arr, unit) => (arr || []).length ? `<ol class="st-list">${arr.map(x => { const t = byId(x.t); const top = (arr[0].n || 1);
+    return `<li><span class="st-th" ${t?.poster ? `style="background-image:url('${esc(t.poster)}')"` : ''}></span><span class="st-n">${esc(name(x.t))}</span><span class="st-bar"><i style="width:${Math.round(x.n / top * 100)}%"></i></span><b>${x.n}</b><small>${unit}</small></li>`; }).join('')}</ol>` : '<p class="hint">Todavía no hay datos.</p>';
+  return head + `<div class="st-tiles">
+      ${tile(d.watchingNow, 'mirando ahora', 'últimos 10 min')}
+      ${tile(d.active1, 'miraron hoy', 'últimas 24 h')}
+      ${tile(d.active7, 'miraron esta semana', '7 días')}
+      ${tile(d.visits1, 'visitas hoy', 'personas distintas')}
+      ${tile(d.users, 'cuentas', `${d.users7 || 0} nuevas esta semana`)}
+    </div>
+    <div class="fs"><h3>Visitas por día <small>últimas 2 semanas</small></h3>
+      <div class="st-chart">${days.map(k => { const n = map[k] || 0; return `<div class="st-col" title="${k}: ${n}"><i style="height:${Math.max(2, n / mx * 100)}%"></i><small>${+k.slice(8)}</small></div>`; }).join('')}</div></div>
+    <div class="st-two">
+      <div class="fs"><h3>Lo más visto <small>personas que entraron a la ficha · 30 días</small></h3>${list(d.topViews, 'pers.')}</div>
+      <div class="fs"><h3>Lo que más se mira <small>cuentas que lo reprodujeron · 30 días</small></h3>${list(d.topWatched, 'cuentas')}</div>
+    </div>
+    <div class="fs"><h3>Último que se reprodujo</h3>${(d.recent || []).length ? `<ul class="st-rec">${d.recent.map(x => `<li><b>${esc(name(x.t))}</b>${x.s ? ` <span>T${x.s} · E${x.e}</span>` : ''}<small>${new Date(x.at).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></li>`).join('')}</ul>` : '<p class="hint">Todavía no hay datos.</p>'}</div>
+    <span class="hint">Son datos anónimos: no muestran quién miró qué. Actualizado ${new Date(st.at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })} h</span>`;
+}
+document.addEventListener('click', async e => {
+  if (!S.owner) return;
+  if (e.target.closest('[data-stats-reload]')){ S.stats = null; rerenderPanel(); return; }
+  if (e.target.closest('[data-stats-copy]')){ try { const sql = await (await fetch('/supabase/10-estadisticas.sql', { cache: 'no-store' })).text(); await navigator.clipboard.writeText(sql); toast('Copiado: pegalo en el editor SQL y tocá Run'); } catch(_){ toast('No se pudo copiar', true); } }
+});
 function renderSite(){
   const shut = !!S.site.closed;
   const sbLeft = sbFilesInUse().length;
@@ -2964,7 +3008,7 @@ function morph(oldP, newP){
 function rerenderPanel(anim){
   const panel = document.getElementById('panel'); if (!panel) return render();
   const y = window.scrollY;
-  const html = S.adminTab==='catalogo' ? (S.editing && !S.quick ? renderEditor() : renderCatalog()) : S.adminTab==='banners' ? renderBanners() : S.adminTab==='sitio' ? renderSite() : S.adminTab==='filas' ? renderFrowsAdmin() : S.adminTab==='canales' ? renderLiveAdmin() : S.adminTab==='colecciones' ? renderCollsAdmin() : renderTaxonomy();
+  const html = S.adminTab==='catalogo' ? (S.editing && !S.quick ? renderEditor() : renderCatalog()) : S.adminTab==='banners' ? renderBanners() : S.adminTab==='sitio' ? renderSite() : S.adminTab==='filas' ? renderFrowsAdmin() : S.adminTab==='canales' ? renderLiveAdmin() : S.adminTab==='stats' ? renderStats() : S.adminTab==='colecciones' ? renderCollsAdmin() : renderTaxonomy();
   if (anim === true || !panel.firstElementChild) panel.innerHTML = html;
   else { const tpl = document.createElement('div'); tpl.innerHTML = html; try { morph(panel, tpl); } catch { panel.innerHTML = html; } }
   hydrate(panel); window.scrollTo(0,y);

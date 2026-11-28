@@ -782,6 +782,7 @@ a.cast-card:hover strong{color:var(--accent-2)}
 
 .rvp-subs{position:absolute;left:5%;right:5%;bottom:112px;z-index:2;pointer-events:none;transition:bottom .3s ease}
 .player.idle .rvp-subs{bottom:calc(30px + env(safe-area-inset-bottom,0px))}
+.beta-tag{align-self:center;margin-left:8px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.16);color:rgba(255,255,255,.85);font:700 10px/1.2 var(--font,system-ui);letter-spacing:.1em;white-space:nowrap}
 .rvp-subs.cc{inset:0;bottom:0 !important}
 .rvp-subs.cc .lvp-43{z-index:2}
 .rvp-subs.cc .cc-wrap{transition:translate .3s ease}
@@ -1118,6 +1119,21 @@ a.cast-card:hover strong{color:var(--accent-2)}
 .lv-bugdel{position:absolute;top:10px;right:10px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;text-decoration:none}
 .lv-thbtn{all:unset;box-sizing:border-box;cursor:pointer;position:relative;background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;outline:1px dashed rgba(127,127,127,.5)}.lv-thbtn i{font-style:normal;font-size:11px;color:var(--muted);text-align:center}.lv-thbtn u{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;text-decoration:none}
 .lv-clip{display:flex;flex-direction:column;gap:4px;min-width:0}.lv-clip .input{height:32px;padding:4px 10px;font-size:14px}
+.st-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.st-tile{background:#fff;border:1px solid var(--line-2);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.st-tile b{font-size:30px;line-height:1.1}.st-tile span{font-weight:600;font-size:14px}.st-tile small{font-size:12px;color:var(--muted)}
+.st-chart{display:flex;align-items:flex-end;gap:6px;height:150px;padding-top:6px}
+.st-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+.st-col i{width:100%;max-width:34px;background:#ff3d8b;border-radius:6px 6px 2px 2px}.st-col small{font-size:11px;color:var(--muted)}
+.st-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.st-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.st-list li{display:grid;grid-template-columns:30px minmax(0,1fr) 80px 34px auto;gap:10px;align-items:center;font-size:14px}
+.st-th{width:30px;height:44px;border-radius:5px;background:#eee center/cover}
+.st-n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-bar{height:6px;border-radius:9px;background:#f0f0f2;overflow:hidden}.st-bar i{display:block;height:100%;background:#ff3d8b;border-radius:9px}
+.st-list b{text-align:right}.st-list small{color:var(--muted);font-size:11px}
+.st-rec{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+.st-rec li{display:flex;flex-direction:column;padding:8px 12px;border-radius:10px;background:#fafafa;font-size:14px}.st-rec span{color:var(--muted);font-size:12px}.st-rec small{color:var(--muted);font-size:11px}
 .lv-bgrp{display:flex;flex-direction:column;gap:10px}
 .lv-bg{background:#fafafa;border-radius:12px;padding:10px 12px}
 .lv-bg-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.lv-bg-h b{flex:1 1 160px;min-width:0}.lv-bg-h small{color:var(--muted);font-size:12px}
@@ -1748,7 +1764,7 @@ body.sorting,body.sorting *{cursor:grabbing!important;user-select:none!important
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="/" aria-label="REALITY VAULT inicio"><img id="siteLogo" class="brand-logo" alt="REALITY VAULT" hidden><span id="brandText" style="display:contents"><span class="dial" aria-hidden="true"></span><b>REALITY <span>VAULT</span></b></span></a>
+  <a class="brand" href="/" aria-label="REALITY VAULT inicio"><img id="siteLogo" class="brand-logo" alt="REALITY VAULT" hidden><span id="brandText" style="display:contents"><span class="dial" aria-hidden="true"></span><b>REALITY <span>VAULT</span></b></span><span class="beta-tag">BETA</span></a>
   <nav class="nav" aria-label="Secciones">
     <a href="/" data-r="home">Inicio</a>
     <a href="/series" data-r="series">Series</a>

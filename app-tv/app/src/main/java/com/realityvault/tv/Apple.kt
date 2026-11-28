@@ -218,7 +218,10 @@ fun TopNavBar(nav: Nav, modifier: Modifier = Modifier, downTarget: FocusRequeste
     ) {
         if (Store.siteLogo.isNotBlank()) Img(Store.siteLogo, Modifier.height(24.dp).width(140.dp), scale = ContentScale.Fit, alignment = Alignment.CenterStart)
         else LocalLogo(Modifier.height(24.dp).width(140.dp))
-        Spacer(Modifier.width(40.dp))
+        Box(Modifier.padding(start = 8.dp).background(Color.White.copy(alpha = .16f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+            Text("BETA", style = ts(10, FontWeight.Bold, Color.White.copy(alpha = .85f)).copy(letterSpacing = 1.sp))
+        }
+        Spacer(Modifier.width(32.dp))
         Box(
             Modifier
                 .focusGroup()

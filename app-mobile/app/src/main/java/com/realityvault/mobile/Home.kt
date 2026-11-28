@@ -215,6 +215,9 @@ private fun homeTabs(): List<String> =
 private fun TopIcons(nav: Nav) {
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         LocalLogo(Modifier.height(28.dp).width(150.dp))
+        Box(Modifier.padding(start = 8.dp).background(Color.White.copy(alpha = .16f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+            Text("BETA", style = ts(9, FontWeight.Bold, Color.White.copy(alpha = .85f)).copy(letterSpacing = 1.sp))
+        }
         Spacer(Modifier.weight(1f))
         CastButton(42.dp, 25.dp)
         Spacer(Modifier.width(6.dp))
