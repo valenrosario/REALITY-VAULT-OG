@@ -872,22 +872,28 @@ function renderEditor(){
   const allGenres = [...new Set([...S.titles.flatMap(t=>t.genres||[]), ...GENRE_SUGGEST])];
   const etabs = [['info','Información'],['imagenes','Imágenes'],['contenido','Contenido'],['extra','Extra']];
   const et = S.editorTab || 'info';
-  return `<div class="panel-head"><button class="btn btn-line btn-sm" data-back>← Catálogo</button><h1>${E._new?'Nuevo título':esc(E.title||'Editar')}</h1><button class="btn btn-primary" data-tmdb-open>Importar de TMDB</button></div>
+  const pub = E.status !== 'borrador';
+  return `<div class="ed2-head"><button class="btn btn-line btn-sm" data-back>← Catálogo</button><h1>${E._new?'Nuevo título':esc(E.title||'Editar')}</h1>${E._new ? '' : `<span class="ed2-st ${pub ? 'pub' : ''}">● ${pub ? 'Publicado' : 'Borrador'}</span>`}<span class="ed2-sp"></span><button class="btn btn-line btn-sm" data-tmdb-open>Importar de TMDB</button></div>
   ${S.tmdb?.open ? renderTmdbBox() : ''}
-  <div class="pillseg editor-tabs"><span class="pillseg-pill"></span>${etabs.map(([id,label])=>`<button data-etab="${id}" aria-pressed="${et===id}">${label}</button>`).join('')}</div>
+  <div class="ed2">
+  <aside class="ed2-side">${edSide(E)}</aside>
+  <div class="ed2-main">
+  <nav class="ed2-tabs">${etabs.map(([id,label])=>`<button data-etab="${id}" aria-pressed="${et===id}">${label}</button>`).join('')}</nav>
   <div class="editor">
     <div data-epanel="info" ${et==='info'?'':'hidden'}>
     <div class="fs"><h3>Información</h3>
-      <div class="seg" role="group" aria-label="Tipo"><button data-type="serie" aria-pressed="${isSerie}">Serie</button><button data-type="pelicula" aria-pressed="${!isSerie}">Película</button></div>
-      <div class="fgrid">
-        <label class="field span2"><span>Título</span><input class="input" id="f-title" data-k="title" value="${esc(E.title)}" placeholder="Ej: La Isla de los Secretos"></label>
+      <div class="ed2-row1"><div class="field"><span>Tipo</span><div class="seg" role="group" aria-label="Tipo"><button data-type="serie" aria-pressed="${isSerie}">Serie</button><button data-type="pelicula" aria-pressed="${!isSerie}">Película</button></div></div>
+        <label class="field"><span>Título</span><input class="input" id="f-title" data-k="title" value="${esc(E.title)}" placeholder="Ej: La Isla de los Secretos"></label></div>
+      <div class="fgrid ed2-info">
         <label class="field span2"><span>Frase corta</span><input class="input" id="f-tagline" data-k="tagline" value="${esc(E.tagline)}" placeholder="Una línea que aparece bajo el título"></label>
         <label class="field span2"><span>Descripción</span><textarea class="textarea" id="f-desc" data-k="description">${esc(E.description)}</textarea></label>
+        <div class="ed2-small span2">
         <label class="field"><span>Año</span><input class="input" id="f-year" data-k="year" inputmode="numeric" value="${esc(E.year)}"></label>
-        ${isSerie?`<label class="field"><span>Año de fin (opcional)</span><input class="input" id="f-yearend" data-k="yearEnd" inputmode="numeric" value="${esc(E.yearEnd||'')}" placeholder="Si terminó, ej: 2007"></label>`:''}
+        ${isSerie?`<label class="field"><span>Hasta (opcional)</span><input class="input" id="f-yearend" data-k="yearEnd" inputmode="numeric" value="${esc(E.yearEnd||'')}" placeholder="Si terminó, ej: 2007"></label>`:''}
         <label class="field"><span>Clasificación</span><select class="select" id="f-rating" data-k="rating">${RATINGS.map(r=>`<option ${E.rating===r?'selected':''}>${r}</option>`).join('')}</select></label>
         ${!isSerie?`<label class="field"><span>Duración</span><input class="input" id="f-dur" data-k="duration" value="${esc(E.duration)}" placeholder="1 h 48 min"></label>`:''}
-        <label class="field"><span>${isSerie?'Creación':'Dirección'}</span><input class="input" id="f-dir" data-k="director" value="${esc(E.director)}"></label>
+        <label class="field ed2-grow"><span>${isSerie?'Creación':'Dirección'}</span><input class="input" id="f-dir" data-k="director" value="${esc(E.director)}"></label>
+        </div>
       </div>
     </div>
     <div class="fs"><h3>Géneros y etiquetas</h3><div class="fgrid">
@@ -902,49 +908,52 @@ function renderEditor(){
         <div class="field"><span>Fondo de la ficha</span>${slot('backdrop','backdrop',E.backdrop,'r169','Subir fondo de la ficha')}<span class="hint"><b>1920 × 1080 px</b> (16:9). Se ve detrás del logo al abrir el título. Dejá libre el lado izquierdo, ahí va el texto.</span></div>
         <div class="field"><span>Fondo del reproductor (opcional)</span>${slot('backdrop','playerBg',E.playerBg,'r169','Subir fondo del reproductor')}<span class="hint"><b>1920 × 1080 px</b> (16:9). Solo se ve en el reproductor de la web: en la pantalla de carga (difuminado) y en la pausa. Si lo dejás vacío, se usa el fondo de la ficha.</span></div>
         <div class="field"><span>Logo del título</span>${slot('logo','logo',E.logo,'r31 contain','Subir logo')}<span class="hint"><b>1000 × 400 px</b> aprox., PNG con fondo transparente y recortado al borde. Reemplaza al título escrito.</span></div>
-        <div class="field"><span>Miniatura horizontal</span>${slot('thumb','thumbWide',E.thumbWide,'r169','Subir miniatura')}<span class="hint"><b>1280 × 720 px</b> (16:9). Se muestra tal cual en Mi lista y Seguir viendo. Si no la cargás, se usa el fondo del título.</span></div>
+        <div class="field"><span>Miniatura fija · Mi lista y Seguir viendo</span>${slot('thumb','thumbWide',E.thumbWide,'r169','Subir miniatura')}<span class="hint"><b>1280 × 720 px</b> (16:9). Es la imagen del título en Mi lista y en Seguir viendo (cada capítulo tiene la suya en Contenido). Si no la cargás, se usa el fondo del título.</span></div>
         <div class="field span3"><span>Imagen del banner principal</span>${slot('banner','bannerImage',E.bannerImage,'r31','Subir imagen para el banner')}<span class="hint"><b>2400 × 800 px</b> (3:1). Dejá lo importante en el centro y la derecha: a la izquierda va el logo y el texto, y en pantallas angostas se recortan un poco los costados. La que se ve en la portada cuando este título está en el banner. Distinta del fondo de la ficha.</span></div>
       </div>
-      <h3 style="margin-top:8px">Versión celular <small>opcional · si no las cargás, se usan las de arriba</small></h3>
+      <details class="ed2-more"><summary>Versión celular y TV <small>opcional · si no las cargás, se usan las de arriba</small></summary>
+      <h3 style="margin-top:8px">Versión celular</h3>
       <div class="imgs imgs-m">
         <div class="field"><span>Banner principal · celular</span>${slot('mobilebanner','bannerImageMobile',E.bannerImageMobile,'r916','Subir banner para celular')}<span class="hint"><b>1080 × 1920 px</b> (vertical 9:16, como la portada de la app del celular). El logo, el texto y los botones van encima, abajo; el logo y los botones van abajo al centro.</span></div>
         <div class="field"><span>Fondo de la ficha · celular</span>${slot('mobile','backdropMobile',E.backdropMobile,'r910','Subir fondo para celular')}<span class="hint"><b>1080 × 1200 px</b> (casi cuadrada, 9:10, como la ficha de la app del celular). Se muestra arriba al abrir el título; el logo va encima, abajo.</span></div>
       </div>
-      <h3 style="margin-top:8px">Versión TV <small>opcional · solo para la app de la tele · si no las cargás, se usan las de arriba</small></h3>
+      <h3 style="margin-top:8px">Versión TV <small>solo para la app de la tele</small></h3>
       <div class="imgs imgs-m">
         <div class="field"><span>Banner principal · TV</span>${slot('tv','bannerImageTv',E.bannerImageTv,'r169','Subir banner para TV')}<span class="hint"><b>1920 × 1080 px</b> (16:9). Ocupa toda la pantalla del inicio en la tele. Dejá lo importante a la derecha: abajo a la izquierda van el logo, el texto y los botones.</span></div>
         <div class="field"><span>Fondo de la ficha · TV</span>${slot('tv','backdropTv',E.backdropTv,'r169','Subir fondo para TV')}<span class="hint"><b>1920 × 1080 px</b> (16:9). Se ve a pantalla completa al abrir el título en la tele. También de ahí sale el color del fondo de los capítulos.</span></div>
       </div>
+      </details>
     </div>
     </div>
     <div data-epanel="contenido" ${et==='contenido'?'':'hidden'}>
-    <div class="fs"><h3>Reparto <small>${E.cast.length} persona${E.cast.length===1?'':'s'}</small></h3>
+    <details class="fs ed2-det" ${E.cast.length ? '' : 'open'}><summary><h3>Reparto <small>${E.cast.length ? E.cast.slice(0, 4).map(c => esc(c.name)).filter(Boolean).join(', ') + (E.cast.length > 4 ? '…' : '') : 'nadie todavía'}</small></h3></summary>
       <div class="cast-ed">${E.cast.map((c,i)=>`<div class="cast-row">
         ${slot('face','cast.'+i+'.photo',c.photo,'','+')}
         <input class="input" id="cast-n-${i}" data-cast="${i}" data-f="name" value="${esc(c.name)}" placeholder="Nombre" aria-label="Nombre">
         <input class="input" id="cast-r-${i}" data-cast="${i}" data-f="role" value="${esc(c.role)}" placeholder="Rol (participante, conductora…)" aria-label="Rol">
         <button class="iconbtn" data-cast-x="${i}" aria-label="Quitar">✕</button></div>`).join('')}
       </div><div><button class="btn btn-line btn-sm" data-cast-add>+ Agregar persona</button></div>
-    </div>
+    </details>
     ${isSerie ? renderSeasonsEd(E) : `<div class="fs"><h3>Reproducción</h3><div class="fgrid">
       <label class="field span2"><span>Enlace para ver la película</span><input class="input" id="f-url" data-k="url" value="${esc(E.url)}" placeholder="https://…"><span class="hint">Se reproduce dentro del sitio. Funciona con YouTube, Vimeo, Google Drive, Dailymotion, OK.ru, Internet Archive, archivos .mp4, .ts o .m3u8 y servicios como StreamHG: ahí copiá el <b>Embed code</b> completo y pegalo acá (el sitio se queda solo con el enlace).</span></label>
       <label class="field span2"><span>Enlace para la TV (4K, opcional)</span><input class="input" id="f-urltv" data-k="urlTv" value="${esc(E.urlTv)}" placeholder="https://…/pelicula-4k.mkv"><span class="hint">Solo lo usa la app de la TV (4K, Dolby, varios audios). Si lo dejás vacío, la TV usa el enlace de arriba. La web siempre usa el de arriba.</span></label>
       <label class="field span2"><span>Subtítulos en español (.vtt)</span><input class="input" id="f-subs" data-k="subs" value="${esc(E.subs)}" placeholder="https://…/pelicula.es.vtt"><span class="hint">Opcional. Enlace a un archivo .vtt. Solo se muestran con enlaces de archivo .mp4, .webm o .m3u8.</span></label>
     </div>${skipsEd(E.skips, 'm')}</div>`}
-    <div class="fs"><h3>Video del banner principal</h3>
+    <details class="fs ed2-det"><summary><h3>Video del banner principal <small>${E.previewVideo ? 'cargado' : 'sin video'}</small></h3></summary>
       <p class="hint" style="margin:0 0 12px">Cuando esta serie aparece en el banner del inicio, se ve la imagen unos segundos y después arranca este video sin sonido (con un botón para activarlo). Al terminar, pasa al siguiente banner. Tiene que ser un archivo de video: los enlaces de YouTube no sirven acá.</p>
       <div class="vid-grid">
         ${vidField(E, 'previewVideo', 'Computadora', '1920 × 1080 px (horizontal 16:9)', 'Se recorta arriba y abajo para llenar el banner: dejá lo importante en la franja del medio.')}
         ${vidField(E, 'previewVideoMobile', 'Celular (opcional)', '1080 × 1920 px (vertical 9:16)', 'Si no cargás uno, en el celular se usa el de computadora recortado al centro.')}
       </div>
       <span class="hint">Formato MP4 (H.264) o WebM · entre 15 y 40 segundos · hasta 200 MB (ideal menos de 20 MB para que cargue rápido).</span>
-    </div>
+    </details>
     <div class="fs"><h3>Disponibilidad</h3>
       <div class="seg" role="group" aria-label="Disponibilidad"><button data-avail="disponible" aria-pressed="${!isSoon(E)}">Disponible para ver</button><button data-avail="proximamente" aria-pressed="${isSoon(E)}">Próximamente</button></div>
       ${isSoon(E) ? `<label class="field" style="max-width:320px"><span>Fecha de estreno (opcional)</span><input class="input" id="f-release" data-k="releaseDate" value="${esc(E.releaseDate||'')}" placeholder="15 de noviembre"><span class="hint">Se muestra junto a “Próximamente”. Los enlaces para ver quedan ocultos hasta que lo cambies a disponible.</span></label>`
         : `<span class="hint">El botón “Ver ahora” abre ${E.type==='serie'?'el enlace del primer capítulo que lo tenga':'el enlace de la película'}.</span>`}
     </div>
-    <div class="fs"><h3>Formato y calidad · en la TV</h3>
+    <details class="fs ed2-det"><summary><h3>Formato y calidad <small>insignias de HD, 4K, HDR… en la tele y en la web</small></h3></summary>
+    <h3 style="font-size:14px">En la TV</h3>
       <div class="fmt-check-grid">
         <label class="check"><input type="checkbox" data-fmt="hd" ${E.formats?.hd?'checked':''}> HD</label>
         <label class="check"><input type="checkbox" data-fmt="uhd4k" ${E.formats?.uhd4k?'checked':''}> 4K Ultra HD</label>
@@ -953,8 +962,7 @@ function renderEditor(){
         <label class="check"><input type="checkbox" data-fmt="surround51" ${E.formats?.surround51?'checked':''}> Audio 5.1</label>
       </div>
       <span class="hint">Marcá los que apliquen de verdad al archivo de 4K que usa la TV — es solo informativo, no cambia la calidad del video. Aparecen como insignias solo en la app de la TV.</span>
-    </div>
-    <div class="fs"><h3>Formato y calidad · en la web</h3>
+    <h3 style="font-size:14px;margin-top:8px">En la web</h3>
       <div class="fmt-check-grid">
         <label class="check"><input type="checkbox" data-fmtw="hd" ${E.formatsWeb?.hd?'checked':''}> HD</label>
         <label class="check"><input type="checkbox" data-fmtw="uhd4k" ${E.formatsWeb?.uhd4k?'checked':''}> 4K Ultra HD</label>
@@ -963,7 +971,7 @@ function renderEditor(){
         <label class="check"><input type="checkbox" data-fmtw="surround51" ${E.formatsWeb?.surround51?'checked':''}> Audio 5.1</label>
       </div>
       <span class="hint">Marcá los que apliquen al archivo que se ve en la web (por ejemplo HD). Aparecen como insignias solo en la web, en la portada y en la ficha. Son independientes de las de la TV.</span>
-    </div>
+    </details>
     </div>
     <div data-epanel="extra" ${et==='extra'?'':'hidden'}>
     <div class="fs"><h3>Extras y publicación</h3><div class="fgrid">
@@ -975,7 +983,26 @@ function renderEditor(){
     <div class="savebar"><span class="status" id="saveStatus">${S.dirty?'Cambios sin guardar':(E._new?'Nuevo, sin guardar':'Todo guardado')}</span>
       ${E._new?'':`<span data-row="${esc(E.id)}"><button class="btn btn-danger" data-del="${esc(E.id)}">Eliminar</button></span>`}
       <button class="btn btn-line" data-back>Cancelar</button><button class="btn btn-primary" data-save>Guardar</button></div>
-  </div>`;
+  </div></div></div>${edDrawer(E)}`;
+}
+/** Columna de la izquierda: cómo se ve y qué falta. */
+function edSide(E){
+  const isSerie = E.type === 'serie';
+  const eps = isSerie ? (E.seasons || []).flatMap(s => s.episodes || []) : [];
+  const nV = isSerie ? eps.filter(e => isFileUrl(e.url) || safeUrl(e.url)).length : (E.url ? 1 : 0);
+  const nS = isSerie ? eps.filter(e => (e.subs || '').trim()).length : ((E.subs || '').trim() ? 1 : 0);
+  const tot = isSerie ? eps.length : 1;
+  const li = (ok, label, extra, opt) => `<li class="${ok ? 'ok' : opt ? 'opt' : 'no'}"><i>${ok ? '✓' : opt ? '–' : '!'}</i>${label}${extra ? `<small>${extra}</small>` : ''}</li>`;
+  const bg = E.backdrop || E.bannerImage || E.thumbWide || '';
+  const yr = [E.year, E.yearEnd].filter(Boolean).join('–');
+  return `<div class="ed2-prev"><div class="ed2-bd" ${bg ? `style="background-image:url('${esc(bg)}')"` : ''}>${E.logo ? `<img src="${esc(E.logo)}" alt="">` : `<b>${esc(E.title || 'Sin título')}</b>`}</div>
+    <div class="ed2-meta"><b>${isSerie ? 'Serie' : 'Película'}${yr ? ' · ' + esc(yr) : ''}${E.rating ? ' · ' + esc(E.rating) : ''}</b>
+      ${isSerie ? `<span>${(E.seasons || []).length} temporada${(E.seasons || []).length === 1 ? '' : 's'} · ${eps.length} capítulo${eps.length === 1 ? '' : 's'}</span>` : E.duration ? `<span>${esc(E.duration)}</span>` : ''}
+      ${(E.genres || []).length ? `<span>${esc(E.genres.join(', '))}</span>` : ''}</div></div>
+    <div class="ed2-chk"><h4>Para publicar</h4><ul>
+      ${li(!!E.poster, 'Póster')}${li(!!E.backdrop, 'Fondo de la ficha')}${li(!!E.logo, 'Logo', '', true)}${li(!!E.thumbWide, 'Miniatura fija', '', true)}
+      ${li(tot > 0 && nV === tot, isSerie ? 'Videos' : 'Video', isSerie ? `${nV}/${tot}` : '')}${li(tot > 0 && nS === tot, 'Subtítulos', isSerie ? `${nS}/${tot}` : '', true)}
+    </ul></div>`;
 }
 function vidField(E, key, label, size, note){
   const v = safeUrl(E[key]);
@@ -1167,58 +1194,74 @@ async function atvImport(){
   } catch(err){ A.status = err.message || 'No se pudo importar.'; }
   A.busy = false; rerenderPanel();
 }
+function edEpForm(si, ei, e){
+  const eSoon = episodeSoon(e);
+  return `<div class="ep-ed ${eSoon?'ep-ed-soon':''}">
+    <div class="field">${slot('thumb',`seasons.${si}.episodes.${ei}.thumb`,e.thumb,'r169','Miniatura del capítulo')}<span class="hint">Miniatura del capítulo · 1280 × 720 px</span></div>
+    <div class="fgrid ed2-epg">
+      <label class="field"><span>Nº</span><input class="input" id="e-n-${si}-${ei}" data-ep="${si}.${ei}" data-f="number" value="${esc(e.number)}" inputmode="numeric"></label>
+      <label class="field"><span>Duración</span><input class="input" id="e-d-${si}-${ei}" data-ep="${si}.${ei}" data-f="duration" value="${esc(e.duration)}" placeholder="45 min"></label>
+      <label class="field span2"><span>Título del capítulo</span><input class="input" id="e-t-${si}-${ei}" data-ep="${si}.${ei}" data-f="title" value="${esc(e.title)}"></label>
+    </div>
+    <label class="field"><span>Sinopsis</span><textarea class="textarea" style="min-height:80px" id="e-s-${si}-${ei}" data-ep="${si}.${ei}" data-f="description">${esc(e.description)}</textarea></label>
+    <label class="field"><span>Video</span><input class="input" id="e-u-${si}-${ei}" data-ep="${si}.${ei}" data-f="url" value="${esc(e.url)}" placeholder="Enlace o código de inserción (embed) del video" aria-label="Enlace del capítulo"></label>
+    <label class="field"><span>Subtítulos en español (.vtt)</span><input class="input" id="e-v-${si}-${ei}" data-ep="${si}.${ei}" data-f="subs" value="${esc(e.subs)}" placeholder="Enlace al archivo .vtt (opcional)"></label>
+    <label class="field"><span>Enlace para la TV (4K, opcional)</span><input class="input" id="e-t4-${si}-${ei}" data-ep="${si}.${ei}" data-f="urlTv" value="${esc(e.urlTv)}" placeholder="Vacío = usa el video de arriba"></label>
+    ${skipsEd(e.skips, `e.${si}.${ei}`)}
+    <div class="ed2-dfoot"><button class="pill-toggle btn-sm ${eSoon?'on':''}" data-ep-soon="${si}.${ei}" aria-pressed="${eSoon}">Próximamente</button><span class="ed2-sp"></span>
+      <button class="btn btn-danger btn-sm" data-ep-x="${si}.${ei}">Quitar capítulo</button><button class="btn btn-primary btn-sm" data-ep-close>Listo</button></div>
+  </div>`;
+}
+function edExForm(si, xi, x){
+  return `<div class="ep-ed ep-ed-x">
+    <div class="field">${slot('thumb',`seasons.${si}.extras.${xi}.thumb`,x.thumb,'r169','Miniatura')}<span class="hint">1280 × 720 px</span></div>
+    <div class="fgrid ed2-epg">
+      <label class="field span2"><span>Título del extra</span><input class="input" id="x-t-${si}-${xi}" data-ex="${si}.${xi}" data-f="title" value="${esc(x.title)}" placeholder="Detrás de cámaras"></label>
+      <label class="field"><span>Duración</span><input class="input" id="x-d-${si}-${xi}" data-ex="${si}.${xi}" data-f="duration" value="${esc(x.duration)}" placeholder="12 min"></label>
+    </div>
+    <label class="field"><span>Descripción</span><textarea class="textarea" style="min-height:70px" id="x-s-${si}-${xi}" data-ex="${si}.${xi}" data-f="description">${esc(x.description)}</textarea></label>
+    <label class="field"><span>Video</span><input class="input" id="x-u-${si}-${xi}" data-ex="${si}.${xi}" data-f="url" value="${esc(x.url)}" placeholder="Enlace del video del extra" aria-label="Enlace del extra"></label>
+    <label class="field"><span>Subtítulos en español (.vtt)</span><input class="input" id="x-v-${si}-${xi}" data-ex="${si}.${xi}" data-f="subs" value="${esc(x.subs)}" placeholder="Enlace al archivo .vtt (opcional)"></label>
+    <label class="field"><span>Enlace para la TV (4K, opcional)</span><input class="input" id="x-t4-${si}-${xi}" data-ex="${si}.${xi}" data-f="urlTv" value="${esc(x.urlTv)}" placeholder="Vacío = usa el video de arriba"></label>
+    ${skipsEd(x.skips, `x.${si}.${xi}`)}
+    <div class="ed2-dfoot">${xi > 0 ? `<button class="btn btn-line btn-sm" data-ex-up="${si}.${xi}">↑ Subir</button>` : '<span class="ex-feat">Destacado</span>'}<span class="ed2-sp"></span>
+      <button class="btn btn-danger btn-sm" data-ex-x="${si}.${xi}">Quitar extra</button><button class="btn btn-primary btn-sm" data-ep-close>Listo</button></div>
+  </div>`;
+}
+/** Panel al costado para editar un capítulo o un extra. */
+function edDrawer(E){
+  const k = S.edEp; if (!k || E.type !== 'serie') return '';
+  const [kind, a, b] = k.split(':'); const si = +a, i = +b; const sea = (E.seasons || [])[si];
+  const it = sea && (kind === 'e' ? (sea.episodes || [])[i] : (sea.extras || [])[i]);
+  if (!it){ S.edEp = null; return ''; }
+  return `<button class="ed2-scrim" data-ep-close aria-label="Cerrar"></button><aside class="ed2-drawer" role="dialog" aria-label="Editar">
+    <div class="ed2-dh"><b>${kind === 'e' ? `T${esc(sea.number)} · Capítulo ${esc(it.number || i + 1)}` : `T${esc(sea.number)} · Extra`}</b><button class="iconbtn" data-ep-close aria-label="Cerrar">✕</button></div>
+    ${kind === 'e' ? edEpForm(si, i, it) : edExForm(si, i, it)}</aside>`;
+}
 function renderSeasonsEd(E){
-  return `<div class="fs"><h3>Temporadas y capítulos <small>${E.seasons.length} temp. · ${epCount(E)} ep.</small></h3>
-    <div class="toolbar"><button class="btn btn-line btn-sm" data-atv-open>${S.atv?.open ? 'Cerrar Apple TV' : 'Importar de Apple TV'}</button></div>
+  const n = E.seasons.length;
+  if (S.edSeason == null || S.edSeason >= n) S.edSeason = Math.max(0, n - 1 < 0 ? 0 : Math.min(S.edSeason ?? 0, n - 1));
+  const si = S.edSeason, s = E.seasons[si];
+  const badge = (ok, yes, no) => `<i class="${ok ? 'ok' : 'warn'}">${ok ? yes : no}</i>`;
+  const row = (it, i, kind) => `<button class="ed2-ep ${S.edEp === `${kind}:${si}:${i}` ? 'sel' : ''}" data-ep-open="${kind}:${si}:${i}">
+      <span class="n">${kind === 'e' ? esc(it.number || i + 1) : '★'}</span><span class="th" ${it.thumb ? `style="background-image:url('${esc(it.thumb)}')"` : ''}>${it.thumb ? '' : 'Sin miniatura'}</span>
+      <span class="x"><b>${esc(it.title || (kind === 'e' ? `Capítulo ${it.number || i + 1}` : 'Extra sin título'))}</b><small>${esc(it.duration || '')}${(it.skips || []).length ? `${it.duration ? ' · ' : ''}saltear intro` : ''}</small></span>
+      <span class="bd">${kind === 'e' && episodeSoon(it) ? '<i class="grey">Próximamente</i>' : badge(!!(it.url || '').trim(), 'Video', 'Sin video')}${badge(!!(it.subs || '').trim(), 'Subtítulos', 'Sin subtítulos')}</span>
+      <span class="more">›</span></button>`;
+  return `<div class="fs"><h3>Temporadas y capítulos <small>${n} temp. · ${epCount(E)} ep.</small><span class="ed2-sp"></span><button class="btn btn-line btn-sm" data-atv-open>${S.atv?.open ? 'Cerrar Apple TV' : 'Importar de Apple TV'}</button></h3>
     ${S.atv?.open ? renderAtvBox(E) : ''}
-    ${E.seasons.map((s,si)=>{ const open = S.openSeasons.has(si); const soon = seasonSoon(s);
-      return `<div class="season ${open?'open':''}">
-      <div class="season-h">
-        <button class="season-toggle" data-season-toggle="${si}" aria-expanded="${open}" aria-label="${open?'Contraer':'Expandir'} temporada"><span class="chev">›</span></button>
-        <span class="num">T${esc(s.number)}</span>
+    <div class="ed2-stabs">${E.seasons.map((x, i) => `<button data-sea-tab="${i}" aria-pressed="${i === si}">T${esc(x.number)} · ${(x.episodes || []).length}</button>`).join('')}<button class="plus" data-season-add>+ Temporada</button></div>
+    ${s ? `<div class="ed2-shead">
         <input class="input" id="s-t-${si}" data-season="${si}" data-f="title" value="${esc(s.title)}" placeholder="Nombre de la temporada (opcional)" aria-label="Nombre de la temporada">
-        <input class="input" id="s-n-${si}" data-season="${si}" data-f="number" value="${esc(s.number)}" style="max-width:80px;flex:0" inputmode="numeric" aria-label="Número">
-        <button class="pill-toggle ${soon?'on':''}" data-season-soon="${si}" aria-pressed="${soon}">Próximamente</button>
+        <label class="ed2-num"><span>Nº</span><input class="input" id="s-n-${si}" data-season="${si}" data-f="number" value="${esc(s.number)}" inputmode="numeric" aria-label="Número"></label>
+        <button class="pill-toggle ${seasonSoon(s)?'on':''}" data-season-soon="${si}" aria-pressed="${seasonSoon(s)}">Próximamente</button>
         <span data-row="s${si}"><button class="btn btn-danger btn-sm" data-season-x="${si}">Quitar temporada</button></span></div>
-      <div class="season-b-wrap"><div class="season-b">
-        ${(s.episodes||[]).map((e,ei)=>{ const eSoon = episodeSoon(e); return `<div class="ep-ed ${eSoon?'ep-ed-soon':''}">
-          <div class="field">${slot('thumb',`seasons.${si}.episodes.${ei}.thumb`,e.thumb,'r169','Miniatura')}<span class="hint">1280 × 720 px</span></div>
-          <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
-            <div class="fgrid">
-              <label class="field"><span>Nº</span><input class="input" id="e-n-${si}-${ei}" data-ep="${si}.${ei}" data-f="number" value="${esc(e.number)}" inputmode="numeric"></label>
-              <label class="field"><span>Título del capítulo</span><input class="input" id="e-t-${si}-${ei}" data-ep="${si}.${ei}" data-f="title" value="${esc(e.title)}"></label>
-              <label class="field"><span>Duración</span><input class="input" id="e-d-${si}-${ei}" data-ep="${si}.${ei}" data-f="duration" value="${esc(e.duration)}" placeholder="45 min"></label>
-            </div>
-            <label class="field"><span>Sinopsis</span><textarea class="textarea" style="min-height:64px" id="e-s-${si}-${ei}" data-ep="${si}.${ei}" data-f="description">${esc(e.description)}</textarea></label>
-            <label class="field"><span>Subtítulos en español (.vtt)</span><input class="input" id="e-v-${si}-${ei}" data-ep="${si}.${ei}" data-f="subs" value="${esc(e.subs)}" placeholder="Enlace al archivo .vtt (opcional)"></label>
-            <label class="field"><span>Enlace para la TV (4K, opcional)</span><input class="input" id="e-t4-${si}-${ei}" data-ep="${si}.${ei}" data-f="urlTv" value="${esc(e.urlTv)}" placeholder="Solo para la app de la TV. Vacío = usa el enlace de abajo"></label>
-            ${skipsEd(e.skips, `e.${si}.${ei}`)}
-            <div class="ep-ed-foot"><input class="input" id="e-u-${si}-${ei}" data-ep="${si}.${ei}" data-f="url" value="${esc(e.url)}" placeholder="Enlace o código de inserción (embed) del video" aria-label="Enlace del capítulo">
-              <button class="pill-toggle btn-sm ${eSoon?'on':''}" data-ep-soon="${si}.${ei}" aria-pressed="${eSoon}">Próximamente</button>
-              <button class="iconbtn" data-ep-x="${si}.${ei}" aria-label="Quitar capítulo">✕</button></div>
-          </div></div>`; }).join('')}
-        <div><button class="btn btn-line btn-sm" data-ep-add="${si}">+ Capítulo</button></div>
-        <div class="ex-ed">
-          <div class="ex-ed-h"><span class="ex-star">${XSTAR}</span><b>Extras de esta temporada</b><small>${(s.extras||[]).length ? (s.extras.length + ' extra' + (s.extras.length>1?'s':'')) : 'Detrás de cámaras, escenas eliminadas, entrevistas… Aparecen aparte, sin contar como capítulos.'}</small></div>
-          ${(s.extras||[]).map((x,xi)=>`<div class="ep-ed ep-ed-x">
-            <div class="field">${slot('thumb',`seasons.${si}.extras.${xi}.thumb`,x.thumb,'r169','Miniatura')}<span class="hint">1280 × 720 px</span></div>
-            <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
-              <div class="fgrid">
-                <label class="field" style="grid-column:span 2"><span>Título del extra</span><input class="input" id="x-t-${si}-${xi}" data-ex="${si}.${xi}" data-f="title" value="${esc(x.title)}" placeholder="Detrás de cámaras"></label>
-                <label class="field"><span>Duración</span><input class="input" id="x-d-${si}-${xi}" data-ex="${si}.${xi}" data-f="duration" value="${esc(x.duration)}" placeholder="12 min"></label>
-              </div>
-              <label class="field"><span>Descripción</span><textarea class="textarea" style="min-height:56px" id="x-s-${si}-${xi}" data-ex="${si}.${xi}" data-f="description">${esc(x.description)}</textarea></label>
-              <label class="field"><span>Subtítulos en español (.vtt)</span><input class="input" id="x-v-${si}-${xi}" data-ex="${si}.${xi}" data-f="subs" value="${esc(x.subs)}" placeholder="Enlace al archivo .vtt (opcional)"></label>
-              <label class="field"><span>Enlace para la TV (4K, opcional)</span><input class="input" id="x-t4-${si}-${xi}" data-ex="${si}.${xi}" data-f="urlTv" value="${esc(x.urlTv)}" placeholder="Solo para la app de la TV. Vacío = usa el enlace de abajo"></label>
-              ${skipsEd(x.skips, `x.${si}.${xi}`)}
-              <div class="ep-ed-foot"><input class="input" id="x-u-${si}-${xi}" data-ex="${si}.${xi}" data-f="url" value="${esc(x.url)}" placeholder="Enlace del video del extra" aria-label="Enlace del extra">
-                ${xi > 0 ? `<button class="iconbtn" data-ex-up="${si}.${xi}" aria-label="Subir (el primero es el destacado)" title="Subir (el primero es el destacado)">↑</button>` : '<span class="ex-feat">Destacado</span>'}
-                <button class="iconbtn" data-ex-x="${si}.${xi}" aria-label="Quitar extra">✕</button></div>
-            </div></div>`).join('')}
-          <div><button class="btn btn-line btn-sm" data-ex-add="${si}">+ Extra</button></div>
-        </div>
-      </div></div></div>`; }).join('')}
-    <div><button class="btn btn-line" data-season-add>+ Temporada</button></div></div>`;
+      <div class="ed2-eps">${(s.episodes || []).map((e, i) => row(e, i, 'e')).join('') || '<p class="hint">Esta temporada todavía no tiene capítulos.</p>'}</div>
+      <div class="toolbar"><button class="btn btn-line btn-sm" data-ep-add="${si}">+ Capítulo</button></div>
+      <div class="ed2-exh"><span class="ex-star">${XSTAR}</span><b>Extras de esta temporada</b><small>${(s.extras||[]).length ? '' : 'Detrás de cámaras, escenas eliminadas, entrevistas… Aparecen aparte, sin contar como capítulos.'}</small></div>
+      <div class="ed2-eps">${(s.extras || []).map((x, i) => row(x, i, 'x')).join('')}</div>
+      <div class="toolbar"><button class="btn btn-line btn-sm" data-ex-add="${si}">+ Extra</button></div>` : '<p class="hint">Agregá la primera temporada.</p>'}
+  </div>`;
 }
 function renderBanners(){
   const bs = S.banners.slice().sort((a,b)=>(a.order||0)-(b.order||0));
@@ -3177,7 +3220,7 @@ app.addEventListener('click', async e => {
   if (d.qtPick !== undefined){ tmdbQuickPick(d.qtPick); return; }
   if (d.qtConfirm !== undefined){ const id = d.qtConfirm; const sel = S.qt.sel.slice(); S.qt = null; S.quick = false; S.catalogPicker = false; S.tmdb = { open:true, specials:false, sel }; S.editorTab = 'info'; S.openSeasons = new Set(); rerenderPanel(true); tmdbImport(+id); return; }
   if (d.new){ S.tmdb = { open:false }; S.atv = null; S.catalogPicker = false; S.editing = blankTitle(d.new); S.quick = true; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(); rerenderPanel(); setTimeout(()=>document.getElementById('f-title')?.focus(), 120); return; }
-  if (d.edit){ S.tmdb = { open:false }; S.atv = null; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.editing.formats ||= {}; S.editing.formatsWeb ||= {}; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(S.editing.seasons.length===1 ? [0] : []); rerenderPanel(true); window.scrollTo(0,0); return; }
+  if (d.edit){ S.edSeason = 0; S.edEp = null; S.tmdb = { open:false }; S.atv = null; S.editing = clone(byId(d.edit)); S.editing.cast ||= []; S.editing.seasons ||= []; S.editing.genres ||= []; S.editing.tags ||= []; S.editing.formats ||= {}; S.editing.formatsWeb ||= {}; S.dirty=false; S.editorTab='info'; S.openSeasons = new Set(S.editing.seasons.length===1 ? [0] : []); rerenderPanel(true); window.scrollTo(0,0); return; }
   if (d.del !== undefined && d.del){ inlineConfirm(t.closest('[data-row]'), '¿Eliminar?', () => deleteTitle(d.del)); return; }
   if (d.back !== undefined){ S.editing=null; S.dirty=false; rerenderPanel(true); return; }
   if (d.save !== undefined){ saveTitle(); return; }
@@ -3207,16 +3250,19 @@ app.addEventListener('click', async e => {
     document.getElementById(`sk-f-${d.skipAdd}-${ks.length - 1}`)?.focus(); return;
   }
   if (d.skipX !== undefined){ const [path, i] = d.skipX.split('|'); const o = skipTarget(path); o.skips.splice(+i, 1); if (!o.skips.length) delete o.skips; markDirty(); rerenderPanel(); return; }
-  if (d.seasonAdd !== undefined){ const n = Math.max(0,...E.seasons.map(s=>+s.number||0))+1; E.seasons.push({id:uid('s'),number:n,title:'',episodes:[]}); S.openSeasons.add(E.seasons.length-1); markDirty(); rerenderPanel(); return; }
-  if (d.seasonX !== undefined){ const si=+d.seasonX; inlineConfirm(t.closest('[data-row]'), '¿Quitar con sus capítulos?', ()=>{ E.seasons.splice(si,1); markDirty(); rerenderPanel(); }); return; }
+  if (d.seasonAdd !== undefined){ const n = Math.max(0,...E.seasons.map(s=>+s.number||0))+1; E.seasons.push({id:uid('s'),number:n,title:'',episodes:[]}); S.openSeasons.add(E.seasons.length-1); S.edSeason = E.seasons.length-1; S.edEp = null; markDirty(); rerenderPanel(); return; }
+  if (d.seasonX !== undefined){ const si=+d.seasonX; inlineConfirm(t.closest('[data-row]'), '¿Quitar con sus capítulos?', ()=>{ E.seasons.splice(si,1); S.edSeason = Math.max(0, si - 1); S.edEp = null; markDirty(); rerenderPanel(); }); return; }
+  if (d.seaTab !== undefined){ S.edSeason = +d.seaTab; S.edEp = null; rerenderPanel(); return; }
+  if (d.epOpen){ S.edEp = d.epOpen; rerenderPanel(); return; }
+  if (d.epClose !== undefined){ S.edEp = null; rerenderPanel(); return; }
   if (d.seasonToggle !== undefined){ const si=+d.seasonToggle; S.openSeasons.has(si) ? S.openSeasons.delete(si) : S.openSeasons.add(si); rerenderPanel(); return; }
   if (d.seasonSoon !== undefined){ const s = E.seasons[+d.seasonSoon]; s.availability = s.availability === 'proximamente' ? '' : 'proximamente'; markDirty(); rerenderPanel(); return; }
   if (d.epSoon){ const [si,ei]=d.epSoon.split('.').map(Number); const e2 = E.seasons[si].episodes[ei]; e2.availability = e2.availability === 'proximamente' ? '' : 'proximamente'; markDirty(); rerenderPanel(); return; }
-  if (d.epAdd !== undefined){ const s = E.seasons[+d.epAdd]; const n = Math.max(0,...s.episodes.map(x=>+x.number||0))+1; s.episodes.push({id:uid('e'),number:n,title:'',description:'',duration:'',thumb:'',url:''}); markDirty(); rerenderPanel(); document.getElementById(`e-t-${d.epAdd}-${s.episodes.length-1}`)?.focus(); return; }
-  if (d.epX){ const [si,ei]=d.epX.split('.').map(Number); E.seasons[si].episodes.splice(ei,1); markDirty(); rerenderPanel(); return; }
-  if (d.exAdd !== undefined){ const s = E.seasons[+d.exAdd]; (s.extras ||= []).push({ id:uid('x'), title:'', description:'', duration:'', thumb:'', url:'' }); markDirty(); rerenderPanel(); document.getElementById(`x-t-${d.exAdd}-${s.extras.length-1}`)?.focus(); return; }
-  if (d.exX){ const [si,xi]=d.exX.split('.').map(Number); E.seasons[si].extras.splice(xi,1); markDirty(); rerenderPanel(); return; }
-  if (d.exUp){ const [si,xi]=d.exUp.split('.').map(Number); const a = E.seasons[si].extras; [a[xi-1], a[xi]] = [a[xi], a[xi-1]]; markDirty(); rerenderPanel(); return; }
+  if (d.epAdd !== undefined){ const s = E.seasons[+d.epAdd]; const n = Math.max(0,...s.episodes.map(x=>+x.number||0))+1; s.episodes.push({id:uid('e'),number:n,title:'',description:'',duration:'',thumb:'',url:''}); S.edEp = `e:${+d.epAdd}:${s.episodes.length-1}`; markDirty(); rerenderPanel(); document.getElementById(`e-t-${d.epAdd}-${s.episodes.length-1}`)?.focus(); return; }
+  if (d.epX){ const [si,ei]=d.epX.split('.').map(Number); E.seasons[si].episodes.splice(ei,1); S.edEp = null; markDirty(); rerenderPanel(); return; }
+  if (d.exAdd !== undefined){ const s = E.seasons[+d.exAdd]; (s.extras ||= []).push({ id:uid('x'), title:'', description:'', duration:'', thumb:'', url:'' }); S.edEp = `x:${+d.exAdd}:${s.extras.length-1}`; markDirty(); rerenderPanel(); document.getElementById(`x-t-${d.exAdd}-${s.extras.length-1}`)?.focus(); return; }
+  if (d.exX){ const [si,xi]=d.exX.split('.').map(Number); E.seasons[si].extras.splice(xi,1); S.edEp = null; markDirty(); rerenderPanel(); return; }
+  if (d.exUp){ const [si,xi]=d.exUp.split('.').map(Number); const a = E.seasons[si].extras; [a[xi-1], a[xi]] = [a[xi], a[xi-1]]; S.edEp = `x:${si}:${xi-1}`; markDirty(); rerenderPanel(); return; }
   if (d.clear){ e.stopPropagation();
     if (d.clear.startsWith('chlogo:') || d.clear.startsWith('chguide:')){ const [k, id] = d.clear.split(':'); const c = lvCh(id); if (c){ c[k === 'chlogo' ? 'logo' : 'guideImage'] = ''; lvDirty(); rerenderPanel(); } return; }
     if (d.clear.startsWith('colllogo:')){ const c = S.colls.find(x => x.id === d.clear.slice(9)); if (c){ c.logo = ''; await saveColls(true); rerenderPanel(); } return; }
