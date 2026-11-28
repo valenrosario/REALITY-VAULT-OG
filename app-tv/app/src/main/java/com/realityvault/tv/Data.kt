@@ -124,6 +124,9 @@ fun posKey(season: Int?, episode: Int?) = if (season == null || episode == null)
 fun posDone(t: Long, d: Long) = d > 0 && (d - t <= 45 || t.toDouble() / d >= 0.95)
 fun posResumable(p: Pair<Long, Long>?) = p != null && p.second > 0 && p.first >= 10 && !posDone(p.first, p.second)
 
+/** Perfil de la cuenta (hasta 5). "main" es el de siempre; los demás guardan su lista y progreso con el prefijo p<id>:: */
+data class Profile(val id: String, val name: String, val avatar: String, val likes: List<String>)
+
 data class Session(val access: String, val refresh: String, val userId: String, val email: String, val expiresAt: Long, val avatar: String = "")
 
 /* ---------------- lectura de JSON ---------------- */
@@ -250,6 +253,86 @@ object Store {
     var myList by mutableStateOf<List<String>>(emptyList())
     var progress by mutableStateOf<List<Progress>>(emptyList())
     var session by mutableStateOf<Session?>(null)
+
+    /* ---------- perfiles (los mismos que en la web: se guardan en la cuenta) ---------- */
+    var profiles by mutableStateOf<List<Profile>>(emptyList())
+    var profile by mutableStateOf<Profile?>(null)
+    /** true = al abrir la app hay que preguntar quién mira (más de un perfil). */
+    var askProfile by mutableStateOf(false)
+    private var askedOnce = false
+    /** Fotos para elegir: las que subió el admin (panel → Sitio) y las caritas de colores. */
+    var avatarLib by mutableStateOf<List<String>>(emptyList())
+    val avatarDefaults = (1..12).map { "${BuildConfig.SITE_URL.trimEnd('/')}/avatars/d$it.png" }
+    fun avatarChoices() = avatarLib + avatarDefaults
+    private const val PF_SEP = "::"
+    private fun pid() = profile?.id ?: "main"
+    fun pfKey(id: String) = if (pid() == "main") id else "p${pid()}$PF_SEP$id"
+    private fun pfMine(tid: String) = if (pid() == "main") !tid.contains(PF_SEP) else tid.startsWith("p${pid()}$PF_SEP")
+    private fun pfStrip(tid: String) = tid.indexOf(PF_SEP).let { if (it < 0) tid else tid.substring(it + PF_SEP.length) }
+    private var lastMeta: JSONObject? = null
+    private fun parseProfiles(meta: JSONObject?) {
+        lastMeta = meta
+        val arr = meta?.optJSONArray("profiles")
+        val list = ArrayList<Profile>()
+        if (arr != null) for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val id = o.s("id"); val name = o.s("name"); if (id.isBlank() || name.isBlank()) continue
+            val lk = o.optJSONArray("likes")
+            list += Profile(id, name, o.s("avatar"), if (lk == null) emptyList() else (0 until lk.length()).map { lk.optString(it) })
+        }
+        if (list.none { it.id == "main" }) {
+            val av = meta?.s("avatar").orEmpty()
+            val name = meta?.s("name").orEmpty().ifBlank { session?.email?.substringBefore('@').orEmpty() }.ifBlank { "Yo" }
+            list.add(0, Profile("main", name, if (av == "a1" || av == "a2") "${BuildConfig.SITE_URL.trimEnd('/')}/avatars/$av.jpg" else avatarDefaults[0], emptyList()))
+        }
+        profiles = list.take(5)
+        val saved = prefs.getString("pf.${session?.userId}", "") ?: ""
+        profile = profiles.firstOrNull { it.id == (profile?.id ?: saved) } ?: profiles.firstOrNull { it.id == saved } ?: profiles.first()
+        if (!askedOnce && profiles.size > 1) { askedOnce = true; askProfile = true }
+    }
+    /** Cambia de perfil: trae su lista y su progreso. */
+    suspend fun useProfile(p: Profile) {
+        profile = p; askProfile = false
+        prefs.edit().putString("pf.${session?.userId}", p.id).apply()
+        myList = emptyList(); progress = emptyList()
+        loadMine()
+    }
+    private fun profilesJson(list: List<Profile>) = JSONArray().apply {
+        list.forEach { p -> put(JSONObject().put("id", p.id).put("name", p.name).put("avatar", p.avatar).put("likes", JSONArray(p.likes.take(40)))) }
+    }
+    /** Guarda los perfiles en la cuenta (los ve también la web). */
+    suspend fun saveProfiles(list: List<Profile>) {
+        val tk = token() ?: throw IllegalStateException("sin sesión")
+        Api.call("PUT", "/auth/v1/user", JSONObject().put("data", JSONObject().put("profiles", profilesJson(list))).toString(), tk)
+        profiles = list
+        profile = list.firstOrNull { it.id == profile?.id } ?: list.first()
+    }
+    suspend fun deleteProfile(p: Profile) {
+        if (p.id == "main") return
+        saveProfiles(profiles.filter { it.id != p.id })
+        val tk = token() ?: return; val uid = session?.userId ?: return
+        val pre = enc("p${p.id}$PF_SEP") + "*"
+        runCatching { Api.call("DELETE", "/rest/v1/user_lists?user_id=eq.$uid&title_id=like.$pre", token = tk) }
+        runCatching { Api.call("DELETE", "/rest/v1/watch_progress?user_id=eq.$uid&title_id=like.$pre", token = tk) }
+        if (profile?.id == p.id) useProfile(profiles.first())
+    }
+    fun newProfileId() = java.lang.Long.toString(System.nanoTime() % 2176782336L, 36)
+
+    /** Recomendados: géneros de lo que eligió al crear el perfil, de Mi lista y de lo que vio. */
+    fun recommendedTitles(): List<Title> {
+        val pub = published()
+        val likes = profile?.likes ?: emptyList()
+        val liked = (likes + myList + progress.map { it.titleId }).distinct().mapNotNull { byId(it) }
+        val seen = (myList + progress.map { it.titleId }).toSet()
+        val gw = HashMap<String, Int>()
+        liked.forEach { t -> val w = if (t.id in likes) 2 else 1; t.genres.forEach { g -> gw[g] = (gw[g] ?: 0) + w } }
+        val series = liked.count { it.isSerie }; val movies = liked.size - series
+        val scored = pub.filter { it.id !in seen }.map { t ->
+            t to (t.genres.sumOf { gw[it] ?: 0 } * 3 + (if (t.isSerie == (series >= movies)) 1 else 0) + liked.count { l -> l.cast.any { c -> t.cast.any { it.name.equals(c.name, true) } } } * 2)
+        }.filter { it.second > 1 }.sortedWith(compareByDescending<Pair<Title, Int>> { it.second }.thenByDescending { it.first.createdAt }).map { it.first }
+        val fill = pub.filter { it.id !in seen && it !in scored }.sortedWith(compareByDescending<Title> { it.featured }.thenByDescending { it.createdAt })
+        return (scored + fill).take(20)
+    }
     var loaded by mutableStateOf(false)
     var offline by mutableStateOf(false)
 
@@ -347,7 +430,7 @@ object Store {
             val r = site.optJSONObject(k) ?: continue
             val d = r.optJSONObject("data") ?: continue
             when (r.s("id")) {
-                "config" -> { siteLogo = d.s("logo"); applyClosed(d) }
+                "config" -> { siteLogo = d.s("logo"); applyClosed(d); avatarLib = d.optJSONArray("avatars")?.let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.startsWith("http") } } ?: emptyList() }
                 "live" -> live = runCatching { parseLive(d) }.getOrNull()
                 "collections" -> {
                     val la = d.optJSONArray("list") ?: JSONArray()
@@ -450,7 +533,7 @@ object Store {
         val add = ids.filter { it !in myList }.distinct()
         if (add.isEmpty()) return
         myList = add + myList
-        val rows = org.json.JSONArray(); add.forEach { rows.put(JSONObject().put("user_id", uid).put("title_id", it)) }
+        val rows = org.json.JSONArray(); add.forEach { rows.put(JSONObject().put("user_id", uid).put("title_id", pfKey(it))) }
         runCatching { Api.call("POST", "/rest/v1/user_lists", rows.toString(), tk, "return=minimal") }
     }
 
@@ -476,6 +559,7 @@ object Store {
 
     fun logout() {
         session = null; myList = emptyList(); progress = emptyList(); isOwner = false
+        profiles = emptyList(); profile = null; askProfile = false; askedOnce = false; lastMeta = null
         prefs.edit().remove("session").remove("owner").apply()
     }
 
@@ -510,25 +594,34 @@ object Store {
         runCatching {
             val u = JSONObject(Api.call("GET", "/auth/v1/user", token = tk))
             val av = u.optJSONObject("user_metadata")?.s("avatar") ?: ""
+            parseProfiles(u.optJSONObject("user_metadata"))
             val cur = session
             if (cur != null && cur.avatar != av) {
                 session = cur.copy(avatar = av)
                 prefs.edit().putString("session", JSONObject(prefs.getString("session", "{}") ?: "{}").put("avatar", av).toString()).apply()
             }
         }
+        if (profiles.isEmpty()) parseProfiles(lastMeta)
+        loadMine()
+    }
+
+    /** Mi lista y Seguir viendo del perfil elegido (no se mezclan entre perfiles). */
+    suspend fun loadMine() {
+        val tk = token() ?: return
         runCatching {
             val a = JSONArray(Api.call("GET", "/rest/v1/user_lists?select=title_id&order=created_at.desc", token = tk))
-            myList = (0 until a.length()).mapNotNull { a.optJSONObject(it)?.s("title_id") }
+            myList = (0 until a.length()).mapNotNull { a.optJSONObject(it)?.s("title_id") }.filter { pfMine(it) }.map { pfStrip(it) }
         }
         runCatching {
             val a = JSONArray(Api.call("GET", "/rest/v1/watch_progress?select=*&order=updated_at.desc", token = tk))
             progress = (0 until a.length()).mapNotNull { k ->
                 val o = a.optJSONObject(k) ?: return@mapNotNull null
+                if (!pfMine(o.s("title_id"))) return@mapNotNull null
                 val w = o.optJSONArray("watched")
                 val po = o.optJSONObject("positions")
                 val pos = HashMap<String, Pair<Long, Long>>()
                 po?.keys()?.forEach { kk -> po.optJSONObject(kk)?.let { v -> pos[kk] = v.optLong("t") to v.optLong("d") } }
-                Progress(o.s("title_id"), o.s("last_season").toIntOrNull(), o.s("last_episode").toIntOrNull(),
+                Progress(pfStrip(o.s("title_id")), o.s("last_season").toIntOrNull(), o.s("last_episode").toIntOrNull(),
                     if (w == null) emptyList() else (0 until w.length()).map { w.optString(it) }, o.s("updated_at"), pos)
             }
         }
@@ -540,8 +633,8 @@ object Store {
         val on = id in myList
         myList = if (on) myList - id else listOf(id) + myList
         runCatching {
-            if (on) Api.call("DELETE", "/rest/v1/user_lists?user_id=eq.$uid&title_id=eq.${enc(id)}", token = tk)
-            else Api.call("POST", "/rest/v1/user_lists", JSONObject().put("user_id", uid).put("title_id", id).toString(), tk, "return=minimal")
+            if (on) Api.call("DELETE", "/rest/v1/user_lists?user_id=eq.$uid&title_id=eq.${enc(pfKey(id))}", token = tk)
+            else Api.call("POST", "/rest/v1/user_lists", JSONObject().put("user_id", uid).put("title_id", pfKey(id)).toString(), tk, "return=minimal")
         }
     }
 
@@ -555,7 +648,7 @@ object Store {
         val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date())
         val p = Progress(id, season, episode, watched.toList(), now, prev?.positions ?: emptyMap())
         progress = listOf(p) + progress.filter { it.titleId != id }
-        val row = JSONObject().put("user_id", uid).put("title_id", id)
+        val row = JSONObject().put("user_id", uid).put("title_id", pfKey(id))
             .put("last_season", season ?: JSONObject.NULL).put("last_episode", episode ?: JSONObject.NULL)
             .put("watched", JSONArray(watched.toList())).put("updated_at", now)
         runCatching { Api.call("POST", "/rest/v1/watch_progress", row.toString(), tk, "resolution=merge-duplicates,return=minimal") }
@@ -580,7 +673,7 @@ object Store {
         progress = progress.map { if (it.titleId == id) it.copy(positions = pos, watched = watched.toList()) else it }
         val jo = JSONObject(); pos.forEach { (kk, v) -> jo.put(kk, JSONObject().put("t", v.first).put("d", v.second)) }
         // upsert solo con "positions": no toca el resto de la fila (temporada, vistos, fecha)
-        val body = JSONObject().put("user_id", uid).put("title_id", id).put("positions", jo)
+        val body = JSONObject().put("user_id", uid).put("title_id", pfKey(id)).put("positions", jo)
         if (done) body.put("watched", JSONArray(watched.toList()))
         runCatching { Api.call("POST", "/rest/v1/watch_progress", body.toString(), tk, "resolution=merge-duplicates,return=minimal") }
     }
@@ -592,7 +685,7 @@ object Store {
         val tk = token() ?: return
         val uid = session?.userId ?: return
         progress = progress.filter { it.titleId != id }
-        runCatching { Api.call("DELETE", "/rest/v1/watch_progress?user_id=eq.$uid&title_id=eq.${enc(id)}", token = tk) }
+        runCatching { Api.call("DELETE", "/rest/v1/watch_progress?user_id=eq.$uid&title_id=eq.${enc(pfKey(id))}", token = tk) }
     }
 
     private val lastViews = HashMap<String, Long>()
