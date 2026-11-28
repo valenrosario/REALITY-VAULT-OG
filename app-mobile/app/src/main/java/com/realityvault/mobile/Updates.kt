@@ -121,7 +121,6 @@ fun UpdateDialog(nav: Nav) {
                 else -> {
                     Text("Hay una versión nueva", style = ts(19, FontWeight.Bold, Color.White))
                     Text("Versión ${info.versionName}", style = ts(13, FontWeight.Bold, C.accent), modifier = Modifier.padding(top = 4.dp))
-                    if (info.notes.isNotBlank()) Text(info.notes, style = ts(14, color = C.fg2), modifier = Modifier.padding(top = 12.dp))
                     if (state is DownloadState.Failed) Text(state.msg, style = ts(13, color = Color(0xFFFF8A8A)), modifier = Modifier.padding(top = 10.dp))
                     if (state is DownloadState.Cancelled) Text("Descarga cancelada.", style = ts(13, color = C.muted), modifier = Modifier.padding(top = 10.dp))
                     Spacer(Modifier.height(20.dp))

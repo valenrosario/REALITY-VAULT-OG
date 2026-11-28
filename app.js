@@ -251,14 +251,16 @@ function strHash(s){ let h = 2166136261; for (const c of String(s)) { h ^= c.cha
 function rng(key){ let a = (S.seed ^ strHash(key)) >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 function shuffled(list, key){ const r = rng(key), a = list.slice(); for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 // Títulos que abrió en este navegador (para recomendar aunque no tenga cuenta)
-function recentOpened(){ try { return JSON.parse(localStorage.getItem('rv-opened') || '[]'); } catch { return []; } }
-function rememberOpened(tid){ try { const l = recentOpened().filter(x => x !== tid); l.unshift(tid); localStorage.setItem('rv-opened', JSON.stringify(l.slice(0, 40))); } catch {} }
+const openedKey = () => 'rv-opened' + (S.profile && S.profile.id !== 'main' ? '.' + S.profile.id : '');
+function recentOpened(){ try { return JSON.parse(localStorage.getItem(openedKey()) || '[]'); } catch { return []; } }
+function rememberOpened(tid){ try { const l = recentOpened().filter(x => x !== tid); l.unshift(tid); localStorage.setItem(openedKey(), JSON.stringify(l.slice(0, 40))); } catch {} }
 // Cuánto le gusta cada género según lo que vio, guardó y abrió
 function tasteProfile(){
   const g = new Map(), add = (tid, w) => { const t = byId(tid); if (!t) return; (t.genres||[]).forEach(x => g.set(x, (g.get(x)||0) + w)); };
   [...S.progress.keys()].forEach(id => add(id, 3));
   [...S.myList].forEach(id => add(id, 2));
   recentOpened().forEach((id, i) => add(id, i < 10 ? 1 : .5));
+  (S.profile?.likes || []).forEach(id => add(id, 4));
   return g;
 }
 function tasteScore(t, prof){ return (t.genres||[]).reduce((s, x) => s + (prof.get(x) || 0), 0); }
@@ -272,7 +274,7 @@ function recommendedRow(){
   const prof = tasteProfile(); if (!prof.size) return '';
   const seen = new Set([...S.progress.keys(), ...recentOpened().slice(0, 3)]);
   const list = byTaste(published().filter(t => !seen.has(t.id) && tasteScore(t, prof) > 0), 'rec', prof).slice(0, 20);
-  return list.length >= 3 ? row('Recomendado para vos', list) : '';
+  return list.length >= 3 ? row(S.profile && pfList().length > 1 ? `Recomendado para ${S.profile.name}` : 'Recomendado para vos', list) : '';
 }
 function heroSlides(){
   const pub = published();
@@ -2439,6 +2441,35 @@ async function migrateToR2(btn){
   rerenderPanel();
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-r2-migrate]'); if (b && S.owner) migrateToR2(b); });
+function avatarsAdminHtml(){
+  const mine = (S.site.avatars || []);
+  return `<div class="fs"><h3>Fotos de perfil <small>las que se pueden elegir al crear un perfil · web, celular y tele</small></h3>
+    <p class="hint" style="margin:0 0 10px">Subí imágenes cuadradas (por ejemplo 400 × 400). Las tuyas aparecen primero; las caritas de colores vienen siempre.</p>
+    <div class="av-grid">${mine.map((u, i) => `<span class="av-it" style="background-image:url('${esc(u)}')"><button data-av-del="${i}" aria-label="Quitar">✕</button></span>`).join('')}
+      <button class="av-it av-add" data-av-up>＋<small>Subir fotos</small></button>
+      ${PF_DEFAULTS.map(u => `<span class="av-it fixed" style="background-image:url('${esc(u)}')"></span>`).join('')}</div></div>`;
+}
+document.addEventListener('click', async e => {
+  if (!S.owner) return;
+  const del = e.target.closest('[data-av-del]');
+  if (del){ const L = [...(S.site.avatars || [])]; L.splice(+del.dataset.avDel, 1); try { S.site = { ...S.site, avatars: L }; await S.db.doc('site/config').set({ ...S.site, updatedAt: Date.now() }); toast('Foto quitada'); rerenderPanel(); } catch(_){ toast('No se pudo guardar', true); } return; }
+  if (!e.target.closest('[data-av-up]')) return;
+  const files = await new Promise(res => { const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true; inp.accept = 'image/jpeg,image/png,image/webp'; inp.onchange = () => res([...inp.files]); inp.click(); });
+  if (!files.length) return;
+  const urls = [];
+  for (let n = 0; n < files.length; n++){ const f = files[n];
+    try {
+      // se recorta al centro en cuadrado y se achica a 400 × 400 antes de subir (cargan rápido en la tele)
+      const bmp = await createImageBitmap(f); const side = Math.min(bmp.width, bmp.height);
+      const cv = document.createElement('canvas'); cv.width = cv.height = 400;
+      cv.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, 400, 400);
+      const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', .9));
+      urls.push(await r2Put(blob, 'jpg', 'image/jpeg', p => toast(`Subiendo ${n + 1}/${files.length}… ${p}%`)));
+    } catch(err){ toast(`${f.name}: ${err.message || 'no se pudo subir'}`, true); } }
+  if (!urls.length) return;
+  try { S.site = { ...S.site, avatars: [...urls, ...(S.site.avatars || [])] }; await S.db.doc('site/config').set({ ...S.site, updatedAt: Date.now() }); toast(`${urls.length} foto${urls.length > 1 ? 's' : ''} agregada${urls.length > 1 ? 's' : ''}`); rerenderPanel(); }
+  catch(_){ toast('No se pudo guardar', true); }
+});
 function subsAdminHtml(){
   const c = subCfg(); const pc = v => Math.round(v * 100);
   const tiles = [{ id:'classic', name:'Clásico del sitio', era:'El de siempre', desc:'Letra blanca sobre un cuadro negro semitransparente.' }, ...CC_STYLES];
@@ -2529,6 +2560,7 @@ function renderSite(){
       <span class="hint span2">Los íconos aparecen solo si cargás el enlace. Dejá un campo vacío para ocultarlo.</span>
     </div></div>
     ${subsAdminHtml()}
+    ${avatarsAdminHtml()}
     <div class="fs"><h3>Respaldo <small>todo el catálogo en un archivo</small></h3>
       <div class="toolbar"><button class="btn btn-line" data-backup-dl>Descargar respaldo</button><button class="btn btn-line" data-backup-up>Importar respaldo</button></div>
       <span class="hint">Importar agrega o reemplaza títulos, banners y la configuración del sitio con los del archivo. Las imágenes incluidas dentro del archivo se suben solas.</span>
@@ -3488,11 +3520,11 @@ async function loadProgress(){
   let { data, error } = await q('title_id,last_season,last_episode,watched,positions,updated_at');
   noPos = false;
   if (error){ noPos = true; ({ data, error } = await q('title_id,last_season,last_episode,watched,updated_at')); }
-  if (!error) (data||[]).forEach(r => S.progress.set(r.title_id, { ...r, watched: r.watched || [], positions: r.positions || {} }));
+  if (!error) (data||[]).filter(r => pfMine(r.title_id)).forEach(r => { const id = pfStrip(r.title_id); S.progress.set(id, { ...r, title_id: id, watched: r.watched || [], positions: r.positions || {} }); });
 }
 /* --- minuto por el que vas --- */
 const posKey = (s, e) => (s == null || s === '') ? 'm' : epKey(s, e);
-const lsPos = (tid, k) => `rv.pos.${tid}.${k}`;
+const lsPos = (tid, k) => `rv.pos.${pfKey(tid)}.${k}`;
 const posDone = (t, d) => d > 0 && (d - t <= 45 || t / d >= 0.95);
 const posResumable = p => !!p && p.d > 0 && p.t >= 10 && !posDone(p.t, p.d);
 function getPos(tid, s, e){
@@ -3513,7 +3545,7 @@ async function savePos(tid, s, e, t, d){
   const upd = { positions };
   // "Visto" solo cuando terminaste el capítulo (no apenas lo empezás)
   if (done && s != null && s !== ''){ const w = new Set(row.watched || []); w.add(epKey(s, e)); row.watched = [...w]; upd.watched = row.watched; }
-  const { error } = await S.sb.from('watch_progress').update(upd).eq('user_id', S.session.user.id).eq('title_id', tid);
+  const { error } = await S.sb.from('watch_progress').update(upd).eq('user_id', S.session.user.id).eq('title_id', pfKey(tid));
   if (error){ noPos = true; console.warn('No se pudo guardar el minuto (falta correr 07-posicion-de-reproduccion.sql)', error.message); }
 }
 function flatEpisodes(t){ const out = []; sortedSeasons(t).forEach(s => s.episodes.forEach(e => out.push({ s, e }))); return out; }
@@ -3572,9 +3604,9 @@ async function recordWatch(tid, season, episode){
   const prev = S.progress.get(tid);
   const watched = new Set(prev?.watched || []);
   // abrir un capítulo ya no lo marca como visto: se marca al terminarlo (ver savePos)
-  const row = { user_id: S.session.user.id, title_id: tid, last_season: season === '' || season == null ? null : +season, last_episode: episode === '' || episode == null ? null : +episode, watched: [...watched], updated_at: new Date().toISOString() };
+  const row = { user_id: S.session.user.id, title_id: pfKey(tid), last_season: season === '' || season == null ? null : +season, last_episode: episode === '' || episode == null ? null : +episode, watched: [...watched], updated_at: new Date().toISOString() };
   if (!noPos) row.positions = prev?.positions || {};
-  S.progress.delete(tid); S.progress = new Map([[tid, { positions: {}, ...row }], ...S.progress]);
+  S.progress.delete(tid); S.progress = new Map([[tid, { positions: {}, ...row, title_id: tid }], ...S.progress]);
   let { error } = await S.sb.from('watch_progress').upsert(row);
   if (error && !noPos){ noPos = true; delete row.positions; ({ error } = await S.sb.from('watch_progress').upsert(row)); }
   setTimeout(loadTop10, 800);
@@ -3583,7 +3615,7 @@ async function recordWatch(tid, season, episode){
 }
 async function removeProgress(tid){
   S.progress.delete(tid); render();
-  await S.sb.from('watch_progress').delete().eq('user_id', S.session.user.id).eq('title_id', tid);
+  await S.sb.from('watch_progress').delete().eq('user_id', S.session.user.id).eq('title_id', pfKey(tid));
   toast('Quitado de Seguir viendo');
 }
 // Horizontal artwork for Mi lista / Seguir viendo: the "Miniatura horizontal" or the backdrop with the logo on top.
@@ -3662,19 +3694,155 @@ function continueRow(){
     <button class="rail-btn r" data-scroll="1" aria-label="Siguiente">›</button></div></section>`;
 }
 
+
+/* ===================== Perfiles =====================
+   Hasta 5 perfiles por cuenta, guardados en la cuenta (user_metadata.profiles), así valen en la web, la tele y el celular.
+   El perfil principal ("main") usa los datos de siempre; los demás guardan su lista y su progreso con el prefijo
+   "p<id>::" en title_id, así no se mezclan entre perfiles. La tele y el celular usan la misma regla (Data.kt). */
+const PF_SEP = '::';
+const PF_MAX = 5;
+const pfId = () => (S.profile && S.profile.id) || 'main';
+const pfKey = id => pfId() === 'main' ? id : `p${pfId()}${PF_SEP}${id}`;
+const pfMine = tid => pfId() === 'main' ? !String(tid).includes(PF_SEP) : String(tid).startsWith(`p${pfId()}${PF_SEP}`);
+const pfStrip = tid => { const x = String(tid); const i = x.indexOf(PF_SEP); return i < 0 ? x : x.slice(i + PF_SEP.length); };
+const PF_DEFAULTS = Array.from({ length: 12 }, (_, i) => `https://reality-vault.vercel.app/avatars/d${i + 1}.png`);
+const pfAvatars = () => [...((S.site && S.site.avatars) || []), ...PF_DEFAULTS];
+function pfList(){
+  const m = S.session?.user?.user_metadata || {};
+  let L = Array.isArray(m.profiles) ? m.profiles.filter(p => p && p.id && p.name) : [];
+  if (!L.find(p => p.id === 'main')) L = [{ id: 'main', name: (m.name || (S.session?.user?.email || '').split('@')[0] || 'Yo').trim(), avatar: AVATARS[m.avatar] || PF_DEFAULTS[0], likes: [] }, ...L];
+  return L.slice(0, PF_MAX);
+}
+async function pfSave(L){
+  const { data, error } = await S.sb.auth.updateUser({ data: { profiles: L } });
+  if (error) throw error;
+  if (data?.user && S.session) S.session = { ...S.session, user: data.user };
+  if (S.profile) S.profile = L.find(p => p.id === S.profile.id) || L[0];
+}
+function pfRestore(){
+  if (!S.session){ S.profile = null; return; }
+  const L = pfList(); let id = '';
+  try { id = localStorage.getItem('rv.pf.' + S.session.user.id) || ''; } catch(_){}
+  S.profile = L.find(p => p.id === id) || L[0];
+}
+async function pfUse(p){
+  S.profile = p;
+  try { localStorage.setItem('rv.pf.' + S.session.user.id, p.id); sessionStorage.setItem('rv.pf.ok', '1'); } catch(_){}
+  pfGateClose(); await loadMyList(); await loadProgress(); brandRef = null; render(); renderAccount();
+  toast(`Mirando como ${p.name}`);
+}
+// al entrar: si hay más de un perfil, se pregunta quién mira (una vez por visita)
+function pfMaybeAsk(){
+  if (!S.session || S.route === 'admin' || pfList().length < 2) return;
+  let ok = false; try { ok = sessionStorage.getItem('rv.pf.ok') === '1'; } catch(_){}
+  if (!ok) pfGateOpen('pick');
+}
+const pfHue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; };
+function pfAv(p, size){
+  return p.avatar ? `<span class="pf-av ${size || ''}" style="background-image:url('${esc(p.avatar)}')"></span>`
+    : `<span class="pf-av ${size || ''}" style="background:linear-gradient(145deg,hsl(${pfHue(p.id)},85%,62%),hsl(${(pfHue(p.id) + 40) % 360},70%,42%))"><b>${esc((p.name || '?')[0].toUpperCase())}</b></span>`;
+}
+let pfG = null;   // estado de la ventana de perfiles
+function pfGateOpen(mode, id){
+  const L = pfList();
+  if (mode === 'new' && L.length >= PF_MAX){ toast(`Podés tener hasta ${PF_MAX} perfiles`, true); return; }
+  const base = id ? L.find(p => p.id === id) : null;
+  pfG = { mode, step: 1, q: '', busy: false,
+    draft: base ? { ...base, likes: [...(base.likes || [])] } : { id: Math.random().toString(36).slice(2, 8), name: '', avatar: pfAvatars()[L.length % pfAvatars().length], likes: [] } };
+  let el = document.getElementById('pfGate');
+  if (!el){ el = document.createElement('div'); el.id = 'pfGate'; el.className = 'pf-gate'; document.body.appendChild(el); }
+  document.body.style.overflow = 'hidden'; pfGateDraw();
+  requestAnimationFrame(() => el.classList.add('on'));
+}
+function pfGateClose(){ const el = document.getElementById('pfGate'); if (el) el.remove(); pfG = null; document.body.style.overflow = ''; }
+function pfGateDraw(){
+  const el = document.getElementById('pfGate'); if (!el || !pfG) return;
+  const L = pfList(), d = pfG.draft;
+  const logo = `<img class="pf-logo" src="${esc(S.site.logo || LANDING_LOGO)}" alt="REALITY VAULT">`;
+  if (pfG.mode === 'pick' || pfG.mode === 'manage'){
+    const man = pfG.mode === 'manage';
+    el.innerHTML = `<div class="pf-in">${logo}<h1>${man ? 'Administrar perfiles' : '¿Quién está mirando?'}</h1>
+      <div class="pf-row">${L.map(p => `<button class="pf-card" data-pf-${man ? 'edit' : 'use'}="${esc(p.id)}">${pfAv(p, 'xl')}${man ? '<i class="pf-pen" aria-hidden="true">✎</i>' : ''}<span>${esc(p.name)}</span></button>`).join('')}
+        ${L.length < PF_MAX ? `<button class="pf-card" data-pf-gate="new"><span class="pf-av xl pf-add">+</span><span>Agregar</span></button>` : ''}</div>
+      <div class="pf-foot">${man ? `<button class="btn btn-primary" data-pf-gate="${S.profile ? 'close' : 'pick'}">Listo</button>` : `<button class="btn btn-line" data-pf-gate="manage">Administrar perfiles</button>`}</div></div>`;
+    return;
+  }
+  // crear / editar
+  const isNew = pfG.mode === 'new';
+  if (pfG.step === 1){
+    el.innerHTML = `<div class="pf-in pf-form">${logo}<h1>${isNew ? 'Nuevo perfil' : 'Editar perfil'}</h1>
+      <div class="pf-edit"><div class="pf-big">${pfAv({ ...d, name: d.name || '?' }, 'xxl')}</div>
+        <div class="pf-fields"><label class="pf-l">Nombre<input class="pf-name" maxlength="20" value="${esc(d.name)}" placeholder="Ej: Valen" data-pf-name></label>
+          <div class="pf-l">Elegí una foto</div>
+          <div class="pf-avs">${pfAvatars().map(u => `<button class="pf-avopt ${u === d.avatar ? 'on' : ''}" data-pf-av="${esc(u)}" style="background-image:url('${esc(u)}')" aria-label="Elegir esta foto"></button>`).join('')}</div></div></div>
+      <div class="pf-foot">${!isNew && d.id !== 'main' ? `<button class="btn btn-line pf-del" data-pf-del>Eliminar perfil</button>` : ''}<span class="pf-sp"></span>
+        <button class="btn btn-line" data-pf-gate="${S.profile && !isNew ? 'manage' : (L.length > 1 || !isNew ? 'manage' : 'close')}">Cancelar</button>
+        ${isNew ? `<button class="btn btn-primary" data-pf-next>Siguiente</button>` : `<button class="btn btn-line" data-pf-next>Cambiar gustos</button><button class="btn btn-primary" data-pf-save>Guardar</button>`}</div></div>`;
+    const inp = el.querySelector('[data-pf-name]'); if (inp && isNew && !d.name) setTimeout(() => inp.focus(), 50);
+    return;
+  }
+  // paso 2: gustos
+  const q = pfG.q.toLowerCase();
+  const pool = published().filter(t => t.poster && (!q || (t.title || '').toLowerCase().includes(q)));
+  const list = q ? pool : [...pool.filter(t => d.likes.includes(t.id)), ...shuffled(pool.filter(t => !d.likes.includes(t.id)), 'pf-likes')];
+  el.innerHTML = `<div class="pf-in pf-taste">${logo}<h1>¿Qué te gusta, ${esc(d.name || '')}?</h1>
+    <p class="pf-sub">Elegí 3 o más. Con esto armamos tus recomendaciones desde el primer día.</p>
+    <input class="pf-search" data-pf-q value="${esc(pfG.q)}" placeholder="Buscar…">
+    <div class="pf-posters">${list.slice(0, 60).map(t => `<button class="pf-po ${d.likes.includes(t.id) ? 'on' : ''}" data-pf-like="${esc(t.id)}" aria-pressed="${d.likes.includes(t.id)}" title="${esc(t.title)}"><span style="background-image:url('${esc(t.poster)}')"></span><i>✓</i></button>`).join('')}</div>
+    <div class="pf-foot pf-sticky"><span class="pf-count">${d.likes.length ? `${d.likes.length} elegido${d.likes.length > 1 ? 's' : ''}` : 'Ninguno elegido'}</span><span class="pf-sp"></span>
+      <button class="btn btn-line" data-pf-back>Atrás</button><button class="btn btn-primary" data-pf-save ${pfG.busy ? 'disabled' : ''}>${d.likes.length < 3 && isNew ? 'Saltear' : 'Listo'}</button></div></div>`;
+}
+document.addEventListener('input', e => {
+  if (!pfG) return;
+  if (e.target.dataset.pfName != null){ pfG.draft.name = e.target.value.trimStart(); const big = document.querySelector('.pf-big'); if (big) big.innerHTML = pfAv({ ...pfG.draft, name: pfG.draft.name || '?' }, 'xxl'); }
+  if (e.target.dataset.pfQ != null){ pfG.q = e.target.value; const pos = e.target.selectionStart; pfGateDraw(); const n = document.querySelector('[data-pf-q]'); if (n){ n.focus(); n.setSelectionRange(pos, pos); } }
+});
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-pf-use],[data-pf-gate],[data-pf-edit],[data-pf-av],[data-pf-next],[data-pf-back],[data-pf-like],[data-pf-save],[data-pf-del]');
+  if (!b || !S.session) return;
+  const d = b.dataset;
+  if (d.pfUse){ const p = pfList().find(x => x.id === d.pfUse); if (p) pfUse(p); return; }
+  if (d.pfGate){ if (d.pfGate === 'close'){ pfGateClose(); try { sessionStorage.setItem('rv.pf.ok', '1'); } catch(_){} return; } pfGateOpen(d.pfGate); return; }
+  if (!pfG) return;
+  if (d.pfEdit){ pfGateOpen('edit', d.pfEdit); return; }
+  if (d.pfAv){ pfG.draft.avatar = d.pfAv; pfGateDraw(); return; }
+  if ('pfNext' in d){ if (!pfG.draft.name.trim()){ toast('Ponele un nombre', true); document.querySelector('[data-pf-name]')?.focus(); return; } pfG.step = 2; pfGateDraw(); document.querySelector('.pf-gate')?.scrollTo(0, 0); return; }
+  if ('pfBack' in d){ pfG.step = 1; pfGateDraw(); return; }
+  if (d.pfLike){ const L = pfG.draft.likes; const i = L.indexOf(d.pfLike); i < 0 ? L.push(d.pfLike) : L.splice(i, 1); b.classList.toggle('on', i < 0); b.setAttribute('aria-pressed', i < 0);
+    const c = document.querySelector('.pf-count'); if (c) c.textContent = L.length ? `${L.length} elegido${L.length > 1 ? 's' : ''}` : 'Ninguno elegido';
+    const sv = document.querySelector('.pf-foot [data-pf-save]'); if (sv && pfG.mode === 'new') sv.textContent = L.length < 3 ? 'Saltear' : 'Listo'; return; }
+  if ('pfDel' in d){ if (!b.dataset.sure){ b.dataset.sure = 1; b.textContent = '¿Seguro? Se borra su lista y su progreso'; return; }
+    const id = pfG.draft.id; const L = pfList().filter(p => p.id !== id);
+    try { await pfSave(L);
+      // se borran sus datos guardados
+      const pre = `p${id}${PF_SEP}%`;
+      S.sb.from('user_lists').delete().eq('user_id', S.session.user.id).like('title_id', pre).then(() => {});
+      S.sb.from('watch_progress').delete().eq('user_id', S.session.user.id).like('title_id', pre).then(() => {});
+      if (S.profile?.id === id){ await pfUse(L[0]); } pfGateOpen('manage'); toast('Perfil eliminado'); } catch(err){ toast('No se pudo eliminar', true); } return; }
+  if ('pfSave' in d){
+    const dr = pfG.draft; dr.name = dr.name.trim().slice(0, 20); if (!dr.name){ toast('Ponele un nombre', true); pfG.step = 1; pfGateDraw(); return; }
+    pfG.busy = true; b.disabled = true;
+    const L = pfList(); const i = L.findIndex(p => p.id === dr.id); const clean = { id: dr.id, name: dr.name, avatar: dr.avatar || '', likes: dr.likes.slice(0, 40) };
+    i < 0 ? L.push(clean) : (L[i] = clean);
+    try { await pfSave(L); if (pfG.mode === 'new'){ await pfUse(clean); } else { if (S.profile?.id === clean.id) S.profile = clean; renderAccount(); render(); pfGateOpen('manage'); toast('Perfil guardado'); } }
+    catch(err){ pfG.busy = false; b.disabled = false; toast('No se pudo guardar el perfil', true); }
+  }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && pfG && pfG.mode !== 'pick'){ pfGateClose(); } });
+
 async function loadMyList(){
   S.myList = new Set();
   if (!S.session || !S.sb) return;
   const { data, error } = await S.sb.from('user_lists').select('title_id').order('created_at', { ascending:false });
-  if (!error) S.myList = new Set((data||[]).map(r => r.title_id));
+  if (!error) S.myList = new Set((data||[]).filter(r => pfMine(r.title_id)).map(r => pfStrip(r.title_id)));
 }
 async function toggleList(id){
   if (!S.session){ openAuth({ reason:'list', titleId:id }); return; }
   const on = S.myList.has(id);
   on ? S.myList.delete(id) : (S.myList = new Set([id, ...S.myList]));
   refreshListButtons();
-  const q = on ? S.sb.from('user_lists').delete().eq('user_id', S.session.user.id).eq('title_id', id)
-               : S.sb.from('user_lists').insert({ user_id: S.session.user.id, title_id: id });
+  const q = on ? S.sb.from('user_lists').delete().eq('user_id', S.session.user.id).eq('title_id', pfKey(id))
+               : S.sb.from('user_lists').insert({ user_id: S.session.user.id, title_id: pfKey(id) });
   const { error } = await q;
   if (error){ on ? S.myList.add(id) : S.myList.delete(id); refreshListButtons(); toast('No se pudo actualizar tu lista', true); return; }
   toast(on ? 'Quitado de Mi lista' : 'Agregado a Mi lista');
@@ -3708,14 +3876,16 @@ const STAR_SVG = '<svg class="ga-star" viewBox="0 0 24 24" aria-hidden="true"><p
 const AVATARS = { a1:'/avatars/a1.jpg', a2:'/avatars/a2.jpg' };
 const userAvatar = () => AVATARS[S.session?.user?.user_metadata?.avatar] || '';
 function glitterAvatar(size){
-  const ph = userAvatar(); if (ph) return `<span class="glitter-av ${size||''} has-photo" style="background-image:url('${ph}')" aria-hidden="true"></span>`; return `<span class="glitter-av ${size||''}" style="--h:${userHue()}" aria-hidden="true"><span class="ga-sparkle"></span>${STAR_SVG}</span>`; }
+  const ph = S.profile?.avatar || userAvatar(); if (ph) return `<span class="glitter-av ${size||''} has-photo" style="background-image:url('${ph}')" aria-hidden="true"></span>`; return `<span class="glitter-av ${size||''}" style="--h:${userHue()}" aria-hidden="true"><span class="ga-sparkle"></span>${STAR_SVG}</span>`; }
 function renderAccount(){
   const box = document.getElementById('account'); if (!box) return;
   document.querySelectorAll('[data-r="mi-lista"]').forEach(a => a.hidden = !S.session);
   if (!S.session){ box.innerHTML = S.sb ? `<a class="icon-btn heart-m" href="/mi-lista" aria-label="Mi lista">${ICON_HEART}</a><button class="btn btn-sm btn-enter" data-auth="login">Entrar</button>` : ''; return; }
-  const n = userName();
+  const n = S.profile?.name || userName();
   box.innerHTML = `<a class="icon-btn heart-m" href="/mi-lista" aria-label="Mi lista">${ICON_HEART}</a><button class="avatar-btn" data-account-menu aria-haspopup="true" aria-expanded="false" title="${esc(n)}" aria-label="Tu cuenta">${glitterAvatar()}</button>
     <div class="acc-menu" hidden><div class="acc-name">${glitterAvatar('lg')}<span>${esc(n)}</span></div>
+      ${pfList().filter(p => p.id !== S.profile?.id).map(p => `<button class="acc-pf" data-pf-use="${esc(p.id)}">${pfAv(p, 'xs')}<span>${esc(p.name)}</span></button>`).join('')}
+      <button data-pf-gate="manage">Administrar perfiles</button>
       <a href="/mi-lista">Mi lista</a>${S.owner ? '<a href="/admin">Panel de control</a>' : ''}<button data-logout>Cerrar sesión</button></div>`;
 }
 document.addEventListener('click', e => {
@@ -3991,8 +4161,8 @@ overlayRoot.addEventListener('click', async e => {
     const ft = overlayRoot.querySelector('.au-foot'); if (ft) ft.firstChild.textContent = (c.favs.length ? `${c.favs.length} elegido${c.favs.length>1?'s':''}` : 'Elegí los que quieras') + ' · '; return; }
   const fin = e.target.closest('[data-au-finish]'); if (fin){
     if (!fin.hasAttribute('data-skip') && c.favs.length && S.session){
-      const rows = c.favs.filter(id => !S.myList.has(id)).map(id => ({ user_id: S.session.user.id, title_id: id }));
-      if (rows.length){ const { error } = await S.sb.from('user_lists').insert(rows); if (!error){ S.myList = new Set([...rows.map(r=>r.title_id), ...S.myList]); toast('Guardamos tus favoritas en Mi lista'); } }
+      const rows = c.favs.filter(id => !S.myList.has(id)).map(id => ({ user_id: S.session.user.id, title_id: pfKey(id) }));
+      if (rows.length){ const { error } = await S.sb.from('user_lists').insert(rows); if (!error){ S.myList = new Set([...rows.map(r=>pfStrip(r.title_id)), ...S.myList]); toast('Guardamos tus favoritas en Mi lista'); } }
     }
     // en un celular Android (web, no la app) ofrecemos instalar la app antes de entrar
     if (appOfferOk() && !c.appSeen){ c.appSeen = true; c.step = 5; c.msg = ''; renderAuth(); return; }
@@ -4037,7 +4207,7 @@ overlayRoot.addEventListener('submit', async e => {
   }
 });
 async function afterLogin(){
-  await checkOwner(); await loadMyList(); await loadProgress(); render();
+  await checkOwner(); pfRestore(); await loadMyList(); await loadProgress(); render();
 }
 // remember what each user opens, for "Seguir viendo"
 document.addEventListener('click', e => {
@@ -4924,13 +5094,13 @@ async function checkOwner(){
   S.sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
   const db = makeDb(S.sb);
   loadTop10(); setInterval(loadTop10, 60000);
-  const authReady = (async () => { await checkOwner(); await loadMyList(); await loadProgress(); S.authReady = true; render(); })();
+  const authReady = (async () => { await checkOwner(); pfRestore(); await loadMyList(); await loadProgress(); S.authReady = true; render(); pfMaybeAsk(); })();
   // Supabase pide no llamar a otras funciones suyas dentro de este aviso: se difiere con setTimeout.
   S.sb.auth.onAuthStateChange((evt) => {
     if (evt === 'TOKEN_REFRESHED' || evt === 'INITIAL_SESSION') return;
     setTimeout(async () => {
       const had = !!S.session, was = S.owner; await checkOwner();
-      if (had !== !!S.session){ await loadMyList(); await loadProgress(); render(); }
+      if (had !== !!S.session){ pfRestore(); await loadMyList(); await loadProgress(); render(); pfMaybeAsk(); }
       else if (was !== S.owner || S.route === 'admin') render();
     }, 0);
   });

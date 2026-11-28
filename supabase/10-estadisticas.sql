@@ -20,10 +20,10 @@ begin
                        select title_id, count(distinct viewer) n from public.title_views where viewed_at > now() - interval '30 days'
                        group by title_id order by n desc limit 10) x),
     'topWatched',   (select coalesce(json_agg(json_build_object('t', title_id, 'n', n) order by n desc), '[]'::json) from (
-                       select title_id, count(*) n from public.watch_progress where updated_at > now() - interval '30 days'
-                       group by title_id order by n desc limit 10) x),
+                       select coalesce(nullif(split_part(title_id, '::', 2), ''), title_id) title_id, count(*) n from public.watch_progress where updated_at > now() - interval '30 days'
+                       group by 1 order by n desc limit 10) x),
     'recent',       (select coalesce(json_agg(json_build_object('t', title_id, 's', last_season, 'e', last_episode, 'at', updated_at) order by updated_at desc), '[]'::json) from (
-                       select title_id, last_season, last_episode, updated_at from public.watch_progress order by updated_at desc limit 12) x)
+                       select coalesce(nullif(split_part(title_id, '::', 2), ''), title_id) title_id, last_season, last_episode, updated_at from public.watch_progress order by updated_at desc limit 12) x)
   ) into r;
   return r;
 end $$;

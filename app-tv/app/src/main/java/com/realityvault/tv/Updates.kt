@@ -82,10 +82,6 @@ fun UpdateOverlay(nav: Nav) {
                     Text("Hay una nueva versión disponible", style = ts(20, FontWeight.Bold, Color.White))
                     Spacer(Modifier.height(8.dp))
                     Text("Versión ${info.versionName}", style = ts(14, FontWeight.Bold, C.accent))
-                    if (info.notes.isNotBlank()) {
-                        Spacer(Modifier.height(14.dp))
-                        Text(info.notes, style = ts(14, color = C.fg2))
-                    }
                     if (state is DownloadState.Cancelled) {
                         Spacer(Modifier.height(10.dp))
                         Text("Descarga cancelada.", style = ts(13, color = C.muted))
