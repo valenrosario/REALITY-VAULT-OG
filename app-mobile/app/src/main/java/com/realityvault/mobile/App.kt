@@ -60,6 +60,11 @@ fun App(nav: Nav, onExit: () -> Unit) {
         else if (!nav.back()) { if (nav.top != Screen.Home) nav.section(Screen.Home) else onExit() }
     }
     if (Store.locked && nav.top !is Screen.Login && nav.top != Screen.Splash) { ClosedScreen(nav, onExit); return }
+    val pfMode = if (Store.askProfile) "pick" else com.realityvault.tv.PfUi.open
+    if (pfMode.isNotBlank() && Store.session != null && nav.top != Screen.Splash && nav.top !is Screen.Login) {
+        com.realityvault.tv.ProfileGate(pfMode, Store.siteLogo, onAccount = { com.realityvault.tv.PfUi.open = ""; nav.section(Screen.Mine) }) { com.realityvault.tv.PfUi.open = ""; Store.askProfile = false }
+        return
+    }
     val haze = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
     val glass = rememberGlassBackdrop()
     Box(Modifier.fillMaxSize().background(C.bg)) {
@@ -188,6 +193,10 @@ internal fun BottomBar(nav: Nav, haze: dev.chrisbanes.haze.HazeState, glass: Gla
 /** Botón redondo con la foto de perfil (abre "Mi cuenta"). */
 @Composable
 fun AvatarButton(nav: Nav, modifier: Modifier = Modifier) {
+    if (Store.session != null && Store.profile != null) {
+        com.realityvault.tv.ProfileAvatar(Store.profile, 36.dp, modifier.tap({ com.realityvault.tv.PfUi.open = "pick" }, .9f))
+        return
+    }
     val s = Store.session
     Box(
         modifier.size(36.dp).tap({ nav.section(Screen.Mine) }, .9f).clip(CircleShape)

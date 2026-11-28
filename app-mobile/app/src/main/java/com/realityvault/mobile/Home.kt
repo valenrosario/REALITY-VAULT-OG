@@ -105,19 +105,7 @@ fun slides(match: (Title) -> Boolean = { true }): List<Slide> {
 class RowSpec(val key: String, val title: String, val kind: String, val titles: List<Title>, val feat: List<Pair<Title, FeatItem>> = emptyList(), val coll: Coll? = null)
 
 /** Recomendados según tus gustos: géneros de Mi lista (los favoritos que elegiste) y de lo que viste. */
-fun recommended(): List<Title> {
-    val pub = Store.published()
-    val liked = (Store.myList + Store.progress.map { it.titleId }).distinct().mapNotNull { Store.byId(it) }
-    val seen = liked.map { it.id }.toSet()
-    val gw = HashMap<String, Int>()
-    liked.forEach { t -> t.genres.forEach { g -> gw[g] = (gw[g] ?: 0) + 1 } }
-    val series = liked.count { it.isSerie }; val movies = liked.size - series
-    val scored = pub.filter { it.id !in seen }.map { t ->
-        t to (t.genres.sumOf { gw[it] ?: 0 } * 3 + (if (t.isSerie == (series >= movies)) 1 else 0) + liked.count { l -> l.cast.any { c -> t.cast.any { it.name.equals(c.name, true) } } } * 2)
-    }.filter { it.second > 1 }.sortedWith(compareByDescending<Pair<Title, Int>> { it.second }.thenByDescending { it.first.createdAt }).map { it.first }
-    val fill = pub.filter { it.id !in seen && it !in scored }.sortedWith(compareByDescending<Title> { it.featured }.thenByDescending { it.createdAt })
-    return (scored + fill).take(20)
-}
+fun recommended(): List<Title> = Store.recommendedTitles()
 
 private fun tabMatch(tab: String): (Title) -> Boolean = when (tab) {
     "Series" -> { t -> t.isSerie }
@@ -133,7 +121,7 @@ fun homeRows(tab: String = "Para vos"): List<RowSpec> {
     val cont = Store.progress.mapNotNull { p -> Store.byId(p.titleId)?.takeIf { it.status != "borrador" } }
     if (cont.isNotEmpty()) rows += RowSpec("cont", "Seguir viendo", "wide", cont)
     val rec = recommended()
-    if (rec.isNotEmpty()) rows += RowSpec("rec", "Recomendado para vos", "poster", rec)
+    if (rec.isNotEmpty()) rows += RowSpec("rec", (if (Store.profiles.size > 1) "Recomendado para ${Store.profile?.name}" else "Recomendado para vos"), "poster", rec)
     val top = Store.top10.mapNotNull { id -> pub.firstOrNull { it.id == id } }.take(10)
     if (top.isNotEmpty()) rows += RowSpec("top", "Top 10 de la semana", "top", top)
     val list = Store.myList.mapNotNull { id -> pub.firstOrNull { it.id == id } }
@@ -183,7 +171,7 @@ private fun tabRows(tab: String): List<RowSpec> {
     val cont = Store.progress.mapNotNull { p -> Store.byId(p.titleId)?.takeIf { it.status != "borrador" && match(it) } }
     if (cont.isNotEmpty()) rows += RowSpec("cont", "Seguir viendo", "wide", cont)
     val rec = recommended().filter(match)
-    if (rec.size >= 3) rows += RowSpec("rec", "Recomendado para vos", "poster", rec)
+    if (rec.size >= 3) rows += RowSpec("rec", (if (Store.profiles.size > 1) "Recomendado para ${Store.profile?.name}" else "Recomendado para vos"), "poster", rec)
     val top = Store.top10.mapNotNull { id -> pub.firstOrNull { it.id == id } }.take(10)
     if (top.size >= 3) rows += RowSpec("top", "Top 10 de la semana", "top", top)
     val newest = pub.sortedByDescending { it.createdAt }.take(20)

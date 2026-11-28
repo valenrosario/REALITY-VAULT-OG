@@ -130,6 +130,12 @@ fun App(nav: Nav, onExit: () -> Unit) {
         }
     }
     if (Store.locked && nav.top !is Screen.Login && nav.top != Screen.Splash) { ClosedScreen(nav, onExit); return }
+    // perfiles: al abrir la app (si hay más de uno) o desde el avatar de arriba
+    val pfMode = if (Store.askProfile) "pick" else PfUi.open
+    if (pfMode.isNotBlank() && Store.session != null && nav.top != Screen.Splash && nav.top !is Screen.Login) {
+        ProfileGate(pfMode, Store.siteLogo, onAccount = { PfUi.open = ""; nav.go(Screen.Account) }) { PfUi.open = ""; Store.askProfile = false }
+        return
+    }
     Box(Modifier.fillMaxSize().background(C.bg)) {
         when (val s = nav.top) {
             Screen.Splash -> SplashScreen(nav)
@@ -259,16 +265,8 @@ fun TopNavBar(nav: Nav, modifier: Modifier = Modifier, downTarget: FocusRequeste
             }
         }
         Spacer(Modifier.weight(1f))
-        Focusable({ nav.go(Screen.Account) }, Modifier.size(36.dp), shape = CircleShape, scale = 1.1f, ring = false) { f ->
-            val photo = avatarRes(Store.session?.avatar)
-            Box(
-                Modifier.fillMaxSize().clip(CircleShape).background(Brush.radialGradient(listOf(Color(0xFFFFD1E6), C.accent)), CircleShape)
-                    .border(if (f) 2.5.dp else 0.dp, Color.White, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                if (photo != null) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(photo), null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
-                else Text(Store.session?.email?.take(1)?.uppercase() ?: "?", style = ts(14, FontWeight.Bold, Color.White))
-            }
+        Focusable({ PfUi.open = "pick" }, Modifier.size(36.dp), shape = RoundedCornerShape(9.dp), scale = 1.1f, ring = false) { f ->
+            ProfileAvatar(Store.profile, 36.dp, Modifier.border(if (f) 2.5.dp else 0.dp, Color.White, RoundedCornerShape(9.dp)))
         }
     }
 }
@@ -385,6 +383,8 @@ fun homeRows(): List<RowSpec> {
     val rows = mutableListOf<RowSpec>()
     val cont = Store.progress.mapNotNull { p -> Store.byId(p.titleId)?.takeIf { it.status != "borrador" } }
     if (cont.isNotEmpty()) rows += RowSpec("cont", "Seguir viendo", "wide", cont)
+    val rec = Store.recommendedTitles()
+    if (rec.size >= 3) rows += RowSpec("rec", if (Store.profiles.size > 1) "Recomendado para ${Store.profile?.name}" else "Recomendado para vos", "poster", rec)
     val top = Store.top10.mapNotNull { id -> pub.firstOrNull { it.id == id } }.take(10)
     if (top.isNotEmpty()) rows += RowSpec("top", "Top 10 de la semana", "top", top)
     val list = Store.myList.mapNotNull { id -> pub.firstOrNull { it.id == id } }
