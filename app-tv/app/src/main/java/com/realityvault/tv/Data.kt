@@ -257,7 +257,7 @@ object Store {
     /* ---------- perfiles (los mismos que en la web: se guardan en la cuenta) ---------- */
     var profiles by mutableStateOf<List<Profile>>(emptyList())
     var profile by mutableStateOf<Profile?>(null)
-    /** true = al abrir la app hay que preguntar quién mira (más de un perfil). */
+    /** true = al abrir la app hay que preguntar quién mira (siempre, una vez por apertura). */
     var askProfile by mutableStateOf(false)
     private var askedOnce = false
     /** Fotos para elegir: las que subió el admin (panel → Sitio) y las caritas de colores. */
@@ -288,11 +288,11 @@ object Store {
         profiles = list.take(5)
         val saved = prefs.getString("pf.${session?.userId}", "") ?: ""
         profile = profiles.firstOrNull { it.id == (profile?.id ?: saved) } ?: profiles.firstOrNull { it.id == saved } ?: profiles.first()
-        if (!askedOnce && profiles.size > 1) { askedOnce = true; askProfile = true }
+        if (!askedOnce) { askedOnce = true; askProfile = true }   // siempre pregunta quién mira al abrir la app
     }
     /** Cambia de perfil: trae su lista y su progreso. */
     suspend fun useProfile(p: Profile) {
-        profile = p; askProfile = false
+        profile = p
         prefs.edit().putString("pf.${session?.userId}", p.id).apply()
         myList = emptyList(); progress = emptyList()
         loadMine()

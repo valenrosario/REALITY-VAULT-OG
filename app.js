@@ -3771,15 +3771,25 @@ function pfRestore(){
   try { id = localStorage.getItem('rv.pf.' + S.session.user.id) || ''; } catch(_){}
   S.profile = L.find(p => p.id === id) || L[0];
 }
-async function pfUse(p){
+async function pfUse(p, anim){
   S.profile = p;
   try { localStorage.setItem('rv.pf.' + S.session.user.id, p.id); sessionStorage.setItem('rv.pf.ok', '1'); } catch(_){}
+  const gate = document.getElementById('pfGate');
+  if (anim && gate && !matchMedia('(prefers-reduced-motion: reduce)').matches){
+    // la foto va al centro con su brillo, todo se va a negro y aparece la app
+    const ov = document.createElement('div'); ov.className = 'pk-enter';
+    ov.innerHTML = `<span class="pk-enter-av">${pfAv(p, 'xl')}</span>`;
+    pfGlow(p.avatar).then(c => ov.style.setProperty('--c', c));
+    gate.appendChild(ov);
+    await new Promise(r => setTimeout(r, 560));
+    gate.classList.add('out'); await new Promise(r => setTimeout(r, 380));
+  }
   pfGateClose(); await loadMyList(); await loadProgress(); brandRef = null; render(); renderAccount();
   toast(`Mirando como ${p.name}`);
 }
-// al entrar: si hay más de un perfil, se pregunta quién mira (una vez por visita)
+// al entrar siempre se pregunta quién mira (una vez por visita)
 function pfMaybeAsk(){
-  if (!S.session || S.route === 'admin' || pfList().length < 2) return;
+  if (!S.session || S.route === 'admin' || !pfList().length) return;
   let ok = false; try { ok = sessionStorage.getItem('rv.pf.ok') === '1'; } catch(_){}
   if (!ok) pfGateOpen('pick');
 }
@@ -3810,6 +3820,7 @@ function pfGlow(url){
   pfGlowCache.set(url, pr); return pr;
 }
 function pfSetGlow(url){ const g = document.getElementById('pfGate'); if (!g) return; pfGlow(url).then(c => { if (g.isConnected) g.style.setProperty('--glow', c); }); }
+let pfFeatTimer = 0;
 let pfG = null;   // estado de la ventana de perfiles: screen = pick · avatar · name · taste
 function pfGateOpen(mode, id){
   const L = pfList();
@@ -3825,7 +3836,13 @@ function pfGateOpen(mode, id){
   document.body.style.overflow = 'hidden'; pfGateDraw();
   requestAnimationFrame(() => el.classList.add('on'));
 }
-function pfGateClose(){ const el = document.getElementById('pfGate'); if (el) el.remove(); pfG = null; document.body.style.overflow = ''; }
+function pfGateClose(){ const el = document.getElementById('pfGate'); if (el) el.remove(); clearInterval(pfFeatTimer); pfG = null; document.body.style.overflow = ''; }
+// teclado como el de Peacock: 3 filas de 10 teclas iguales (borrar, ABC, 123 y espacio)
+function nmKeys(){
+  const rows = pfG?.nums ? ['1234567890', "ñ-_.'!?&@", 'áéíóúü#'] : ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+  const up = !!pfG?.upper, ic = d => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+  return rows.map((r, i) => `<div>${[...r].map(k => `<button data-pf-key="${esc(k)}">${esc(up ? k.toUpperCase() : k)}</button>`).join('')}${i === 1 ? `<button data-pf-key="⌫" aria-label="Borrar">${ic('M8 5h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H8l-6-7z M11 9l6 6 M17 9l-6 6')}</button>` : ''}${i === 2 ? `<button data-pf-key="ABC">${up ? 'abc' : 'ABC'}</button><button data-pf-key="123">${pfG?.nums ? 'abc' : '123'}</button><button data-pf-key=" " aria-label="Espacio">${ic('M3 10v4h18v-4')}</button>` : ''}</div>`).join('');
+}
 function pfGateDraw(){
   const gate = document.getElementById('pfGate'); if (!gate || !pfG) return;
   const el = gate.querySelector('.pf-body'); const L = pfList(), d = pfG.draft;
@@ -3833,9 +3850,10 @@ function pfGateDraw(){
   const pill = (txt, attrs, cls = '') => `<button class="pp ${cls}" ${attrs}>${esc(txt)}</button>`;
   if (pfG.screen === 'pick'){
     const cur = S.profile || L[0];
-    const feat = shuffled(published().filter(t => t.backdrop && t.logo), 'pf-feat')[0];
+    const feats = shuffled(published().filter(t => t.backdrop && t.logo), 'pf-feat').slice(0, 8), feat = feats[0];
     el.innerHTML = `<div class="pk ${feat ? '' : 'nofeat'}">
-      ${feat ? `<div class="pk-bg" style="background-image:url('${esc(feat.backdrop)}')"></div><div class="pk-ft"><img src="${esc(feat.logo)}" alt="${esc(feat.title)}"><small>${esc([(feat.genres || [])[0], feat.year].filter(Boolean).join(' · '))}</small></div>` : ''}
+      ${feats.map((f, i) => `<div class="pk-bg ${i ? '' : 'on'} ${i % 2 ? 'l' : ''}" data-i="${i}" ${i ? `data-bg="${esc(f.backdrop)}"` : `style="background-image:url('${esc(f.backdrop)}')"`}></div>`).join('')}
+      ${feats.map((f, i) => `<div class="pk-ft ${i ? '' : 'on'}" data-i="${i}"><img src="${esc(f.logo)}" alt="${esc(f.title)}" loading="${i ? 'lazy' : 'eager'}"><small>${esc([(f.genres || [])[0], f.year].filter(Boolean).join('  ·  '))}</small></div>`).join('')}
       <div class="pk-blue"><i style="left:22%;top:24%"></i><i style="left:44%;top:58%"></i><i style="left:30%;top:80%"></i><i style="left:64%;top:20%"></i><i style="left:82%;top:72%"></i>
         <div class="pk-new"><h2>Creá hasta ${PF_MAX} perfiles</h2><p>Cada persona de tu casa va a tener sus propias recomendaciones según lo que le gusta mirar.</p></div></div>
       <div class="pk-shade"></div>
@@ -3847,6 +3865,13 @@ function pfGateDraw(){
       ${Store_askable() ? '' : `<div class="pk-tr">${pill('⚙  Mi cuenta', 'data-pf-gate="close"')}</div>`}
     </div>`;
     pfSetGlow(cur?.avatar);
+    clearInterval(pfFeatTimer);
+    if (feats.length > 1){ let fi = 0;
+      const prep = i => { const b = el.querySelector(`.pk-bg[data-i="${i}"]`); if (b?.dataset.bg){ b.style.backgroundImage = `url('${b.dataset.bg}')`; delete b.dataset.bg; } };
+      prep(1);
+      pfFeatTimer = setInterval(() => { if (!el.isConnected){ clearInterval(pfFeatTimer); return; }
+        const nx = (fi + 1) % feats.length; prep(nx); prep((nx + 1) % feats.length);
+        el.querySelectorAll('.pk-bg,.pk-ft').forEach(x => x.classList.toggle('on', +x.dataset.i === nx)); fi = nx; }, 9000); }
     el.querySelectorAll('.pk-p[data-glow]').forEach(b => pfGlow(b.dataset.glow).then(c => b.style.setProperty('--c', c)));
     return;
   }
@@ -3861,11 +3886,11 @@ function pfGateDraw(){
     return;
   }
   if (pfG.screen === 'name'){
-    const keys = ['qwertyuiop', 'asdfghjkl', 'zxcvbnmñ'];
+
     el.innerHTML = `<div class="nm-step"><div class="nm-tint"></div><div class="st-h"><button class="pf-backbtn" data-pf-back aria-label="Volver">←</button><h1>${d.isNew ? '¿Cómo se llama el perfil?' : 'Editar perfil'}</h1></div>
       <button class="nm-av" data-pf-pick aria-label="Cambiar la foto">${pfAv({ ...d, name: d.name || '?' }, 'xl')}<small>CAMBIAR FOTO</small></button>
       <div class="nm-line"><input class="nm-in" maxlength="20" value="${esc(d.name)}" placeholder="" data-pf-name autocomplete="off" spellcheck="false"></div>
-      <div class="nm-kb">${keys.map((r, i) => `<div>${[...r].map(k => `<button data-pf-key="${k}">${k}</button>`).join('')}${i === 1 ? '<button data-pf-key="⌫" aria-label="Borrar">⌫</button>' : ''}${i === 2 ? '<button data-pf-key="ABC">ABC</button><button data-pf-key=" " aria-label="Espacio">␣</button>' : ''}</div>`).join('')}</div>
+      <div class="nm-kb">${nmKeys()}</div>
       <div class="nm-foot">${d.isNew ? pill('Siguiente', 'data-pf-next') : pill('Guardar', 'data-pf-save') + pill('Gustos', 'data-pf-next') + (d.id !== 'main' ? pill('Eliminar perfil', 'data-pf-del', 'danger') : '')}</div></div>`;
     pfSetGlow(d.avatar);
     const inp = el.querySelector('[data-pf-name]'); setTimeout(() => { inp?.focus(); inp?.setSelectionRange(inp.value.length, inp.value.length); }, 60);
@@ -3904,14 +3929,17 @@ async function pfSaveDraft(btn){
   pfG.busy = true; if (btn) btn.disabled = true;
   const L = pfList(); const i = L.findIndex(p => p.id === dr.id); const clean = { id: dr.id, name: dr.name, avatar: dr.avatar || '', likes: dr.likes.slice(0, 40) };
   i < 0 ? L.push(clean) : (L[i] = clean);
-  try { await pfSave(L); if (dr.isNew){ await pfUse(clean); } else { if (S.profile?.id === clean.id) S.profile = clean; renderAccount(); render(); pfGateOpen('pick'); toast('Perfil guardado'); } }
+  try { await pfSave(L); if (dr.isNew){
+      S.profile = clean;
+      if (clean.likes.length) await S.sb.from('user_lists').insert(clean.likes.map(id => ({ user_id: S.session.user.id, title_id: pfKey(id) }))).then(() => {}, () => {});
+      await pfUse(clean, true); } else { if (S.profile?.id === clean.id) S.profile = clean; renderAccount(); render(); pfGateOpen('pick'); toast('Perfil guardado'); } }
   catch(err){ pfG.busy = false; if (btn) btn.disabled = false; toast('No se pudo guardar el perfil', true); }
 }
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-pf-use],[data-pf-gate],[data-pf-edit],[data-pf-av],[data-pf-pick],[data-pf-next],[data-pf-back],[data-pf-like],[data-pf-save],[data-pf-del],[data-pf-genre],[data-pf-key]');
   if (!b || !S.session) return;
   const d = b.dataset;
-  if (d.pfUse){ const p = pfList().find(x => x.id === d.pfUse); if (p){ S.profileChosen = true; pfUse(p); } return; }
+  if (d.pfUse){ const p = pfList().find(x => x.id === d.pfUse); if (p){ S.profileChosen = true; pfUse(p, !!b.closest('#pfGate')); } return; }
   if (d.pfGate){ if (d.pfGate === 'close'){ pfGateClose(); try { sessionStorage.setItem('rv.pf.ok', '1'); } catch(_){} return; } pfGateOpen(d.pfGate === 'manage' ? 'pick' : d.pfGate); return; }
   if (!pfG) return;
   if (d.pfEdit){ pfGateOpen('edit', d.pfEdit); return; }
@@ -3924,7 +3952,8 @@ document.addEventListener('click', async e => {
   if ('pfNext' in d){ pfG.groups = null; if (!pfG.draft.name.trim()){ toast('Ponele un nombre', true); document.querySelector('[data-pf-name]')?.focus(); return; } pfG.screen = 'taste'; pfGateDraw(); document.querySelector('.pf-body')?.scrollTo(0, 0); return; }
   if (d.pfGenre != null){ pfG.gi = +d.pfGenre; document.querySelectorAll('.ts-g button').forEach((x, i) => x.classList.toggle('on', i === pfG.gi)); document.querySelector(`.ts-blk[data-blk="${pfG.gi}"]`)?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' }); return; }
   if (d.pfKey != null){ const inp = document.querySelector('[data-pf-name]'); if (!inp) return; const k = d.pfKey;
-    if (k === '⌫') inp.value = inp.value.slice(0, -1); else if (k === 'ABC'){ pfG.upper = !pfG.upper; document.querySelectorAll('.nm-kb [data-pf-key]').forEach(x => { if (x.dataset.pfKey.length === 1 && x.dataset.pfKey !== ' ') x.textContent = pfG.upper ? x.dataset.pfKey.toUpperCase() : x.dataset.pfKey; }); return; }
+    if (k === '⌫') inp.value = inp.value.slice(0, -1);
+    else if (k === 'ABC' || k === '123'){ if (k === 'ABC') pfG.upper = !pfG.upper; else pfG.nums = !pfG.nums; const kb = document.querySelector('.nm-kb'); kb.innerHTML = nmKeys(); kb.querySelector(`[data-pf-key="${k}"]`)?.focus(); return; }
     else if (inp.value.length < 20 && !(k === ' ' && (!inp.value || inp.value.endsWith(' ')))) inp.value += (pfG.upper || !inp.value) && k !== ' ' ? k.toUpperCase() : k;
     pfG.draft.name = inp.value; return; }
   if (d.pfLike){ const L = pfG.draft.likes; const i = L.indexOf(d.pfLike); if (i < 0 && L.length >= 5){ toast('Podés elegir hasta 5'); return; }

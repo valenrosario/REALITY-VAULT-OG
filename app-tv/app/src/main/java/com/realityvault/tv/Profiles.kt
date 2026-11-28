@@ -4,6 +4,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -67,7 +72,7 @@ import kotlinx.coroutines.launch
 object PfUi { var open by mutableStateOf("") }
 
 private val PfPink = Color(0xFFFF3D8B)
-private val PfBg = Color(0xFF07060B)
+private val PfBg = Color(0xFF000000)
 private val PfFont = androidx.compose.ui.text.font.FontFamily(
     androidx.compose.ui.text.font.Font(R.font.gg_bold, FontWeight.Bold),
     androidx.compose.ui.text.font.Font(R.font.gg_book, FontWeight.Normal))
@@ -172,7 +177,7 @@ private fun PfTap(onClick: () -> Unit, modifier: Modifier = Modifier, req: Focus
 @Composable
 private fun PfButton(text: String, primary: Boolean = false, danger: Boolean = false, req: FocusRequester? = null, onClick: () -> Unit) {
     PfTap(onClick, req = req) { f ->
-        val bg = when { f -> Color.White; primary -> PfYellow; else -> Color(0xFF1E2230).copy(alpha = .92f) }
+        val bg = when { f -> Color.White; primary -> PfYellow; else -> Color(0xFF2B3446) }
         Box(Modifier.scale(if (f) 1.06f else 1f).height(36.dp).background(bg, RoundedCornerShape(99.dp)).padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
             Text(text.uppercase(), style = pfText(13, true, when { f || primary -> Color(0xFF111111); danger -> Color(0xFFFF8FAE); else -> Color.White }).copy(letterSpacing = 1.2.sp), maxLines = 1)
         }
@@ -217,6 +222,14 @@ fun ProfileGate(startMode: String, logo: String, onAccount: (() -> Unit)? = null
         val ch = Store.avatarChoices(); draft = PfDraft(true, Store.newProfileId(), "", ch[Store.profiles.size % ch.size], emptyList()); screen = "avatar"
     }
     LaunchedEffect(Unit) { if (startMode == "new") newDraft() }
+    // al entrar: la pantalla de perfiles se desvanece y aparece la app (el cambio de perfil sigue aunque se cierre)
+    val gateA = remember { Animatable(1f) }
+    var leaving by remember { mutableStateOf(false) }
+    fun enter(p: Profile, addLikes: Boolean = false) {
+        if (leaving) return; leaving = true
+        kotlinx.coroutines.MainScope().launch { Store.useProfile(p); if (addLikes && p.likes.isNotEmpty()) Store.addToList(p.likes) }
+        scope.launch { gateA.animateTo(0f, tween(380)); onClose() }
+    }
     fun leaveEdit() { draft = null; if (startMode == "new") onClose() else screen = "pick" }
     fun save(d: PfDraft, then: () -> Unit) {
         busy = true
@@ -224,7 +237,7 @@ fun ProfileGate(startMode: String, logo: String, onAccount: (() -> Unit)? = null
             val p = Profile(d.id, d.name.trim().take(20), d.avatar, d.likes.take(40))
             val list = Store.profiles.toMutableList(); val i = list.indexOfFirst { it.id == p.id }
             if (i < 0) list += p else list[i] = p
-            runCatching { Store.saveProfiles(list) }.onSuccess { if (d.isNew) { Store.useProfile(p); onClose() } else then() }.onFailure { msg = "No se pudo guardar el perfil" }
+            runCatching { Store.saveProfiles(list) }.onSuccess { if (d.isNew) enter(p, true) else then() }.onFailure { msg = "No se pudo guardar el perfil" }
             busy = false
         }
     }
@@ -238,7 +251,7 @@ fun ProfileGate(startMode: String, logo: String, onAccount: (() -> Unit)? = null
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(PfBg)) {
+    BoxWithConstraints(Modifier.fillMaxSize().graphicsLayer { alpha = gateA.value }.background(PfBg)) {
         val wide = maxWidth > maxHeight
         val d = draft
         when {
@@ -256,7 +269,7 @@ fun ProfileGate(startMode: String, logo: String, onAccount: (() -> Unit)? = null
                 })
             screen == "taste" && d != null -> TastePicker(d, wide, busy) { if (d.name.isBlank()) { msg = "Ponele un nombre"; screen = "name" } else save(d) { draft = null; screen = "pick" } }
             else -> WhoIsWatching(wide, logo,
-                onUse = { p -> scope.launch { Store.useProfile(p); onClose() } },
+                onUse = { p -> enter(p) },
                 onEdit = { p -> draft = PfDraft(false, p.id, p.name, p.avatar, p.likes); screen = "name" },
                 onAdd = { newDraft() },
                 onAccount = if (Store.askProfile) null else onAccount)
@@ -287,67 +300,112 @@ private fun WhoIsWatching(wide: Boolean, logo: String, onUse: (Profile) -> Unit,
     val onPlus = focusedId == "+"
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusSoon(first) }
-    val feat = remember { Store.published().filter { it.backdrop.isNotBlank() && it.logo.isNotBlank() }.shuffled().firstOrNull() }
+    val ctx = LocalContext.current
+    // fondo: varios destacados que se van turnando (la foto se mueve despacio; el logo queda quieto)
+    val feats = remember { Store.published().filter { it.backdrop.isNotBlank() && it.logo.isNotBlank() }.shuffled().take(8) }
+    var fi by remember { mutableIntStateOf(0) }
+    LaunchedEffect(feats.size) {
+        if (feats.size > 1) while (true) {
+            // precarga la próxima para que el cambio no parpadee
+            runCatching { coil.Coil.imageLoader(ctx).enqueue(coil.request.ImageRequest.Builder(ctx).data(feats[(fi + 1) % feats.size].backdrop).build()) }
+            delay(9000); fi = (fi + 1) % feats.size
+        }
+    }
     val plusA by animateFloatAsState(if (onPlus) 1f else 0f, tween(450), label = "plus")
+    val scope = rememberCoroutineScope()
+    var entering by remember { mutableStateOf<Profile?>(null) }
+    val ent = remember { Animatable(0f) }
+    fun use(p: Profile) {
+        if (entering != null) return
+        entering = p
+        scope.launch { ent.animateTo(1f, tween(540, easing = FastOutSlowInEasing)); onUse(p) }
+    }
 
     Box(Modifier.fillMaxSize().background(PfBg)) {
-        // fondo: el título destacado a pantalla completa (o la escena azul parado en "+")
-        if (feat != null) Box(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - plusA }) {
-            coil.compose.AsyncImage(feat.backdrop, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to PfBg, (if (wide) .22f else 0f) to PfBg.copy(alpha = .96f), (if (wide) .48f else .5f) to Color.Transparent)))
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to PfBg.copy(alpha = .5f), .25f to Color.Transparent, .7f to Color.Transparent, 1f to PfBg.copy(alpha = .9f))))
-            if (wide) Column(Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 40.dp), horizontalAlignment = Alignment.Start) {
-                coil.compose.AsyncImage(feat.logo, feat.title, Modifier.height(86.dp).widthIn(max = 330.dp), contentScale = ContentScale.Fit, alignment = Alignment.BottomStart)
-                val meta = listOf(feat.genres.firstOrNull().orEmpty(), feat.year).filter { it.isNotBlank() }.joinToString(" · ")
-                if (meta.isNotBlank()) Text(meta, style = pfText(13, true), modifier = Modifier.padding(top = 10.dp))
+        if (feats.isNotEmpty()) Box(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - plusA }) {
+            Crossfade(fi, animationSpec = tween(1400), label = "bd") { i ->
+                val pan = remember { Animatable(0f) }
+                LaunchedEffect(Unit) { pan.animateTo(1f, tween(10500, easing = LinearEasing)) }
+                val dir = if (i % 2 == 0) 1f else -1f
+                coil.compose.AsyncImage(feats[i].backdrop, null, Modifier.fillMaxSize().graphicsLayer {
+                    scaleX = 1.12f; scaleY = 1.12f
+                    translationX = dir * (pan.value - .5f) * size.width * .09f
+                }, contentScale = ContentScale.Crop)
+            }
+            // negro puro a la izquierda, que se funde suave con la foto
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black, (if (wide) .24f else 0f) to Color.Black, (if (wide) .36f else .2f) to Color.Black.copy(alpha = .82f), (if (wide) .56f else .6f) to Color.Transparent)))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .55f), .25f to Color.Transparent, .65f to Color.Transparent, 1f to Color.Black.copy(alpha = .92f))))
+            if (wide) Crossfade(fi, animationSpec = tween(900), modifier = Modifier.align(Alignment.BottomEnd).padding(end = 56.dp, bottom = 40.dp), label = "lg") { i ->
+                val t = feats[i]
+                Column(Modifier.width(340.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    coil.compose.AsyncImage(t.logo, t.title, Modifier.height(90.dp).fillMaxWidth(), contentScale = ContentScale.Fit, alignment = Alignment.BottomCenter)
+                    val meta = listOf(t.genres.firstOrNull().orEmpty(), t.year).filter { it.isNotBlank() }.joinToString("  ·  ")
+                    if (meta.isNotBlank()) Text(meta.uppercase(), style = pfText(12, true, Color.White.copy(alpha = .9f)).copy(letterSpacing = 1.4.sp), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp))
+                }
             }
         }
         if (plusA > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = plusA }) {
             BlueScene(Modifier.fillMaxSize())
-            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to PfBg, (if (wide) .2f else 0f) to PfBg.copy(alpha = .9f), (if (wide) .42f else .5f) to Color.Transparent)))
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black, (if (wide) .24f else 0f) to Color.Black, (if (wide) .5f else .5f) to Color.Transparent)))
             if (wide) Column(Modifier.align(Alignment.CenterEnd).padding(end = 70.dp).width(420.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Creá hasta 5 perfiles", style = pfText(36, true), textAlign = TextAlign.Center)
                 Text("Cada persona de tu casa va a tener sus propias recomendaciones según lo que le gusta mirar.", style = pfText(17, false, Color.White.copy(alpha = .92f)), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 14.dp))
             }
         }
 
-        // columna de perfiles
+        // columna de perfiles: el tamaño se anima con escala (sin recargar la foto ni rearmar la pantalla)
         Text("¿Quién está mirando?", style = pfText(if (wide) 22 else 24, true), modifier = Modifier.padding(start = if (wide) 48.dp else 24.dp, top = if (wide) 34.dp else 56.dp))
+        val big = 104.dp; val small = if (wide) 56.dp else 72.dp
         Column(Modifier.fillMaxHeight().width(if (wide) 280.dp else 400.dp).padding(start = if (wide) 24.dp else 0.dp, top = 76.dp, bottom = 64.dp)
             .then(if (wide) Modifier else Modifier.fillMaxWidth()).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
             profiles.forEach { p ->
                 val isF = focusedId == p.id
-                val size by animateFloatAsState(if (isF) (if (wide) 104f else 104f) else (if (wide) 56f else 72f), tween(260), label = "sz")
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = if (isF) 14.dp else 6.dp)) {
-                    // lápiz para editar: aparece al lado del perfil enfocado (izquierda en la tele)
+                val t by animateFloatAsState(if (isF) 1f else 0f, spring(dampingRatio = .82f, stiffness = 420f), label = "t")
+                val slot = small + (big - small) * t
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 6.dp + 8.dp * t)) {
                     Box(Modifier.width(44.dp), contentAlignment = Alignment.Center) {
-                        if (isF || !wide) PfTap({ onEdit(p) }, Modifier.size(34.dp), onFocus = { focusedId = p.id }) { f ->
-                            Box(Modifier.fillMaxSize().background(if (f) Color.White else Color(0xFF2A3245).copy(alpha = .9f), CircleShape), contentAlignment = Alignment.Center) {
+                        if (isF || !wide) PfTap({ onEdit(p) }, Modifier.size(34.dp).graphicsLayer { alpha = if (wide) t else 1f }, onFocus = { focusedId = p.id }) { f ->
+                            Box(Modifier.fillMaxSize().background(if (f) Color.White else Color(0xFF2B2B2B), CircleShape), contentAlignment = Alignment.Center) {
                                 Icon(PencilIcon, "Editar", tint = if (f) Color(0xFF111111) else Color.White, modifier = Modifier.size(16.dp))
                             }
                         }
                     }
-                    PfTap({ onUse(p) }, req = if (p.id == (Store.profile ?: profiles.first()).id) first else null, onFocus = { focusedId = p.id }) { _ ->
+                    PfTap({ use(p) }, req = if (p.id == (Store.profile ?: profiles.first()).id) first else null, onFocus = { focusedId = p.id }) { _ ->
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(150.dp)) {
-                            GlowAvatar(p, size.dp, if (isF) .9f else 0f)
-                            if (isF || !wide) Text(p.name, style = pfText(17, true), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp))
+                            Box(Modifier.size(slot), contentAlignment = Alignment.Center) {
+                                val sc = slot / big
+                                GlowAvatar(p, big, if (isF) .9f else 0f, Modifier.requiredSize(big).graphicsLayer { scaleX = sc; scaleY = sc })
+                            }
+                            val nameH = if (wide) 30.dp * t else 30.dp
+                            Box(Modifier.height(nameH).graphicsLayer { alpha = if (wide) t else 1f }, contentAlignment = Alignment.BottomCenter) {
+                                Text(p.name, style = pfText(17, true), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                     Spacer(Modifier.width(44.dp))
                 }
             }
             if (profiles.size < 5) {
-                val isF = onPlus
-                val size by animateFloatAsState(if (isF) (if (wide) 112f else 104f) else (if (wide) 56f else 72f), tween(260), label = "pl")
+                val t by animateFloatAsState(if (onPlus) 1f else 0f, spring(dampingRatio = .82f, stiffness = 420f), label = "pl")
+                val sz = small + (112.dp - small) * t
                 PfTap(onAdd, Modifier.padding(start = 44.dp, end = 44.dp), onFocus = { focusedId = "+" }) { _ ->
-                    Box(Modifier.padding(vertical = 10.dp).size(size.dp).background(if (isF) PfYellow else Color(0xFF3A3F4C), CircleShape), contentAlignment = Alignment.Center) {
-                        Text("+", style = pfText((size * .34f).toInt(), false, if (isF) Color(0xFF111111) else Color.White))
+                    Box(Modifier.padding(vertical = 10.dp).size(sz).background(if (onPlus) PfYellow else Color(0xFF333333), CircleShape), contentAlignment = Alignment.Center) {
+                        Text("+", style = pfText(36, false, if (onPlus) Color(0xFF111111) else Color.White), modifier = Modifier.graphicsLayer { val k = .6f + .4f * t; scaleX = k; scaleY = k })
                     }
                 }
             }
         }
         if (onAccount != null) Box(Modifier.align(Alignment.TopEnd).padding(top = if (wide) 26.dp else 50.dp, end = if (wide) 40.dp else 16.dp)) { PfButton("⚙  Mi cuenta", onClick = onAccount) }
         if (logo.isNotBlank()) coil.compose.AsyncImage(logo, null, Modifier.align(Alignment.BottomStart).padding(start = if (wide) 48.dp else 24.dp, bottom = 26.dp).height(18.dp).widthIn(max = 150.dp), contentScale = ContentScale.Fit, alignment = Alignment.CenterStart)
+
+        // al elegir: la foto va al centro, brilla y la pantalla se va a negro
+        entering?.let { p ->
+            val v = ent.value
+            val pulse = 1f + .25f * kotlin.math.sin(v * Math.PI.toFloat())
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = (v * 1.5f).coerceAtMost(1f))), contentAlignment = Alignment.Center) {
+                GlowAvatar(p, 150.dp, 1f, Modifier.graphicsLayer { val s = (.75f + .4f * v) * pulse.coerceAtMost(1.1f); scaleX = s; scaleY = s; alpha = (v * 3f).coerceAtMost(1f) })
+            }
+        }
     }
 }
 
@@ -398,6 +456,7 @@ private fun NameStep(d: PfDraft, wide: Boolean, busy: Boolean, onPick: () -> Uni
     val firstKey = remember { FocusRequester() }
     val field = remember { FocusRequester() }
     var upper by remember { mutableStateOf(d.name.isEmpty()) }
+    var nums by remember { mutableStateOf(false) }
     var sure by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { focusSoon(if (wide) firstKey else field) }
     fun type(s: String) { if (d.name.length < 20) { d.name += if (upper) s.uppercase() else s; upper = false } }
@@ -429,14 +488,22 @@ private fun NameStep(d: PfDraft, wide: Boolean, busy: Boolean, onPick: () -> Uni
             Box(Modifier.fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = .8f)))
             Spacer(Modifier.height(16.dp))
             if (wide) {
-                val rows = listOf("qwertyuiop", "asdfghjkl", "zxcvbnmñ")
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // teclado como el de Peacock: 3 filas de 10 teclas iguales
+                val rows = if (nums) listOf("1234567890", "ñ-_.'!?&@", "áéíóúü#") else listOf("qwertyuiop", "asdfghjkl", "zxcvbnm")
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     rows.forEachIndexed { ri, row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            row.forEachIndexed { ci, ch -> Key(if (upper) ch.uppercase() else ch.toString(), Modifier.weight(1f), if (ri == 0 && ci == 0) firstKey else null) { type(ch.toString()) } }
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            row.forEachIndexed { ci, ch ->
+                                val lab = if (upper && ch.isLetter()) ch.uppercase() else ch.toString()
+                                Key(lab, Modifier.weight(1f), if (ri == 0 && ci == 0) firstKey else null) { type(ch.toString()) }
+                            }
                             when (ri) {
-                                1 -> Key("⌫", Modifier.weight(1f)) { d.name = d.name.dropLast(1); if (d.name.isEmpty()) upper = true }
-                                2 -> { Key(if (upper) "abc" else "ABC", Modifier.weight(1f)) { upper = !upper }; Key("␣", Modifier.weight(1f)) { if (d.name.isNotEmpty() && !d.name.endsWith(" ")) type(" ") } }
+                                1 -> Key("", Modifier.weight(1f), icon = BackspaceIcon) { d.name = d.name.dropLast(1); if (d.name.isEmpty()) upper = true }
+                                2 -> {
+                                    Key(if (upper) "abc" else "ABC", Modifier.weight(1f)) { upper = !upper }
+                                    Key(if (nums) "abc" else "123", Modifier.weight(1f)) { nums = !nums }
+                                    Key("", Modifier.weight(1f), icon = SpaceIcon) { if (d.name.isNotEmpty() && !d.name.endsWith(" ")) type(" ") }
+                                }
                                 else -> {}
                             }
                         }
@@ -456,11 +523,21 @@ private fun NameStep(d: PfDraft, wide: Boolean, busy: Boolean, onPick: () -> Uni
     }
 }
 
+private fun strokeIcon(path: String, w: Float = 24f, h: Float = 24f) = androidx.compose.ui.graphics.vector.ImageVector.Builder(defaultWidth = w.dp, defaultHeight = h.dp, viewportWidth = w, viewportHeight = h)
+    .addPath(androidx.compose.ui.graphics.vector.addPathNodes(path), fill = null, stroke = SolidColor(Color.White),
+        strokeLineWidth = 2f, strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round, strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round)
+    .build()
+/** Borrar y espacio dibujados (los caracteres ⌫ y ␣ no existen en la letra de la tele). */
+private val BackspaceIcon by lazy { strokeIcon("M8 5h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H8l-6-7z M11 9l6 6 M17 9l-6 6") }
+private val SpaceIcon by lazy { strokeIcon("M3 10v4h18v-4", 24f, 24f) }
+
 @Composable
-private fun Key(label: String, modifier: Modifier, req: FocusRequester? = null, onClick: () -> Unit) {
-    PfTap(onClick, modifier.height(36.dp), req = req) { f ->
-        Box(Modifier.fillMaxSize().background(if (f) PfYellow else Color(0xFF2B3446).copy(alpha = .92f), RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
-            Text(label, style = pfText(16, true, if (f) Color(0xFF111111) else Color.White))
+private fun Key(label: String, modifier: Modifier, req: FocusRequester? = null, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, onClick: () -> Unit) {
+    PfTap(onClick, modifier.height(40.dp), req = req) { f ->
+        Box(Modifier.fillMaxSize().background(if (f) PfYellow else Color(0xFF2B3446), RoundedCornerShape(5.dp)), contentAlignment = Alignment.Center) {
+            val c = if (f) Color(0xFF111111) else Color.White
+            if (icon != null) Icon(icon, null, tint = c, modifier = Modifier.size(if (icon === SpaceIcon) 26.dp else 20.dp))
+            else Text(label, style = pfText(17, true, c))
         }
     }
 }
