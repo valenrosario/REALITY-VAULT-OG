@@ -3829,65 +3829,76 @@ function pfGateClose(){ const el = document.getElementById('pfGate'); if (el) el
 function pfGateDraw(){
   const gate = document.getElementById('pfGate'); if (!gate || !pfG) return;
   const el = gate.querySelector('.pf-body'); const L = pfList(), d = pfG.draft;
-  gate.dataset.screen = pfG.screen;
+  gate.dataset.screen = pfG.screen; gate.classList.remove('plus');
+  const pill = (txt, attrs, cls = '') => `<button class="pp ${cls}" ${attrs}>${esc(txt)}</button>`;
   if (pfG.screen === 'pick'){
     const cur = S.profile || L[0];
     const feat = shuffled(published().filter(t => t.backdrop && t.logo), 'pf-feat')[0];
-    el.innerHTML = `<div class="pk">
-      <div class="pk-left"><h1>¿Quién está mirando?</h1>
-        <div class="pk-list">${L.map(p => `<div class="pk-it"><button class="pk-ed" data-pf-edit="${esc(p.id)}" aria-label="Editar ${esc(p.name)}">✎</button>
-          <button class="pk-p ${p.id === cur?.id ? 'on' : ''}" data-pf-use="${esc(p.id)}" data-glow="${esc(p.avatar || '')}"><span class="pk-halo"></span>${pfAv(p, 'xl')}<span class="pk-n">${esc(p.name)}</span></button></div>`).join('')}
-          ${L.length < PF_MAX ? `<div class="pk-it"><span class="pk-ed-sp"></span><button class="pk-p pk-add" data-pf-gate="new" data-plus="1"><span class="pf-av xl pf-add">+</span><span class="pk-n">Agregar</span></button></div>` : ''}</div>
-        <img class="pk-logo" src="${esc(S.site.logo || LANDING_LOGO)}" alt=""></div>
-      <div class="pk-right">${feat ? `<div class="pk-feat" style="background-image:url('${esc(feat.backdrop)}')"></div><div class="pk-ft"><img src="${esc(feat.logo)}" alt="${esc(feat.title)}"><small>${esc([(feat.genres || [])[0], feat.year].filter(Boolean).join(' · '))}</small></div>` : ''}
-        <div class="pk-new"><h2>Creá hasta ${PF_MAX} perfiles</h2><p>Cada persona tiene sus propias recomendaciones, su lista y lo que viene mirando.</p></div></div>
-      ${pfG.start === 'pick' && Store_askable() ? '' : `<button class="pk-x" data-pf-gate="close" aria-label="Cerrar">✕</button>`}
+    el.innerHTML = `<div class="pk ${feat ? '' : 'nofeat'}">
+      ${feat ? `<div class="pk-bg" style="background-image:url('${esc(feat.backdrop)}')"></div><div class="pk-ft"><img src="${esc(feat.logo)}" alt="${esc(feat.title)}"><small>${esc([(feat.genres || [])[0], feat.year].filter(Boolean).join(' · '))}</small></div>` : ''}
+      <div class="pk-blue"><i style="left:22%;top:24%"></i><i style="left:44%;top:58%"></i><i style="left:30%;top:80%"></i><i style="left:64%;top:20%"></i><i style="left:82%;top:72%"></i>
+        <div class="pk-new"><h2>Creá hasta ${PF_MAX} perfiles</h2><p>Cada persona de tu casa va a tener sus propias recomendaciones según lo que le gusta mirar.</p></div></div>
+      <div class="pk-shade"></div>
+      <h1 class="pk-h">¿Quién está mirando?</h1>
+      <div class="pk-list" data-cur="${esc(cur?.id || '')}">${L.map(p => `<div class="pk-it ${p.id === cur?.id ? 'cur' : ''}"><button class="pk-ed" data-pf-edit="${esc(p.id)}" aria-label="Editar ${esc(p.name)}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg></button>
+          <button class="pk-p" data-pf-use="${esc(p.id)}" data-glow="${esc(p.avatar || '')}"><span class="pk-halo"></span>${pfAv(p, 'xl')}<span class="pk-n">${esc(p.name)}</span></button></div>`).join('')}
+        ${L.length < PF_MAX ? `<div class="pk-it"><span class="pk-ed-sp"></span><button class="pk-p pk-add" data-pf-gate="new" data-plus="1" aria-label="Agregar perfil"><span class="pf-av xl pf-add">+</span></button></div>` : ''}</div>
+      <img class="pk-logo" src="${esc(S.site.logo || LANDING_LOGO)}" alt="">
+      ${Store_askable() ? '' : `<div class="pk-tr">${pill('⚙  Mi cuenta', 'data-pf-gate="close"')}</div>`}
     </div>`;
     pfSetGlow(cur?.avatar);
+    el.querySelectorAll('.pk-p[data-glow]').forEach(b => pfGlow(b.dataset.glow).then(c => b.style.setProperty('--c', c)));
     return;
   }
   if (pfG.screen === 'avatar'){
     const all = [...new Set(pfAvatars())];
-    el.innerHTML = `<div class="av-step"><div class="st-h"><button class="pf-backbtn" data-pf-back aria-label="Volver">←</button><div><h1>Elegí tu foto</h1><p>${d.isNew ? 'Después le ponés el nombre' : esc(d.name)}</p></div></div>
-      <div class="av-car">${all.map(u => `<button class="av-o ${u === d.avatar ? 'on' : ''}" data-pf-av="${esc(u)}" data-glow="${esc(u)}"><span class="pk-halo"></span><span class="pf-av" style="background-image:url('${esc(u)}')"></span></button>`).join('')}</div>
-      <p class="av-hint">Pasá por las fotos y elegí una</p></div>`;
+    el.innerHTML = `<div class="av-step"><div class="st-h"><button class="pf-backbtn" data-pf-back aria-label="Volver">←</button><h1>Elegí tu foto</h1></div>
+      <div class="av-glow"></div>
+      <div class="av-car">${all.map(u => `<button class="av-o ${u === d.avatar ? 'on' : ''}" data-pf-av="${esc(u)}" data-glow="${esc(u)}"><span class="pf-av" style="background-image:url('${esc(u)}')"></span></button>`).join('')}</div>
+      <p class="av-hint">Pasá por las fotos y tocá la que quieras</p></div>`;
     pfSetGlow(d.avatar);
-    requestAnimationFrame(() => el.querySelector('.av-o.on')?.scrollIntoView({ inline: 'center', block: 'nearest' }));
+    requestAnimationFrame(() => { const on = el.querySelector('.av-o.on'); on?.scrollIntoView({ inline: 'center', block: 'nearest' }); pfAvGlowAt(on); });
     return;
   }
   if (pfG.screen === 'name'){
-    el.innerHTML = `<div class="nm-step"><div class="st-h"><button class="pf-backbtn" data-pf-back aria-label="Volver">←</button><h1>${d.isNew ? '¿Cómo se llama el perfil?' : 'Editar perfil'}</h1></div>
-      <button class="nm-av" data-pf-pick aria-label="Cambiar la foto"><span class="pk-halo"></span>${pfAv({ ...d, name: d.name || '?' }, 'xl')}<small>Cambiar foto</small></button>
-      <input class="nm-in" maxlength="20" value="${esc(d.name)}" placeholder="Nombre" data-pf-name autocomplete="off">
-      <div class="nm-foot">${d.isNew ? `<button class="btn btn-primary pf-y" data-pf-next>Siguiente</button>` : `<button class="btn btn-primary pf-y" data-pf-save>Guardar</button><button class="btn btn-line" data-pf-next>Gustos</button>${d.id !== 'main' ? `<button class="btn btn-line pf-del" data-pf-del>Eliminar perfil</button>` : ''}`}</div></div>`;
+    const keys = ['qwertyuiop', 'asdfghjkl', 'zxcvbnmñ'];
+    el.innerHTML = `<div class="nm-step"><div class="nm-tint"></div><div class="st-h"><button class="pf-backbtn" data-pf-back aria-label="Volver">←</button><h1>${d.isNew ? '¿Cómo se llama el perfil?' : 'Editar perfil'}</h1></div>
+      <button class="nm-av" data-pf-pick aria-label="Cambiar la foto">${pfAv({ ...d, name: d.name || '?' }, 'xl')}<small>CAMBIAR FOTO</small></button>
+      <div class="nm-line"><input class="nm-in" maxlength="20" value="${esc(d.name)}" placeholder="" data-pf-name autocomplete="off" spellcheck="false"></div>
+      <div class="nm-kb">${keys.map((r, i) => `<div>${[...r].map(k => `<button data-pf-key="${k}">${k}</button>`).join('')}${i === 1 ? '<button data-pf-key="⌫" aria-label="Borrar">⌫</button>' : ''}${i === 2 ? '<button data-pf-key="ABC">ABC</button><button data-pf-key=" " aria-label="Espacio">␣</button>' : ''}</div>`).join('')}</div>
+      <div class="nm-foot">${d.isNew ? pill('Siguiente', 'data-pf-next') : pill('Guardar', 'data-pf-save') + pill('Gustos', 'data-pf-next') + (d.id !== 'main' ? pill('Eliminar perfil', 'data-pf-del', 'danger') : '')}</div></div>`;
     pfSetGlow(d.avatar);
     const inp = el.querySelector('[data-pf-name]'); setTimeout(() => { inp?.focus(); inp?.setSelectionRange(inp.value.length, inp.value.length); }, 60);
     return;
   }
-  // gustos
+  // gustos: hasta 5, en bloques de 3 × 2 por género que se recorren para el costado
   const pub = published().filter(t => t.poster);
-  const genres = Object.entries(pub.flatMap(t => t.genres || []).reduce((m, g) => (m[g] = (m[g] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]).slice(0, 7).map(x => x[0]);
-  const q = pfG.q.toLowerCase();
-  const pool = pub.filter(t => (!pfG.genre || (t.genres || []).includes(pfG.genre)) && (!q || (t.title || '').toLowerCase().includes(q)));
-  const list = [...pool.filter(t => d.likes.includes(t.id)), ...shuffled(pool.filter(t => !d.likes.includes(t.id)), 'pf-likes')];
-  el.innerHTML = `<div class="ts-step"><div class="st-h"><button class="pf-backbtn" data-pf-back aria-label="Volver">←</button><h1>Elegí los títulos que te gustan<br>para tener mejores recomendaciones</h1></div>
-    <div class="ts-bar"><div class="ts-g">${['', ...genres].map(g => `<button class="${g === pfG.genre ? 'on' : ''}" data-pf-genre="${esc(g)}">${esc(g || 'Todo')}</button>`).join('')}</div><input class="pf-search" data-pf-q value="${esc(pfG.q)}" placeholder="Buscar…"></div>
-    <div class="pf-posters">${list.slice(0, 80).map(t => `<button class="pf-po ${d.likes.includes(t.id) ? 'on' : ''}" data-pf-like="${esc(t.id)}" aria-pressed="${d.likes.includes(t.id)}" title="${esc(t.title)}"><span style="background-image:url('${esc(t.poster)}')"></span><i>✓</i></button>`).join('')}</div>
-    <div class="pf-foot pf-sticky"><button class="btn btn-primary pf-y" data-pf-save ${pfG.busy ? 'disabled' : ''}>${d.likes.length ? 'Listo' : 'Saltear'}</button><span class="pf-sp"></span><span class="pf-count">${d.likes.length} elegido${d.likes.length === 1 ? '' : 's'}</span></div></div>`;
+  const used = new Set();
+  const gs = Object.entries(pub.flatMap(t => t.genres || []).reduce((m, g) => (m[g] = (m[g] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+  if (!pfG.groups) pfG.groups = gs.map(g => { const l = shuffled(pub.filter(t => (t.genres || []).includes(g) && !used.has(t.id)), 'pfg-' + g).slice(0, 6); l.forEach(t => used.add(t.id)); return l.length >= 3 ? { g, l } : null; }).filter(Boolean).slice(0, 8);
+  const G = pfG.groups, n = d.likes.length;
+  el.innerHTML = `<div class="ts-step"><div class="ts-tint"></div><div class="st-h"><button class="pf-backbtn" data-pf-back aria-label="Volver">←</button><h1>Elegí hasta 5 títulos que te interesen<br>para tener mejores recomendaciones</h1></div>
+    <div class="ts-g">${G.map((x, i) => `<button class="${i === (pfG.gi || 0) ? 'on' : ''}" data-pf-genre="${i}">${esc(x.g)}</button>`).join('')}</div>
+    <div class="ts-row">${G.map((x, i) => `<div class="ts-blk" data-blk="${i}">${x.l.map(t => `<button class="pf-po ${d.likes.includes(t.id) ? 'on' : ''}" data-pf-like="${esc(t.id)}" aria-pressed="${d.likes.includes(t.id)}" title="${esc(t.title)}"><span style="background-image:url('${esc(t.poster)}')"></span><i>✓</i></button>`).join('')}</div>`).join('')}</div>
+    <div class="ts-foot">${pill(n ? 'Listo' : 'Saltear', 'data-pf-save', n ? 'y' : '')}<span class="pf-sp"></span><span class="pf-count"><b>${n}</b> ${n === 1 ? 'título elegido' : 'títulos elegidos'}</span></div></div>`;
   pfSetGlow(d.avatar);
 }
+function pfAvGlowAt(b){ const g = document.getElementById('pfGate'); if (!b || !g) return; const r = b.getBoundingClientRect(); g.style.setProperty('--gx', (r.left + r.width / 2) + 'px'); g.style.setProperty('--gy', (r.top + r.height / 2) + 'px'); }
 const Store_askable = () => { let ok = false; try { ok = sessionStorage.getItem('rv.pf.ok') === '1'; } catch(_){} return !ok && !S.profileChosen; };
 // el resplandor sigue a la foto que tenés encima (mouse o teclado)
-document.addEventListener('pointerover', e => { const b = e.target.closest?.('#pfGate [data-glow],#pfGate [data-plus]'); if (!b) return; const g = document.getElementById('pfGate');
-  if (b.dataset.plus){ g.classList.add('plus'); g.style.setProperty('--glow', '#f2ec3b'); } else { g.classList.remove('plus'); pfSetGlow(b.dataset.glow); } });
-document.addEventListener('focusin', e => { const b = e.target.closest?.('#pfGate [data-glow],#pfGate [data-plus]'); if (!b) return; const g = document.getElementById('pfGate');
-  if (b.dataset.plus){ g.classList.add('plus'); g.style.setProperty('--glow', '#f2ec3b'); } else { g.classList.remove('plus'); pfSetGlow(b.dataset.glow); } });
+function pfHover(b){ const g = document.getElementById('pfGate'); if (!g) return;
+  const list = b.closest('.pk-list'); if (list){ list.querySelectorAll('.pk-it').forEach(x => x.classList.toggle('cur', x.contains(b))); }
+  if (b.dataset.plus){ g.classList.add('plus'); } else { g.classList.remove('plus'); pfSetGlow(b.dataset.glow); }
+  if (b.classList.contains('av-o')){ b.parentElement.querySelectorAll('.av-o').forEach(x => x.classList.toggle('on', x === b)); requestAnimationFrame(() => pfAvGlowAt(b)); } }
+document.addEventListener('pointerover', e => { const b = e.target.closest?.('#pfGate [data-glow],#pfGate [data-plus],#pfGate .pk-ed'); if (b) pfHover(b.classList.contains('pk-ed') ? b.nextElementSibling || b : b); });
+document.addEventListener('focusin', e => { const b = e.target.closest?.('#pfGate [data-glow],#pfGate [data-plus],#pfGate .pk-ed'); if (b) pfHover(b.classList.contains('pk-ed') ? b.nextElementSibling || b : b); });
+document.addEventListener('scroll', e => { if (e.target.classList?.contains('av-car')) pfAvGlowAt(e.target.querySelector('.av-o.on')); }, true);
 document.addEventListener('input', e => {
   if (!pfG) return;
   if (e.target.dataset.pfName != null){ pfG.draft.name = e.target.value.trimStart(); }
   if (e.target.dataset.pfQ != null){ pfG.q = e.target.value; const pos = e.target.selectionStart; pfGateDraw(); const n = document.querySelector('[data-pf-q]'); if (n){ n.focus(); n.setSelectionRange(pos, pos); } }
 });
-document.addEventListener('keydown', e => { if (e.key === 'Enter' && pfG && e.target.dataset?.pfName != null){ e.preventDefault(); document.querySelector('.nm-foot .pf-y')?.click(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && pfG && e.target.dataset?.pfName != null){ e.preventDefault(); document.querySelector('.nm-foot .pp')?.click(); } });
 async function pfSaveDraft(btn){
   const dr = pfG.draft; dr.name = (dr.name || '').trim().slice(0, 20); if (!dr.name){ toast('Ponele un nombre', true); pfG.screen = 'name'; pfGateDraw(); return; }
   pfG.busy = true; if (btn) btn.disabled = true;
@@ -3897,7 +3908,7 @@ async function pfSaveDraft(btn){
   catch(err){ pfG.busy = false; if (btn) btn.disabled = false; toast('No se pudo guardar el perfil', true); }
 }
 document.addEventListener('click', async e => {
-  const b = e.target.closest('[data-pf-use],[data-pf-gate],[data-pf-edit],[data-pf-av],[data-pf-pick],[data-pf-next],[data-pf-back],[data-pf-like],[data-pf-save],[data-pf-del],[data-pf-genre]');
+  const b = e.target.closest('[data-pf-use],[data-pf-gate],[data-pf-edit],[data-pf-av],[data-pf-pick],[data-pf-next],[data-pf-back],[data-pf-like],[data-pf-save],[data-pf-del],[data-pf-genre],[data-pf-key]');
   if (!b || !S.session) return;
   const d = b.dataset;
   if (d.pfUse){ const p = pfList().find(x => x.id === d.pfUse); if (p){ S.profileChosen = true; pfUse(p); } return; }
@@ -3910,11 +3921,16 @@ document.addEventListener('click', async e => {
     if (s === 'taste') pfG.screen = 'name'; else if (s === 'name' && dr.isNew) pfG.screen = 'avatar'; else if (s === 'avatar' && !dr.isNew) pfG.screen = 'name';
     else { if (pfG.start === 'new' && L_onlyNew()) { pfGateClose(); return; } pfGateOpen('pick'); return; }
     pfGateDraw(); return; }
-  if ('pfNext' in d){ if (!pfG.draft.name.trim()){ toast('Ponele un nombre', true); document.querySelector('[data-pf-name]')?.focus(); return; } pfG.screen = 'taste'; pfGateDraw(); document.querySelector('.pf-body')?.scrollTo(0, 0); return; }
-  if (d.pfGenre != null){ pfG.genre = d.pfGenre; pfGateDraw(); return; }
-  if (d.pfLike){ const L = pfG.draft.likes; const i = L.indexOf(d.pfLike); i < 0 ? L.push(d.pfLike) : L.splice(i, 1); b.classList.toggle('on', i < 0); b.setAttribute('aria-pressed', i < 0);
-    const c = document.querySelector('.pf-count'); if (c) c.textContent = `${L.length} elegido${L.length === 1 ? '' : 's'}`;
-    const sv = document.querySelector('.pf-foot [data-pf-save]'); if (sv) sv.textContent = L.length ? 'Listo' : 'Saltear'; return; }
+  if ('pfNext' in d){ pfG.groups = null; if (!pfG.draft.name.trim()){ toast('Ponele un nombre', true); document.querySelector('[data-pf-name]')?.focus(); return; } pfG.screen = 'taste'; pfGateDraw(); document.querySelector('.pf-body')?.scrollTo(0, 0); return; }
+  if (d.pfGenre != null){ pfG.gi = +d.pfGenre; document.querySelectorAll('.ts-g button').forEach((x, i) => x.classList.toggle('on', i === pfG.gi)); document.querySelector(`.ts-blk[data-blk="${pfG.gi}"]`)?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' }); return; }
+  if (d.pfKey != null){ const inp = document.querySelector('[data-pf-name]'); if (!inp) return; const k = d.pfKey;
+    if (k === '⌫') inp.value = inp.value.slice(0, -1); else if (k === 'ABC'){ pfG.upper = !pfG.upper; document.querySelectorAll('.nm-kb [data-pf-key]').forEach(x => { if (x.dataset.pfKey.length === 1 && x.dataset.pfKey !== ' ') x.textContent = pfG.upper ? x.dataset.pfKey.toUpperCase() : x.dataset.pfKey; }); return; }
+    else if (inp.value.length < 20 && !(k === ' ' && (!inp.value || inp.value.endsWith(' ')))) inp.value += (pfG.upper || !inp.value) && k !== ' ' ? k.toUpperCase() : k;
+    pfG.draft.name = inp.value; return; }
+  if (d.pfLike){ const L = pfG.draft.likes; const i = L.indexOf(d.pfLike); if (i < 0 && L.length >= 5){ toast('Podés elegir hasta 5'); return; }
+    i < 0 ? L.push(d.pfLike) : L.splice(i, 1); document.querySelectorAll(`[data-pf-like="${CSS.escape(d.pfLike)}"]`).forEach(x => { x.classList.toggle('on', i < 0); x.setAttribute('aria-pressed', i < 0); });
+    const c = document.querySelector('.pf-count'); if (c) c.innerHTML = `<b>${L.length}</b> ${L.length === 1 ? 'título elegido' : 'títulos elegidos'}`;
+    const sv = document.querySelector('.ts-foot [data-pf-save]'); if (sv){ sv.textContent = L.length ? 'Listo' : 'Saltear'; sv.classList.toggle('y', !!L.length); } return; }
   if ('pfDel' in d){ if (!b.dataset.sure){ b.dataset.sure = 1; b.textContent = '¿Seguro? Se borra su lista y su progreso'; return; }
     const id = pfG.draft.id; const L = pfList().filter(p => p.id !== id);
     try { await pfSave(L);
